@@ -1,0 +1,66 @@
+// Mirrors scripts/render_clip.py (group_words / events) and src/daemon/render.js (keepSegments)
+// so the live preview shows the same caption grouping and cuts as the export.
+
+export function groupWords(words, maxWords = 3, maxChars = 22) {
+  const groups = [];
+  let cur = [];
+  for (const w of words) {
+    const chars = cur.reduce((a, x) => a + x.w.length, 0) + cur.length;
+    const gap = cur.length ? w.start - cur.at(-1).end : 0;
+    if (cur.length && (cur.length >= maxWords || chars + w.w.length > maxChars * Math.max(1, maxWords / 3) || gap > 0.6)) {
+      groups.push(cur);
+      cur = [];
+    }
+    cur.push(w);
+    if (/[.?!,;:]$/.test(w.w)) { groups.push(cur); cur = []; }
+  }
+  if (cur.length) groups.push(cur);
+  return groups;
+}
+
+export function captionEvents(words, maxWords) {
+  const groups = groupWords(words, maxWords);
+  const events = [];
+  groups.forEach((g, gi) => g.forEach((w, wi) => {
+    let e = wi + 1 < g.length ? g[wi + 1].start : w.end + 0.15;
+    if (gi + 1 < groups.length) e = Math.min(e, groups[gi + 1][0].start);
+    if (e - w.start > 0.01) events.push({ s: w.start, e, group: g, wi });
+  }));
+  return events;
+}
+
+export function activeCaption(events, t) {
+  // Small lists (one clip): a linear scan is fine.
+  for (const ev of events) if (ev.s <= t && t < ev.e) return ev;
+  return null;
+}
+
+export function keepSegments(words, clip, { maxPause = 0.45, pad = 0.08 } = {}) {
+  const len = clip.end - clip.start;
+  const cut = new Set(clip.cutWords || []);
+  const inClip = words.map((w, i) => ({ ...w, i })).filter((w) => w.end > clip.start && w.start < clip.end);
+  const cuts = inClip.filter((w) => cut.has(w.i)).map((w) => [w.start - clip.start, w.end - clip.start]);
+  if (clip.tightenPauses) {
+    const kept = inClip.filter((w) => !cut.has(w.i));
+    for (let k = 1; k < kept.length; k++) {
+      if (kept[k].start - kept[k - 1].end > maxPause) cuts.push([kept[k - 1].end - clip.start + pad, kept[k].start - clip.start - pad]);
+    }
+  }
+  if (!cuts.length) return [[0, len]];
+  cuts.sort((a, b) => a[0] - b[0]);
+  const merged = [];
+  for (const [s, e] of cuts) {
+    const a = Math.max(0, s);
+    const b = Math.min(len, e);
+    if (b <= a) continue;
+    if (merged.length && a <= merged.at(-1)[1] + 0.01) merged.at(-1)[1] = Math.max(merged.at(-1)[1], b);
+    else merged.push([a, b]);
+  }
+  const keep = [];
+  let pos = 0;
+  for (const [s, e] of merged) { if (s - pos > 0.05) keep.push([pos, s]); pos = e; }
+  if (len - pos > 0.05) keep.push([pos, len]);
+  return keep;
+}
+
+export const keptLength = (keep) => keep.reduce((a, [s, e]) => a + (e - s), 0);

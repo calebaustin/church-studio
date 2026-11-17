@@ -1,0 +1,38 @@
+{
+  "name": "sermon-clips",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local desktop app: sermon video -> captioned, auto-centered 9:16 clips. Offline, no LLM required.",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n daemon,ui,app -c blue,magenta,green \"npm:dev:daemon\" \"npm:dev:ui\" \"npm:dev:app\"",
+    "dev:daemon": "node --watch src/daemon/server.js",
+    "dev:ui": "vite",
+    "dev:app": "wait-on tcp:127.0.0.1:5173 tcp:127.0.0.1:4317 && cross-env SC_UI_URL=http://127.0.0.1:5173 SC_EXTERNAL_DAEMON=1 electron .",
+    "build": "vite build",
+    "start": "vite build && electron .",
+    "daemon": "node src/daemon/server.js",
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.10.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.0.0",
+    "concurrently": "^9.1.0",
+    "cross-env": "^7.0.3",
+    "electron": "^38.0.0",
+    "vite": "^7.0.0",
+    "wait-on": "^8.0.0"
+  },
+  "allowScripts": {
+    "electron@38.8.6": true,
+    "esbuild@0.28.2": true
+  }
+}

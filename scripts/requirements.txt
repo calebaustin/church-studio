@@ -1,0 +1,5 @@
+faster-whisper>=1.1
+opencv-python-headless>=4.10,<5  # 5.x removed CascadeClassifier
+numpy>=1.26
+pillow>=10.4
+yt-dlp
