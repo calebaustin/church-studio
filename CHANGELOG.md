@@ -2,6 +2,11 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## 0.4.4 · November 18, 2026
+
+### Fixed
+- Long event names on the calendar stay inside their day instead of running into the next one. Hover an event to see its full name.
+
 ## 0.4.3 · November 18, 2026
 
 ### New
