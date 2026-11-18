@@ -57,7 +57,9 @@ export async function checkForUpdate() {
   const latest = releases[0];
   if (!latest) return (lastCheck = { current: VERSION, available: false, checked: new Date().toISOString(), message: 'No releases published yet.' });
   const version = latest.tag_name.replace(/^v/, '');
-  const dmg = latest.assets.find((a) => /arm64.*\.dmg$/i.test(a.name)) || latest.assets.find((a) => /\.dmg$/i.test(a.name));
+  // The download for this Mac: Apple Silicon (arm64) or Intel (x64). An Intel copy never gets the Apple Silicon file.
+  const mine = process.arch === 'arm64' ? /arm64.*\.dmg$/i : /x64.*\.dmg$/i;
+  const dmg = latest.assets.find((a) => mine.test(a.name)) || (process.arch === 'arm64' ? latest.assets.find((a) => /\.dmg$/i.test(a.name) && !/x64/i.test(a.name)) : null);
   // Notes for every release between this copy and the latest, newest first.
   const between = releases.filter((x) => newer(x.tag_name, VERSION)).map((x) => ({ version: x.tag_name.replace(/^v/, ''), date: x.published_at, notes: x.body || '' }));
   lastCheck = {
@@ -73,7 +75,7 @@ export const lastUpdateCheck = () => lastCheck;
 export async function downloadUpdate(ctx) {
   const info = lastCheck?.available ? lastCheck : await checkForUpdate();
   if (!info.available) throw new Error('You already have the latest version.');
-  if (!info.asset) throw new Error('This release has no Mac download yet.');
+  if (!info.asset) throw new Error(process.arch === 'arm64' ? 'This release has no Mac download yet.' : 'This release has no Intel Mac download yet. Check back soon.');
   const dest = path.join(downloadsDir(), info.asset.name);
   const r = await fetch(info.asset.url, { headers: { 'user-agent': 'Church-Studio-Updater' }, signal: ctx.signal });
   if (!r.ok || !r.body) throw new Error(`Download failed (${r.status}).`);

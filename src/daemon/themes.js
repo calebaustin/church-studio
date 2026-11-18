@@ -5,7 +5,7 @@
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { ASSETS_DIR, DATA_DIR, pyCommand, run } from './tools.js';
+import { ASSETS_DIR, DATA_DIR, pyCommand, run, jsonFrom } from './tools.js';
 
 const FILE = path.join(DATA_DIR, 'themes.json');
 const FONT_CACHE = path.join(DATA_DIR, 'fonts.json');
@@ -46,7 +46,7 @@ export async function listSystemFonts() {
   }
   try {
     const { stdout } = await run(...pyCommand('list_fonts', []));
-    systemFonts = JSON.parse(stdout).map((f) => ({
+    systemFonts = jsonFrom(stdout).map((f) => ({
       id: `sys:${f.family}|${f.style}`, name: `${f.family} ${f.style}`.replace(/ (Regular|Plain|Roman)$/, ''),
       family: f.family, file: f.file, index: f.index, style: f.style,
       css: `'${f.family.replace(/'/g, "\\'")}'`, weight: styleWeight(f.style), italic: /italic|oblique/i.test(f.style), system: true,

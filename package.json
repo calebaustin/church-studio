@@ -93,7 +93,8 @@
       "darkModeSupport": true
     },
     "dmg": {
-      "title": "Church Studio"
+      "title": "Church Studio",
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
     }
   }
 }

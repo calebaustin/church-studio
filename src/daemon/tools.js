@@ -161,6 +161,18 @@ export function run(cmd, args, { cwd = ROOT, input, onStderr, onStdout, signal }
   });
 }
 
+/**
+ * JSON printed by a helper program. Some math libraries print a warning first (Intel MKL does on
+ * older or emulated Intel chips), so skip any lines before the JSON starts.
+ */
+export function jsonFrom(stdout) {
+  const text = String(stdout).trim();
+  try { return JSON.parse(text); } catch { /* look past any warnings */ }
+  const at = text.search(/^[[{]/m);
+  if (at < 0) throw new Error(`Unexpected output: ${text.slice(0, 120)}`);
+  return JSON.parse(text.slice(at));
+}
+
 export async function probe(file) {
   const { stdout } = await run(tool('ffprobe'), [
     '-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', file,
@@ -199,7 +211,7 @@ export async function toolStatus() {
   if (!mediaHelper()) try {
     const { stdout } = await run(python(), ['-c',
       'import importlib.util as u, json; print(json.dumps({m: bool(u.find_spec(m)) for m in ["faster_whisper","cv2","numpy","PIL"]}))']);
-    const mods = JSON.parse(stdout.trim());
+    const mods = jsonFrom(stdout);
     for (const [m, ok] of Object.entries(mods)) {
       out.push({ name: `python: ${m}`, ok, required: true, path: '.venv', version: ok ? 'installed' : '', error: ok ? undefined : 'Missing' });
     }

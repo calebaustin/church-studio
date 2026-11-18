@@ -3,7 +3,7 @@
 // which makes long service videos much faster to process.
 import { rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { run, tool, pyCommand } from './tools.js';
+import { jsonFrom, run, tool, pyCommand } from './tools.js';
 import { file, getProject, updateProject } from './projects.js';
 import { loadConfig } from './config.js';
 import { detectSermon } from './sermon.js';
@@ -34,7 +34,7 @@ export async function transcribeProject(id, { start = null, end = null, cleanup 
       if (m) ctx.progress(6 + Number(m[1]) * 0.9, `Transcribing… ${m[1]}%`);
     },
   });
-  const transcript = JSON.parse(stdout);
+  const transcript = jsonFrom(stdout);
   // Write Bible references the way people read them: 1 Corinthians 10:16.
   transcript.words = normalizeWords(transcript.words);
   for (const s of transcript.segments || []) s.text = normalizeText(s.text);

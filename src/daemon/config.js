@@ -20,7 +20,8 @@ export const DEFAULTS = {
   openaiModel: 'gpt-5-mini',
   geminiApiKey: '',
   geminiModel: 'gemini-2.5-flash',
-  whisperModel: 'small', // tiny | base | small | medium | large-v3-turbo
+  // tiny | base | small | medium | large-v3-turbo. Intel Macs start on the faster Base model.
+  whisperModel: process.arch === 'arm64' ? 'small' : 'base',
   clipCount: 8,
   clipMin: 25,
   clipMax: 60,

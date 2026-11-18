@@ -2,6 +2,15 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## 0.4.3 · November 18, 2026
+
+### New
+- **Intel Macs.** Church Studio now runs on Intel Macs too. Each release has two downloads, one for Apple Silicon and one for Intel, and Settings › Updates picks the right one for your Mac.
+- Intel Macs start on the faster Base transcription model. You can switch models anytime in Settings › Transcription & clips.
+
+### Fixed
+- Transcription no longer fails when the computer's math library prints a warning first, which some Intel Macs do.
+
 ## 0.4.2 · November 18, 2026
 
 ### New

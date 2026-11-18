@@ -30,8 +30,13 @@ npm test                # engine tests (no network)
 ## Package it as one app
 
 ```sh
-scripts/build-app.sh    # -> dist/release/Church Studio-<version>-arm64.dmg
+scripts/build-app.sh            # Apple Silicon -> dist/release/Church Studio-<version>-arm64.dmg
+scripts/setup-intel.sh          # once: Intel Python, packages and ffmpeg (runs through Rosetta)
+ARCH=x64 scripts/build-app.sh   # Intel -> dist/release/Church Studio-<version>-x64.dmg
 ```
+
+Releases include both when the Intel setup has been run. Each copy's update check downloads the file for its
+own kind of Mac. Intel Macs start on the faster Base transcription model.
 
 The `.app` contains everything: a frozen Python media engine (`sc-media`: Whisper, OpenCV, Pillow,
 yt-dlp), static ffmpeg/ffprobe, fonts, the UI and the local daemon. Nothing else needs installing.

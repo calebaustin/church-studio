@@ -256,8 +256,8 @@ function AIKeys() {
 }
 
 const WHISPER = [
-  ['base', 'Base (fastest)'],
-  ['small', 'Small (recommended)'],
+  ['base', 'Base (fastest, best for Intel Macs)'],
+  ['small', 'Small (recommended on Apple Silicon)'],
   ['medium', 'Medium (more accurate)'],
   ['large-v3-turbo', 'Large (most accurate, slowest)'],
 ];
