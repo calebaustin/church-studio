@@ -1,45 +1,55 @@
 # Sermon Clips
 
-Local macOS desktop app that turns a sermon video into short, captioned, vertical (9:16) clips —
-and posts or schedules them to your social accounts. No login, no cloud, no API keys required.
+A Mac app that turns a sermon into short, captioned clips and helps you post them.
+No login, no cloud, no API keys required.
 
 ## Run it
 
 ```sh
-scripts/setup.sh      # once: ffmpeg, Python 3.12 venv (faster-whisper, OpenCV<5, Pillow), npm deps
-npm start             # builds the UI and opens the app window
-npm run dev           # hot-reload UI + daemon + Electron
-npm test              # engine tests (no network)
+scripts/setup.sh        # once: Python venv + npm packages (ffmpeg comes bundled via npm)
+npm start               # build the UI and open the app
+npm run dev             # hot reload: UI + daemon + Electron
+npm test                # engine tests (no network)
 ```
+
+## Package it as one app
+
+```sh
+scripts/build-app.sh    # -> dist/release/Sermon Clips-<version>-arm64.dmg
+```
+
+The `.app` contains everything: a frozen Python media engine (`sc-media`: Whisper, OpenCV, Pillow,
+yt-dlp), static ffmpeg/ffprobe, fonts, the UI and the local daemon. Nothing else needs installing.
+Data lives in `~/Library/Application Support/Sermon Clips`. The Whisper model downloads once on first
+transcription. The build is unsigned, so the first launch needs right-click > Open.
 
 ## How it works
 
-1. **Ingest** — pick a video from your channel (yt-dlp lists uploads + past livestreams), paste a link, or open a file.
-2. **Transcribe** — faster-whisper with word timestamps, on this Mac (whole service or a known range).
-3. **Find the sermon** — longest stretch of continuous speech (songs are slower and repeat), snapped to cue phrases
-   like “turn with me to…” / “let's pray”. You confirm or adjust it on a timeline.
-4. **Propose clips** — offline scoring tuned for preaching (stories, application, quotable lines, scripture, strong
-   openers, complete endings). Optional AI helper (Ollama / Claude / OpenAI / Gemini) only re-ranks and retitles.
-5. **Edit** — live 9:16 preview, word-level cuts, trim, tighten pauses, remove “um/uh”, hook text, caption themes, undo/redo.
-6. **Export** — 1080×1920 H.264. A smooth camera follows the speaker (face tracking → dead-zone spring → zero-phase
-   smoothing); captions are drawn word by word with Pillow (no libass needed). Rendered by `scripts/render_clip.py`.
-7. **Social** — post now, schedule, or draft. See `docs/SOCIAL.md`.
+1. **Add a sermon.** Pick from your channel or paste a link. Before downloading, the app reads YouTube's
+   captions, finds the sermon, and can download only that part.
+2. **Transcribe** with faster-whisper on this Mac (word timings).
+3. **Confirm the sermon** on a timeline and scene strip.
+4. **Clips** are suggested by offline scoring tuned for preaching. An optional AI helper can rerank them.
+5. **Edit:** live 9:16 preview, word cuts, trims, pause tightening, hook text, caption themes, undo/redo.
+   Framing: smooth glide (start to finish), follow closely, timestamp cues (cut or glide), fixed, or whole frame.
+6. **Export:** 9:16, 4:5, 1:1 or 16:9; 720p to 4K; H.264 or HEVC. Saves to Downloads, then asks where you want it.
+7. **Social:** post now, schedule, or draft. See `docs/SOCIAL.md`.
+
+The home screen is a dashboard: weekly goal, quick actions, what's up next, and a summary of clips and posts.
 
 ## Layout
 
 ```
-electron/          main window + preload (file pickers)
-src/daemon/        local HTTP daemon on 127.0.0.1:4317 (all heavy work, job queue)
-  social/          social hub: platforms, providers, encrypted vault, scheduler
-src/ui/            React + Vite UI (light liquid glass, themeable)
-scripts/           setup.sh, transcribe.py, render_clip.py
-data/ projects/ config.local.json   local only, gitignored
+electron/        window + preload
+src/daemon/      local HTTP daemon on 127.0.0.1:4317 (job queue, media, social)
+src/ui/          React + Vite UI (liquid glass, light and dark themes)
+scripts/         setup.sh, build-app.sh, transcribe.py, render_clip.py, list_fonts.py, sc_media.py
+assets/fonts/    Montserrat (OFL) for captions
+docs/            plan, architecture, social hub, UI guide
 ```
 
 ## Notes
-- `config.local.json` holds settings and optional AI keys. Social credentials are AES-256-GCM encrypted in
-  `data/social/` with a key in `data/social/credentials.key` — back up `data/` as a whole.
-- Face tracking uses OpenCV Haar cascades (pinned `opencv-python-headless<5`; 5.x removed them). YuNet/YOLO is the
-  planned upgrade for wide stage shots.
-- The liquid-glass look is CSS (`backdrop-filter` + an SVG displacement filter); the `@ybouane/liquidglass` package's
-  install script is broken and its per-frame HTML capture is too heavy for an editor.
+- Settings and optional AI keys: `config.local.json`. Social credentials are encrypted in `data/social/`.
+- Speaker tracking uses OpenCV face detection (`opencv-python-headless<5`). YuNet/YOLO is the next upgrade.
+- Captions are drawn in Python (Pillow), so ffmpeg doesn't need libass.
+- UI follows `docs/ui-ux-guide.md`: tokens only, one button system, plain copy.

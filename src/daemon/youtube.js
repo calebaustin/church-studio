@@ -1,10 +1,15 @@
 // YouTube ingest with yt-dlp: list the owner's channel (uploads + past livestreams) and
 // download one video into a project. No login and no API key needed.
 // Adapted from VGP Clips src/episodes.js (recentEpisodes / addEpisodeUrl).
-import { copyFile, stat } from 'node:fs/promises';
+import { copyFile, mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { run, tool, probe } from './tools.js';
+import { run, tool, probe, pyCommand } from './tools.js';
+
+const ytdlp = (args, opts) => run(...pyCommand('yt-dlp', args), opts);
 import { createProject, file, updateProject } from './projects.js';
+import { makeThumbs } from './thumbs.js';
+import { detectSermon } from './sermon.js';
 
 /** "@church", "youtube.com/@church", ".../channel/UC…" → base channel URL without a tab. */
 export function channelBase(input) {
@@ -21,7 +26,7 @@ export function channelBase(input) {
 
 async function listTab(url, limit, signal) {
   try {
-    const { stdout } = await run(tool('yt-dlp'), [
+    const { stdout } = await ytdlp([
       url, '--flat-playlist', '--playlist-end', String(limit), '-J', '--no-warnings',
     ], { signal });
     return JSON.parse(stdout).entries ?? [];
@@ -63,12 +68,63 @@ function youtubeId(url) {
 }
 
 /** Create a project for a YouTube URL and download it (≤1080p, H.264 when available). */
-export async function downloadToProject(url, ctx, existingProject = null) {
-  const bin = tool('yt-dlp');
+/** YouTube auto-caption json3 -> words with timings. Bracketed tags like [Music] are dropped. */
+export function json3Words(data) {
+  const words = [];
+  for (const ev of data.events || []) {
+    if (!ev.segs) continue;
+    const base = ev.tStartMs || 0;
+    const evEnd = base + (ev.dDurationMs || 0);
+    const segs = ev.segs.filter((sg) => sg.utf8 && sg.utf8.trim() && !/^\[.*\]$/.test(sg.utf8.trim()));
+    segs.forEach((sg, i) => {
+      const start = base + (sg.tOffsetMs || 0);
+      const next = segs[i + 1] ? base + (segs[i + 1].tOffsetMs || 0) : Math.min(evEnd, start + 800);
+      for (const w of sg.utf8.trim().split(/\s+/)) words.push({ w, start: start / 1000, end: Math.max(start + 120, next) / 1000 });
+    });
+  }
+  return words.sort((a, b) => a.start - b.start);
+}
+
+/**
+ * Look at a video before downloading it: title, length, chapters, and (from YouTube's own
+ * captions) where the sermon probably is. Nothing big is downloaded.
+ */
+export async function scoutVideo(url) {
+  const dir = await mkdtemp(path.join(tmpdir(), 'sc-scout-'));
+  try {
+    const { stdout } = await ytdlp([
+      url, '--no-playlist', '--no-warnings', '--skip-download', '--no-simulate', '--dump-single-json',
+      '--write-auto-subs', '--write-subs', '--sub-langs', 'en.*,en', '--sub-format', 'json3', '-o', path.join(dir, 'v.%(ext)s'),
+    ]);
+    const info = JSON.parse(stdout);
+    const subs = (await readdir(dir)).filter((f) => f.endsWith('.json3'));
+    let words = [];
+    if (subs.length) {
+      const pick = subs.find((f) => /\.en\.json3$/.test(f)) || subs[0];
+      words = json3Words(JSON.parse(await readFile(path.join(dir, pick), 'utf8')));
+    }
+    const sermon = words.length > 50 ? detectSermon(words, info.duration) : null;
+    if (sermon) {
+      delete sermon.bins;
+      const near = (t, after) => (after ? words.filter((w) => w.start >= t).slice(0, 14) : words.filter((w) => w.end <= t).slice(-14)).map((w) => w.w).join(' ');
+      sermon.startText = near(sermon.start, true);
+      sermon.endText = near(sermon.end, false);
+    }
+    return {
+      id: info.id, title: info.title, duration: info.duration, thumb: info.thumbnail,
+      chapters: (info.chapters || []).map((c) => ({ title: c.title, start: c.start_time, end: c.end_time })),
+      sermon, captions: words.length > 0,
+    };
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+export async function downloadToProject(url, ctx, existingProject = null, range = null) {
   let project = existingProject;
   if (!project) {
     ctx.progress(1, 'Reading video details…');
-    const { stdout } = await run(bin, ['--no-playlist', '--no-warnings', '--print', 'title', '--skip-download', url], { signal: ctx.signal });
+    const { stdout } = await ytdlp(['--no-playlist', '--no-warnings', '--print', 'title', '--skip-download', url], { signal: ctx.signal });
     const id = youtubeId(url);
     project = await createProject({
       title: stdout.trim().split(/\r?\n/)[0] || 'Sermon',
@@ -76,13 +132,16 @@ export async function downloadToProject(url, ctx, existingProject = null) {
       thumbnail: id ? `https://i.ytimg.com/vi/${id}/mqdefault.jpg` : null,
     });
   }
+  const part = range && range.end > range.start ? range : (project.range || null);
+  if (part) await updateProject(project.id, (p) => { p.range = { start: part.start, end: part.end }; });
   await updateProject(project.id, (p) => { p.status = 'downloading'; });
-  ctx.progress(3, 'Downloading…');
+  ctx.progress(3, part ? 'Downloading the sermon…' : 'Downloading…');
   const out = file(project.id, 'source.mp4');
-  await run(bin, [
-    '--no-playlist', '--no-warnings', '--newline',
+  await ytdlp([
+    '--no-playlist', '--no-warnings', '--newline', '--ffmpeg-location', tool('ffmpeg'),
     '-f', 'bv*[height<=1080][vcodec^=avc1]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]/b',
     '--merge-output-format', 'mp4',
+    ...(part ? ['--download-sections', `*${Math.max(0, part.start).toFixed(2)}-${part.end.toFixed(2)}`] : []),
     '--progress-template', 'download:PROGRESS %(progress._percent_str)s',
     '-o', out, url,
   ], {
@@ -119,6 +178,7 @@ async function finishIngest(id, source, ctx) {
     p.poster = 'poster.jpg';
     p.status = 'ready';
   });
+  await makeThumbs(id, null).catch((e) => console.error('[thumbs]', e.message));
   ctx.progress(100, 'Video ready');
   return { projectId: project.id };
 }

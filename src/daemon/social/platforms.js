@@ -20,7 +20,7 @@ export const PLATFORMS = [
       'APIs & Services → Library → enable “YouTube Data API v3”.',
       'Google Auth Platform → Branding: fill in an app name and your email. Audience: External, then add your own Google account under Test users.',
       'Clients → Create client → Application type “Desktop app”. Copy the client ID and secret here.',
-      'Press Connect. A Google page opens in your browser — pick the channel and allow uploads. You come back here automatically.',
+      'Press Connect, pick your channel, and allow uploads.',
     ],
     link: 'https://console.cloud.google.com/apis/library/youtube.googleapis.com',
   },

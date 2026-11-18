@@ -115,7 +115,7 @@ const mastodon = {
 // ------------------------------------------------------------------ YouTube (OAuth, resumable upload)
 export async function googleToken(creds) {
   if (creds.accessToken && creds.expiresAt > Date.now() + 60_000) return { creds, token: creds.accessToken, refreshed: false };
-  if (!creds.refreshToken) throw new ProviderError('YouTube: not connected yet — press Connect.');
+  if (!creds.refreshToken) throw new ProviderError('YouTube isn’t connected yet. Press Connect.');
   const r = await json(await req('https://oauth2.googleapis.com/token', {
     method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ client_id: creds.clientId, client_secret: creds.clientSecret, refresh_token: creds.refreshToken, grant_type: 'refresh_token' }),

@@ -3,7 +3,7 @@
 // which makes long service videos much faster to process.
 import { rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { run, tool, python, SCRIPTS_DIR } from './tools.js';
+import { run, tool, pyCommand } from './tools.js';
 import { file, getProject, updateProject } from './projects.js';
 import { loadConfig } from './config.js';
 import { detectSermon } from './sermon.js';
@@ -22,9 +22,7 @@ export async function transcribeProject(id, { start = null, end = null } = {}, c
   await run(tool('ffmpeg'), ['-y', '-loglevel', 'error', ...range, '-i', source, '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', wav], { signal: ctx.signal });
 
   ctx.progress(6, `Transcribing with Whisper (${config.whisperModel})… the first run downloads the model.`);
-  const { stdout } = await run(python(), [
-    path.join(SCRIPTS_DIR, 'transcribe.py'), wav, '--model', config.whisperModel, '--offset', String(start ?? 0),
-  ], {
+  const { stdout } = await run(...pyCommand('transcribe', [wav, '--model', config.whisperModel, '--offset', String(start ?? 0)]), {
     signal: ctx.signal,
     onStderr: (chunk) => {
       const m = [...chunk.matchAll(/PROGRESS (\d+)/g)].pop();

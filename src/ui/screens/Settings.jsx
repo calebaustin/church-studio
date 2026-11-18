@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useApp, applyAppTheme } from '../App.jsx';
+import { Plus, AlertTriangle } from 'lucide-react';
+import { useApp, applyAppTheme, activeAppTheme } from '../App.jsx';
 import { api, desktop, openLink } from '../api.js';
 import VideoThemeEditor from '../components/VideoThemeEditor.jsx';
 
@@ -49,9 +50,7 @@ function StartHere({ go }) {
     <>
       <section className="glass strong panel stack">
         <h2>Welcome to Sermon Clips</h2>
-        <p className="muted">Everything runs on this Mac. No account, no login, and <b>no API keys are needed</b> —
-          downloading, transcription (Whisper), clip picking, auto-centering and captions all work offline.
-          Keys are only for the optional AI helper.</p>
+        <p className="muted">Everything runs on this Mac. No account or keys needed.</p>
         <div className="row wrap" style={{ marginTop: 6 }}>
           <span className={`chip ${config.youtubeChannel ? 'ok' : 'warn'}`}><span className="dot" />{config.youtubeChannel ? 'Channel connected' : 'Add your channel'}</span>
           <span className={`chip ${ready ? 'ok' : 'warn'}`}><span className="dot" />{tools ? (ready ? 'Tools ready' : 'Setup needed') : 'Checking tools…'}</span>
@@ -64,7 +63,7 @@ function StartHere({ go }) {
       </section>
       <section className="glass panel stack">
         <h3>Local tools</h3>
-        <p className="muted small">If anything is missing, run <span className="mono">scripts/setup.sh</span> once in Terminal.</p>
+        <p className="muted small">Missing something? Run <span className="mono">scripts/setup.sh</span>.</p>
         <div>
           {!tools && <p className="muted">Checking…</p>}
           {tools?.map((t) => (
@@ -97,7 +96,7 @@ function YouTube() {
   return (
     <section className="glass strong panel stack">
       <h2>Your YouTube channel</h2>
-      <p className="muted">Paste your church's channel. The app lists recent uploads and past livestreams with yt-dlp — no Google sign-in.</p>
+      <p className="muted">Paste your church's channel link or handle.</p>
       <label className="field">Channel URL or handle
         <input className="input" value={channel} placeholder="https://www.youtube.com/@yourchurch or @yourchurch" onChange={(e) => setChannel(e.target.value)} />
       </label>
@@ -106,7 +105,7 @@ function YouTube() {
         <Saved at={saved} />
       </div>
       {test && !test.busy && (test.ok
-        ? <div className="banner info">Found {test.n} videos{test.first ? ` — latest: “${test.first}”` : ''}.</div>
+        ? <div className="banner info">Found {test.n} videos{test.first ? `. Latest: “${test.first}”` : ''}.</div>
         : <div className="banner">{test.error}</div>)}
       <p className="muted small">Optional: a YouTube Data API key (under “AI helper & keys”) is stored for richer listings later. It isn't required.</p>
     </section>
@@ -155,7 +154,7 @@ function AIKeys() {
     try {
       await saveConfig(models);
       const r = await api.post('/api/ai/test');
-      setTest(r.ok ? { ok: true, msg: `Works — sample title: “${r.sample}”` } : { ok: false, msg: r.error });
+      setTest(r.ok ? { ok: true, msg: `Working. Sample title: “${r.sample}”` } : { ok: false, msg: r.error });
     } catch (e) { setTest({ ok: false, msg: e.message }); }
   };
   const modelField = { anthropic: 'anthropicModel', openai: 'openaiModel', gemini: 'geminiModel', ollama: 'ollamaModel' }[p];
@@ -163,8 +162,7 @@ function AIKeys() {
     <>
       <section className="glass strong panel stack">
         <h2>AI helper (optional)</h2>
-        <p className="muted">Clips are always found by offline scoring first. If you turn on a helper, it only re-ranks those
-          candidates and writes titles, hooks and captions. If it fails, the offline picks are kept.</p>
+        <p className="muted">Off by default. When on, it reranks clips and writes titles.</p>
         <div className="provider-grid">
           {PROVIDERS.map((x) => (
             <div key={x.id} className={`provider ${p === x.id ? 'on' : ''}`} onClick={() => { setTest(null); saveConfig({ llmProvider: x.id }); }}>
@@ -202,7 +200,7 @@ function AIKeys() {
       </section>
       <section className="glass panel stack">
         <h3>API keys</h3>
-        <p className="muted small">Only needed for the provider you picked. Never sent anywhere except that provider.</p>
+        <p className="muted small">Only needed for the helper you picked.</p>
         {keyGuide.map((g) => (
           <SecretField key={g.field} guide={g} value={config[g.field]} onSave={(v) => saveConfig({ [g.field]: v })} />
         ))}
@@ -212,10 +210,10 @@ function AIKeys() {
 }
 
 const WHISPER = [
-  ['base', 'Base — fastest, rough'],
-  ['small', 'Small — good balance (default)'],
-  ['medium', 'Medium — more accurate, slower'],
-  ['large-v3-turbo', 'Large v3 Turbo — best, needs time'],
+  ['base', 'Base (fastest)'],
+  ['small', 'Small (recommended)'],
+  ['medium', 'Medium (more accurate)'],
+  ['large-v3-turbo', 'Large (most accurate, slowest)'],
 ];
 
 function ClipDefaults() {
@@ -225,7 +223,7 @@ function ClipDefaults() {
   return (
     <section className="glass strong panel stack">
       <h2>Transcription & clips</h2>
-      <label className="field">Whisper model <span className="hint">Downloaded once, then runs offline. Bigger is more accurate and slower.</span>
+      <label className="field">Transcription model
         <select className="input" value={v.whisperModel} onChange={(e) => setV({ ...v, whisperModel: e.target.value })}>
           {WHISPER.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
         </select>
@@ -248,10 +246,10 @@ function ExportSettings() {
   return (
     <section className="glass strong panel stack">
       <h2>Export</h2>
-      <p className="muted">Every export is 1080 × 1920 (9:16) H.264 with burned-in captions.</p>
-      <label className="field">Export folder <span className="hint">Leave empty to keep exports inside each project folder.</span>
+
+      <label className="field">Export folder <span className="hint">Empty means Downloads.</span>
         <div className="row">
-          <input className="input mono" value={v.exportFolder} placeholder="(project folder)" onChange={(e) => setV({ ...v, exportFolder: e.target.value })} />
+          <input className="input mono" value={v.exportFolder} placeholder="Downloads" onChange={(e) => setV({ ...v, exportFolder: e.target.value })} />
           {desktop?.pickFolder && <button className="btn" onClick={async () => { const f = await desktop.pickFolder(); if (f) setV({ ...v, exportFolder: f }); }}>Choose…</button>}
         </div>
       </label>
@@ -264,68 +262,106 @@ function ExportSettings() {
 }
 
 const TOKEN_LABELS = [
-  ['--bg', 'Background', 'color'], ['--bg-2', 'Background 2', 'color'], ['--text', 'Text', 'color'], ['--muted', 'Muted text', 'color'],
-  ['--accent', 'Accent', 'color'], ['--accent-2', 'Accent 2', 'color'],
+  ['--bg', 'Background'], ['--bg-2', 'Background blend'], ['--ink', 'Text'], ['--accent', 'Main color (buttons)'], ['--accent-2', 'Highlight color'],
 ];
+const hexToRgb = (hex) => { const h = hex.replace('#', ''); return `${parseInt(h.slice(0, 2), 16)}, ${parseInt(h.slice(2, 4), 16)}, ${parseInt(h.slice(4, 6), 16)}`; };
+const rgbToHex = (rgb = '255, 255, 255') => `#${rgb.split(',').map((n) => Number(n).toString(16).padStart(2, '0')).join('')}`;
+const lum = (hex) => { const [r, g, b] = hexToRgb(hex).split(',').map((n) => { const c = Number(n) / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
+
+const NEW_LIGHT = { name: 'My light theme', mode: 'light', tokens: { '--bg': '#F2F0EC', '--bg-2': '#EAF0F7', '--ink': '#16181F', '--accent': '#3D6BFF', '--accent-2': '#FF8A5B', '--glass-rgb': '255, 255, 255', '--radius': '20px', '--glass-blur': '18px', '--glass-tint': '0.55', '--font-sans': "-apple-system, 'SF Pro Text', system-ui, sans-serif", '--font-display': "'Avenir Next', -apple-system, system-ui, sans-serif" } };
+const NEW_DARK = { name: 'My dark theme', mode: 'dark', tokens: { ...NEW_LIGHT.tokens, '--bg': '#10131F', '--bg-2': '#1B1530', '--ink': '#EEF0F8', '--accent': '#7C9BFF', '--accent-2': '#FFA37A', '--glass-rgb': '34, 39, 60' } };
+
+function Swatch({ t, on, onClick }) {
+  return (
+    <button className={`swatch ${on ? 'on' : ''}`} style={{ background: `linear-gradient(135deg, ${t.tokens['--bg']}, ${t.tokens['--bg-2']})`, color: t.tokens['--ink'] }} onClick={onClick} aria-pressed={on}>
+      <strong>{t.name}</strong>
+      <div className="bars"><i style={{ background: t.tokens['--accent'] }} /><i style={{ background: t.tokens['--accent-2'] }} /><i style={{ background: `rgb(${t.tokens['--glass-rgb']})` }} /></div>
+    </button>
+  );
+}
 
 function AppTheme() {
-  const { config, saveConfig, themes, reloadThemes } = useApp();
-  const current = themes.app.find((t) => t.id === config.appTheme) || themes.app[0];
-  const [draft, setDraft] = useState(() => structuredClone(current));
-  useEffect(() => { setDraft(structuredClone(current)); }, [current?.id]);
-  const setToken = (k, val) => {
-    const next = { ...draft, tokens: { ...draft.tokens, [k]: val } };
-    setDraft(next);
-    applyAppTheme(next);
-  };
-  const px = (k, d) => parseFloat(draft.tokens[k] ?? d);
-  const save = async (asNew) => {
-    const body = { ...draft, id: asNew ? undefined : draft.id, name: asNew ? `${draft.name} copy` : draft.name };
-    const { theme } = await api.post('/api/themes/app', body);
+  const { config, saveConfig, themes, reloadThemes, toast } = useApp();
+  const [editing, setEditing] = useState(null); // a theme draft or null
+  const light = themes.app.filter((t) => t.mode !== 'dark');
+  const dark = themes.app.filter((t) => t.mode === 'dark');
+  const restore = () => applyAppTheme(activeAppTheme(config, themes));
+  const preview = (d) => applyAppTheme(d);
+  const setToken = (k, v) => { const next = { ...editing, tokens: { ...editing.tokens, [k]: v } }; setEditing(next); preview(next); };
+  const px = (k, d) => parseFloat(editing.tokens[k] ?? d);
+  const start = (t, fresh) => { const d = structuredClone(fresh ? (t.mode === 'dark' ? NEW_DARK : NEW_LIGHT) : t); if (!fresh && t.builtin) { d.name = `${t.name} (mine)`; } setEditing(d); preview(d); };
+  const save = async () => {
+    const { theme } = await api.post('/api/themes/app', { ...editing, id: editing.builtin ? undefined : editing.id });
     await reloadThemes();
-    await saveConfig({ appTheme: theme.id });
+    await saveConfig(theme.mode === 'dark' ? { appThemeDark: theme.id } : { appTheme: theme.id });
+    setEditing(null);
+    toast({ text: `Saved “${theme.name}”.` });
   };
+  const ratio = editing ? contrast(editing.tokens['--ink'], editing.tokens['--bg']) : 0;
   return (
     <>
-      <section className="glass strong panel stack">
+      <section className="glass strong panel stack" style={{ gap: 16 }}>
         <h2>App theme</h2>
-        <div className="theme-swatches">
-          {themes.app.map((t) => (
-            <div key={t.id} className={`swatch ${t.id === config.appTheme ? 'on' : ''}`} style={{ background: `linear-gradient(135deg, ${t.tokens['--bg']}, ${t.tokens['--bg-2']})`, color: t.tokens['--text'] }}
-              onClick={() => saveConfig({ appTheme: t.id })}>
-              <strong>{t.name}</strong>
-              <div className="bars"><i style={{ background: t.tokens['--accent'] }} /><i style={{ background: t.tokens['--accent-2'] }} /><i style={{ background: t.tokens['--muted'] }} /></div>
-            </div>
-          ))}
+        <div className="stack" style={{ gap: 6 }}>
+          <span className="small" style={{ fontWeight: 600, color: 'var(--ink)' }}>Appearance</span>
+          <div className="seg" role="radiogroup" aria-label="Appearance">
+            {[['light', 'Light'], ['dark', 'Dark'], ['system', 'Match my Mac']].map(([k, l]) => (
+              <button key={k} role="radio" aria-checked={config.appearance === k} className={config.appearance === k ? 'on' : ''} onClick={() => saveConfig({ appearance: k })}>{l}</button>
+            ))}
+          </div>
         </div>
-        <label className="row small"><input type="checkbox" checked={config.refraction !== false} onChange={(e) => saveConfig({ refraction: e.target.checked })} /> Liquid refraction on glass panels</label>
-      </section>
-      <section className="glass panel stack">
-        <div className="row between"><h3>Edit “{draft.name}”</h3>{draft.builtin && <span className="chip">Built-in — saving makes a copy</span>}</div>
-        <label className="field">Name<input className="input" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></label>
-        <div className="token-grid">
-          {TOKEN_LABELS.map(([k, label]) => (
-            <label key={k} className="row small"><input type="color" value={draft.tokens[k]} onChange={(e) => setToken(k, e.target.value)} />{label}</label>
-          ))}
-          <label className="field">Corner radius · {px('--radius', 22)}px<input type="range" min="8" max="32" value={px('--radius', 22)} onChange={(e) => setToken('--radius', `${e.target.value}px`)} /></label>
-          <label className="field">Glass blur · {px('--glass-blur', 18)}px<input type="range" min="0" max="40" value={px('--glass-blur', 18)} onChange={(e) => setToken('--glass-blur', `${e.target.value}px`)} /></label>
-          <label className="field">Glass tint · {px('--glass-tint', 0.55).toFixed(2)}<input type="range" min="0.1" max="0.9" step="0.05" value={px('--glass-tint', 0.55)} onChange={(e) => setToken('--glass-tint', e.target.value)} /></label>
-          <label className="field">Display font
-            <select className="input" value={draft.tokens['--font-display']} onChange={(e) => setToken('--font-display', e.target.value)}>
-              <option value="'Avenir Next', -apple-system, system-ui, sans-serif">Avenir Next</option>
-              <option value="-apple-system, system-ui, sans-serif">SF Pro (system)</option>
-              <option value="Georgia, 'Times New Roman', serif">Georgia</option>
-              <option value="Futura, -apple-system, sans-serif">Futura</option>
-              <option value="'Helvetica Neue', Helvetica, sans-serif">Helvetica Neue</option>
-            </select>
-          </label>
+        <div className="stack">
+          <h3>Light theme</h3>
+          <div className="theme-swatches">
+            {light.map((t) => <Swatch key={t.id} t={t} on={t.id === config.appTheme} onClick={() => saveConfig({ appTheme: t.id, ...(config.appearance === 'dark' ? { appearance: 'light' } : {}) })} />)}
+            <button className="swatch new" onClick={() => start({ mode: 'light' }, true)}><span className="row"><Plus size={16} />Create custom theme</span></button>
+          </div>
         </div>
-        <div className="row">
-          {!draft.builtin && <button className="btn primary" onClick={() => save(false)}>Save</button>}
-          <button className={`btn ${draft.builtin ? 'primary' : ''}`} onClick={() => save(true)}>Save as new theme</button>
-          <button className="btn ghost" onClick={() => { setDraft(structuredClone(current)); applyAppTheme(current); }}>Reset</button>
+        <div className="stack">
+          <h3>Dark theme</h3>
+          <div className="theme-swatches">
+            {dark.map((t) => <Swatch key={t.id} t={t} on={t.id === config.appThemeDark} onClick={() => saveConfig({ appThemeDark: t.id, ...(config.appearance === 'light' ? { appearance: 'dark' } : {}) })} />)}
+            <button className="swatch new" onClick={() => start({ mode: 'dark' }, true)}><span className="row"><Plus size={16} />Create custom theme</span></button>
+          </div>
+        </div>
+        <div className="row wrap">
+          <button className="btn sm" onClick={() => start(activeAppTheme(config, themes), false)}>Edit the current theme</button>
+          <label className="row small"><input type="checkbox" checked={config.refraction !== false} onChange={(e) => saveConfig({ refraction: e.target.checked })} /> Liquid refraction on glass panels</label>
         </div>
       </section>
+      {editing && (
+        <section className="glass panel stack" style={{ gap: 14 }}>
+          <div className="row between"><h3>Custom theme</h3><span className="chip accent">{editing.mode === 'dark' ? 'Dark' : 'Light'} theme · previewing live</span></div>
+          <label className="field">Name<input className="input" value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></label>
+          <div className="token-grid">
+            {TOKEN_LABELS.map(([k, label]) => (
+              <label key={k} className="row small"><input type="color" value={editing.tokens[k]} onChange={(e) => setToken(k, e.target.value)} />{label}</label>
+            ))}
+            <label className="row small"><input type="color" value={rgbToHex(editing.tokens['--glass-rgb'])} onChange={(e) => setToken('--glass-rgb', hexToRgb(e.target.value))} />Glass color</label>
+          </div>
+          {ratio < 4.5 && <div className="banner bad"><AlertTriangle size={16} />Text on this background is hard to read (contrast {ratio.toFixed(1)}:1, aim for 4.5:1). Make the text or background lighter/darker.</div>}
+          <div className="token-grid">
+            <label className="field">Corner radius · {px('--radius', 20)}px<input type="range" min="8" max="32" value={px('--radius', 20)} onChange={(e) => setToken('--radius', `${e.target.value}px`)} /></label>
+            <label className="field">Glass blur · {px('--glass-blur', 18)}px<input type="range" min="0" max="40" value={px('--glass-blur', 18)} onChange={(e) => setToken('--glass-blur', `${e.target.value}px`)} /></label>
+            <label className="field">Glass strength · {Math.round(px('--glass-tint', 0.55) * 100)}%<input type="range" min="0.15" max="0.95" step="0.05" value={px('--glass-tint', 0.55)} onChange={(e) => setToken('--glass-tint', e.target.value)} /></label>
+            <label className="field">Heading font
+              <select className="input" value={editing.tokens['--font-display']} onChange={(e) => setToken('--font-display', e.target.value)}>
+                <option value="'Avenir Next', -apple-system, system-ui, sans-serif">Avenir Next</option>
+                <option value="'Montserrat', -apple-system, system-ui, sans-serif">Montserrat</option>
+                <option value="-apple-system, system-ui, sans-serif">SF Pro (system)</option>
+                <option value="Georgia, 'Times New Roman', serif">Georgia</option>
+                <option value="Futura, -apple-system, sans-serif">Futura</option>
+                <option value="'Helvetica Neue', Helvetica, sans-serif">Helvetica Neue</option>
+              </select>
+            </label>
+          </div>
+          <div className="row">
+            <button className="btn primary" onClick={save}>Save theme</button>
+            <button className="btn ghost" onClick={() => { setEditing(null); restore(); }}>Cancel</button>
+          </div>
+        </section>
+      )}
     </>
   );
 }
@@ -336,7 +372,7 @@ function VideoThemes() {
     <section className="glass strong panel stack">
       <div className="row between">
         <h2>Video themes</h2>
-        <span className="muted small">Caption looks burned into exports. Pick one per clip or project.</span>
+        <span className="muted small">Caption styles for your clips.</span>
       </div>
       <VideoThemeEditor
         selectedId={config.videoTheme}

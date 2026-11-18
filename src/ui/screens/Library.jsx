@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useApp } from '../App.jsx';
+import { Check, MonitorPlay, FolderOpen, Link2, Clapperboard } from 'lucide-react';
 import { api, desktop, fmt, media } from '../api.js';
+import Modal from '../components/Modal.jsx';
+import AddVideo from '../components/AddVideo.jsx';
 
-export default function Library() {
+export default function Library({ openPicker = false }) {
   const { go, trackJob, onJobFinished, config } = useApp();
   const [projects, setProjects] = useState(null);
   const [url, setUrl] = useState('');
   const [error, setError] = useState(null);
-  const [picker, setPicker] = useState(false);
+  const [picker, setPicker] = useState(openPicker);
+  const [adding, setAdding] = useState(null); // { url, title } being looked at before download
 
   const load = () => api.get('/api/projects').then((r) => setProjects(r.projects));
   useEffect(() => { load(); }, []);
@@ -36,31 +40,33 @@ export default function Library() {
       <section className="glass strong hero">
         <div>
           <h1>Turn Sunday's sermon into clips worth sharing.</h1>
-          <p>Pick a service from your channel. We'll find the sermon, suggest the strongest moments, and export
-            vertical videos with live captions — all on this Mac.</p>
+          <p>Pick a service. Get captioned vertical clips of the best moments.</p>
         </div>
         <div className="dropzone">
-          <button className="btn primary" style={{ height: 46, fontSize: 15 }} onClick={() => setPicker(true)}>
-            Pick from {config.youtubeChannel ? 'your channel' : 'a channel'}
+          <button className="btn primary lg" onClick={() => setPicker(true)}>
+            <MonitorPlay size={18} />Pick from {config.youtubeChannel ? 'your channel' : 'a channel'}
           </button>
           <div className="row">
             <input className="input" placeholder="…or paste a YouTube link" value={url} onChange={(e) => setUrl(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && url.trim() && add({ url: url.trim() })} />
-            <button className="btn" disabled={!url.trim()} onClick={() => add({ url: url.trim() })}>Add</button>
+              onKeyDown={(e) => e.key === 'Enter' && url.trim() && setAdding({ url: url.trim() })} />
+            <button className="btn" disabled={!url.trim()} onClick={() => setAdding({ url: url.trim() })}><Link2 size={14} />Add link</button>
           </div>
-          {desktop?.pickVideo && <button className="btn ghost" onClick={openFile}>Open a video file from this Mac…</button>}
+          {desktop?.pickVideo && <button className="btn ghost" onClick={openFile}><FolderOpen size={15} />Open a video file from this Mac…</button>}
           {error && <div className="banner">{error}</div>}
         </div>
       </section>
 
+      <GettingStarted projects={projects} onPick={() => setPicker(true)} />
       <div className="row between">
         <h2>Your sermons</h2>
         <span className="muted small">{projects ? `${projects.length} project${projects.length === 1 ? '' : 's'}` : ''}</span>
       </div>
       {projects && !projects.length && (
         <div className="glass empty">
+          <Clapperboard size={40} />
           <h3>No sermons yet</h3>
-          <p>Pick one from your channel above to get started.</p>
+          <p>Pick a service to get started.</p>
+          <button className="btn primary" onClick={() => setPicker(true)}>Pick from your channel</button>
         </div>
       )}
       <div className="projects">
@@ -83,7 +89,8 @@ export default function Library() {
           </div>
         ))}
       </div>
-      {picker && <ChannelPicker onClose={() => setPicker(false)} onAdd={(v) => add({ url: v.url, title: v.title })} />}
+      {picker && <ChannelPicker onClose={() => setPicker(false)} onAdd={(v) => { setPicker(false); setAdding({ url: v.url, title: v.title }); }} />}
+      {adding && <AddVideo url={adding.url} title={adding.title} onClose={() => setAdding(null)} onAdd={(body) => { setAdding(null); add(body); }} />}
     </div>
   );
 }
@@ -109,8 +116,7 @@ function ChannelPicker({ onClose, onAdd }) {
   useEffect(() => { if (config.youtubeChannel) load(false); else setState({ error: 'none' }); }, []);
   const items = state.items?.filter((v) => v.title.toLowerCase().includes(q.toLowerCase()));
   return (
-    <div className="scrim" onClick={onClose}>
-      <div className="glass strong modal stack" style={{ width: 'min(860px, 94vw)' }} onClick={(e) => e.stopPropagation()}>
+    <Modal onClose={onClose} width={900} label="Pick a service or sermon">
         <div className="row between">
           <h2>Pick a service or sermon</h2>
           <div className="row">
@@ -124,7 +130,7 @@ function ChannelPicker({ onClose, onAdd }) {
             <button className="btn primary" onClick={() => go({ name: 'settings', section: 'youtube' })}>Open Settings</button>
           </div>
         ) : state.error ? <div className="banner">{state.error}</div> : null}
-        {state.loading && <p className="muted">Reading your channel with yt-dlp…</p>}
+        {state.loading && <div className="stack">{[0, 1, 2, 3].map((i) => <div key={i} className="skeleton" style={{ height: 112 }} />)}</div>}
         {items && (
           <>
             <input className="input" placeholder="Search titles" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -146,7 +152,42 @@ function ChannelPicker({ onClose, onAdd }) {
             </div>
           </>
         )}
+    </Modal>
+  );
+}
+
+/** Getting-started checklist (guide §6.12). Hides itself once everything is done. */
+function GettingStarted({ projects, onPick }) {
+  const { config, go } = useApp();
+  const [social, setSocial] = useState(null);
+  useEffect(() => { api.get('/api/social/accounts').then((r) => setSocial(r.accounts.length)).catch(() => setSocial(0)); }, []);
+  if (!projects || social == null) return null;
+  const transcribed = projects.some((p) => p.status === 'transcribed');
+  const exported = projects.some((p) => p.exported > 0);
+  const steps = [
+    ['Add your YouTube channel', 'So your services are one click away.', Boolean(config.youtubeChannel), () => go({ name: 'settings', section: 'youtube' }), 'Add channel'],
+    ['Bring in a sermon', 'Pick a service from your channel, paste a link, or open a file.', projects.length > 0, onPick, 'Pick one'],
+    ['Transcribe it', 'Open the sermon and press Transcribe.', transcribed, projects[0] ? () => go({ name: 'project', id: projects[0].id }) : null, 'Open'],
+    ['Export your first clip', 'Keep a suggested clip, tweak it, export.', exported, projects[0] ? () => go({ name: 'project', id: projects[0].id }) : null, 'Open'],
+    ['Connect a social account', 'Post or schedule clips without leaving the app.', social > 0, () => go({ name: 'social' }), 'Connect'],
+  ];
+  const done = steps.filter((s) => s[2]).length;
+  if (done === steps.length) return null;
+  return (
+    <section className="glass panel stack" style={{ gap: 12 }}>
+      <div className="row between">
+        <div className="stack" style={{ gap: 2 }}><span className="eyebrow">Getting started</span><h2>{done === 0 ? 'Five quick steps to your first clip' : `${done} of ${steps.length} done`}</h2></div>
       </div>
-    </div>
+      <div className="meter" aria-hidden="true"><i style={{ width: `${(done / steps.length) * 100}%` }} /></div>
+      <div className="checklist">
+        {steps.map(([label, help, ok, action, cta]) => (
+          <div key={label} className={`check-row ${ok ? 'done' : ''}`}>
+            <span className="check">{ok && <Check size={15} />}</span>
+            <div className="stack" style={{ gap: 0 }}><strong className="label">{label}</strong><span className="muted small">{help}</span></div>
+            {!ok && action && <button className="btn sm" onClick={action}>{cta}</button>}
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }

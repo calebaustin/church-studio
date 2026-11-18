@@ -1,8 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../App.jsx';
 import { api, fmt, media } from '../api.js';
+import { ArrowLeft, Square, Wand2, Download, Trash2, Plus, Send, FolderOpen, Copy, ScissorsLineDashed } from 'lucide-react';
 import ClipEditor from './ClipEditor.jsx';
 import { StatusChip } from './Library.jsx';
+import Filmstrip from '../components/Filmstrip.jsx';
+import ExportDialog from '../components/ExportDialog.jsx';
+
+/** Progress for a running job with a clear way to stop it. */
+export function InlineJob({ job, label }) {
+  if (!job) return null;
+  return (
+    <div className="inline-job" aria-live="polite">
+      <div className="row between">
+        <strong className="truncate">{label || job.label}</strong>
+        <button className="btn sm danger" onClick={() => api.del(`/api/jobs/${job.id}`)}><Square size={11} fill="currentColor" />Stop</button>
+      </div>
+      <div className="progress"><i style={{ width: `${job.status === 'queued' ? 0 : job.progress}%` }} /></div>
+      <span className="muted small truncate">{job.status === 'queued' ? 'Waiting for the current task to finish…' : job.message}</span>
+    </div>
+  );
+}
 
 export function parseTime(s) {
   const parts = String(s).trim().split(':').map(Number);
@@ -20,7 +38,7 @@ function TimeInput({ value, onChange }) {
   );
 }
 
-export default function Project({ id }) {
+export default function Project({ id, initialStep }) {
   const { go, trackJob, onJobFinished, jobs } = useApp();
   const [project, setProject] = useState(null);
   const [transcript, setTranscript] = useState(null);
@@ -41,7 +59,9 @@ export default function Project({ id }) {
 
   useEffect(() => {
     load().then((p) => {
-      setStep(p.status !== 'transcribed' ? 'transcribe' : p.clips.length ? 'clips' : 'sermon');
+      const fallback = p.status !== 'transcribed' ? 'transcribe' : p.clips.length ? 'clips' : 'sermon';
+      if (initialStep === 'edit' && p.clips.length) { setSelected((p.clips.find((c) => c.status === 'kept' || c.status === 'exported') || p.clips[0]).id); setStep('edit'); }
+      else setStep(fallback);
     }).catch(() => go({ name: 'library' }));
   }, [load]);
 
@@ -56,6 +76,7 @@ export default function Project({ id }) {
 
   const busy = jobs.filter((j) => j.projectId === id && (j.status === 'running' || j.status === 'queued'));
   const busyKind = (k) => busy.some((j) => j.kind === k);
+  const jobOf = (k) => busy.find((j) => j.kind === k);
 
   const patch = async (body) => {
     const { project: p } = await api.patch(`/api/projects/${id}`, body);
@@ -84,10 +105,14 @@ export default function Project({ id }) {
     <div className="page">
       <div className="row between wrap">
         <div className="row grow" style={{ minWidth: 300 }}>
-          <button className="btn ghost sm" onClick={() => go({ name: 'library' })}>← Library</button>
+          <button className="btn ghost sm" onClick={() => go({ name: 'library' })}><ArrowLeft size={15} />Library</button>
           <input className="input" style={{ fontWeight: 650, fontSize: 17, background: 'transparent', border: 0, boxShadow: 'none' }}
             defaultValue={project.title} onBlur={(e) => e.target.value.trim() && e.target.value !== project.title && patch({ title: e.target.value.trim() })} />
           <StatusChip status={project.status} />
+          <button className="btn ghost sm danger" title="Delete this sermon" onClick={async () => {
+            if (!confirm(`Delete “${project.title}”? Its video, transcript, clips and exports in the project folder are removed from this Mac. This can't be undone.`)) return;
+            await api.del(`/api/projects/${id}`); go({ name: 'library' });
+          }}><Trash2 size={14} />Delete</button>
         </div>
         <div className="steps glass">
           {steps.map(([key, label, done], i) => (
@@ -102,19 +127,19 @@ export default function Project({ id }) {
       {notice && <div className="banner row between"><span>{notice}</span><button className="btn ghost sm" onClick={() => setNotice(null)}>Dismiss</button></div>}
 
       {project.status === 'downloading' && !busyKind('download') && (
-        <div className="banner row between"><span>The download didn't finish.</span><button className="btn sm" onClick={() => start('download')}>Retry download</button></div>
+        <div className="banner row between"><span>Download didn't finish.</span><button className="btn sm" onClick={() => start('download')}>Retry download</button></div>
       )}
 
       {step === 'transcribe' && (
-        <TranscribeStep project={project} src={src} player={player} busy={busyKind('transcribe') || busyKind('download')} onStart={(range) => start('transcribe', range)} />
+        <TranscribeStep project={project} src={src} player={player} job={jobOf('transcribe') || jobOf('download')} onStart={(range) => start('transcribe', range)} />
       )}
       {step === 'sermon' && transcript && (
         <SermonStep project={project} transcript={transcript} src={src} player={player} patch={patch}
-          busy={busyKind('propose')}
+          busy={busyKind('propose')} job={jobOf('propose')}
           onConfirm={async (range) => { await patch({ sermon: { ...range, confirmed: true } }); start('propose', {}); }} />
       )}
       {step === 'clips' && (
-        <ClipsStep project={project} src={src} player={player} patch={patch} busy={busyKind('propose')} start={start}
+        <ClipsStep project={project} src={src} player={player} patch={patch} busy={busyKind('propose')} job={jobOf('propose')} start={start}
           onEdit={(cid) => { setSelected(cid); setStep('edit'); }} />
       )}
       {step === 'edit' && transcript && (
@@ -126,36 +151,52 @@ export default function Project({ id }) {
   );
 }
 
-function TranscribeStep({ project, src, player, busy, onStart }) {
+function TranscribeStep({ project, src, player, job, onStart }) {
   const { config } = useApp();
   const [mode, setMode] = useState('all');
   const [range, setRange] = useState({ start: 0, end: project.media?.duration || 0 });
   const cur = () => player.current?.currentTime || 0;
   return (
-    <div className="grid2" style={{ gridTemplateColumns: '1.4fr 1fr' }}>
-      <section className="glass panel">
-        {src ? <video ref={player} className="player" src={src} controls preload="metadata" /> : <div className="player" style={{ display: 'grid', placeItems: 'center', color: '#aaa' }}>Downloading…</div>}
-      </section>
-      <section className="glass strong panel stack">
-        <h2>Transcribe</h2>
-        <p className="muted">Whisper writes down every word with its timing — that's what captions and clip picking use. It runs on this
-          Mac with the <b>{config.whisperModel}</b> model. A 90-minute service takes roughly 10–20 minutes.</p>
-        <div className="seg">
-          <button className={mode === 'all' ? 'on' : ''} onClick={() => setMode('all')}>Whole video</button>
-          <button className={mode === 'range' ? 'on' : ''} onClick={() => setMode('range')}>I know where the sermon is</button>
-        </div>
-        {mode === 'all' ? (
-          <p className="muted small">The app will find the sermon inside the service for you afterwards.</p>
-        ) : (
-          <div className="stack">
-            <p className="muted small">Faster: only this part is transcribed. Scrub the video, then set the edges.</p>
-            <div className="row"><span style={{ width: 44 }}>Start</span><TimeInput value={range.start} onChange={(v) => setRange({ ...range, start: v })} /><button className="btn sm" onClick={() => setRange({ ...range, start: cur() })}>Use player time</button></div>
-            <div className="row"><span style={{ width: 44 }}>End</span><TimeInput value={range.end} onChange={(v) => setRange({ ...range, end: v })} /><button className="btn sm" onClick={() => setRange({ ...range, end: cur() })}>Use player time</button></div>
+    <div className="stack" style={{ gap: 18 }}>
+      <div className="grid2" style={{ gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 1fr)' }}>
+        <section className="glass panel stack">
+          {src ? <video ref={player} className="player" src={src} controls preload="metadata" /> : <div className="player" style={{ display: 'grid', placeItems: 'center', color: '#aab' }}>Downloading…</div>}
+          {src && <Filmstrip project={project} player={player} range={mode === 'range' ? range : null}
+            onSetStart={mode === 'range' ? (t) => setRange((r) => ({ ...r, start: t })) : null}
+            onSetEnd={mode === 'range' ? (t) => setRange((r) => ({ ...r, end: t })) : null} />}
+        </section>
+        <section className="glass strong panel stack" style={{ gap: 14 }}>
+          <div className="stack" style={{ gap: 4 }}>
+            <span className="eyebrow">Step 1</span>
+            <h2>Transcribe the video</h2>
+            <p className="muted">Turns speech into timed text for captions and clips.</p>
           </div>
-        )}
-        <button className="btn primary" disabled={busy || !src || (mode === 'range' && !(range.end > range.start))}
-          onClick={() => onStart(mode === 'range' ? range : {})}>{busy ? 'Working…' : 'Transcribe'}</button>
-      </section>
+          <div className="stack" style={{ gap: 6 }} role="radiogroup" aria-label="What to transcribe">
+            <h3>What should we transcribe?</h3>
+            <div className="choices" style={{ gridTemplateColumns: '1fr' }}>
+              <button role="radio" aria-checked={mode === 'all'} className={`choice ${mode === 'all' ? 'on' : ''}`} onClick={() => setMode('all')}>
+                <span className="t"><span className="radio" />The whole video</span>
+                <span className="d">We'll find the sermon for you.</span>
+              </button>
+              <button role="radio" aria-checked={mode === 'range'} className={`choice ${mode === 'range' ? 'on' : ''}`} onClick={() => setMode('range')}>
+                <span className="t"><span className="radio" />Just the sermon</span>
+                <span className="d">Faster. Mark the start and end.</span>
+              </button>
+            </div>
+          </div>
+          {mode === 'range' && (
+            <div className="keycard">
+              <div className="row"><strong style={{ width: 44 }}>Start</strong><TimeInput value={range.start} onChange={(v) => setRange({ ...range, start: v })} /><button className="btn sm" onClick={() => setRange({ ...range, start: cur() })}>Use player time</button></div>
+              <div className="row"><strong style={{ width: 44 }}>End</strong><TimeInput value={range.end} onChange={(v) => setRange({ ...range, end: v })} /><button className="btn sm" onClick={() => setRange({ ...range, end: cur() })}>Use player time</button></div>
+              <span className="hint num">{fmt(Math.max(0, range.end - range.start))}</span>
+            </div>
+          )}
+          {job ? <InlineJob job={job} /> : (
+            <button className="btn primary lg" disabled={!src || (mode === 'range' && !(range.end > range.start))}
+              onClick={() => onStart(mode === 'range' ? range : {})}><Wand2 size={16} />{mode === 'range' ? 'Transcribe sermon' : 'Transcribe video'}</button>
+          )}
+        </section>
+      </div>
     </div>
   );
 }
@@ -186,7 +227,7 @@ function Timeline({ duration, bins, range, clips = [], player, onSeek }) {
   );
 }
 
-function SermonStep({ project, transcript, src, player, onConfirm, busy }) {
+function SermonStep({ project, transcript, src, player, onConfirm, busy, job }) {
   const s = project.sermon || { start: 0, end: project.media?.duration };
   const [range, setRange] = useState({ start: s.start, end: s.end });
   const duration = project.media?.duration || transcript.words.at(-1)?.end || 1;
@@ -203,7 +244,8 @@ function SermonStep({ project, transcript, src, player, onConfirm, busy }) {
         <section className="glass panel stack">
           <video ref={player} className="player" src={src} controls preload="metadata" />
           <Timeline duration={duration} bins={transcript.bins} range={range} player={player} onSeek={seek} />
-          <div className="row small muted"><span className="row"><span className="dot" style={{ color: 'var(--accent)' }} />continuous speech</span><span className="row"><span className="dot" style={{ color: 'var(--muted)' }} />music / quiet</span></div>
+          <Filmstrip project={project} player={player} range={range} onSetStart={(t) => setRange((r) => ({ ...r, start: t }))} onSetEnd={(t) => setRange((r) => ({ ...r, end: t }))} />
+          <div className="row small muted"><span className="row"><span className="dot" style={{ color: 'var(--accent)' }} />Speaking</span><span className="row"><span className="dot" style={{ color: 'var(--muted)' }} />Music or quiet</span></div>
         </section>
         <section className="glass strong panel stack">
           <div className="row between">
@@ -219,20 +261,29 @@ function SermonStep({ project, transcript, src, player, onConfirm, busy }) {
               <button className="btn sm" onClick={() => setRange({ ...range, end: cur() })}>Set to player</button><button className="btn ghost sm" onClick={() => seek(Math.max(0, range.end - 8))}>▶︎ Play</button></div>
             <p className="phrase">“…{transcript.words.filter((w) => w.end <= range.end + 0.05).slice(-18).map((w) => w.w).join(' ')}”</p>
           </div>
-          <p className="muted small">Sermon length: {fmt(range.end - range.start)}</p>
-          <button className="btn primary" disabled={busy || !(range.end > range.start)} onClick={() => onConfirm(range)}>{busy ? 'Finding clips…' : 'Looks right — find clips'}</button>
+          <p className="muted small num">{fmt(range.end - range.start)} long</p>
+          {job ? <InlineJob job={job} label="Finding clips…" /> : <button className="btn primary lg" disabled={!(range.end > range.start)} onClick={() => onConfirm(range)}><Wand2 size={16} />Find clips</button>}
         </section>
       </div>
     </div>
   );
 }
 
-function ClipsStep({ project, src, player, patch, busy, start, onEdit }) {
-  const { config, trackJob } = useApp();
+function ClipsStep({ project, src, player, patch, busy, job, start, onEdit }) {
+  const { config, trackJob, toast } = useApp();
+  const [exportKept, setExportKept] = useState(false);
   const [topic, setTopic] = useState('');
   const [opts, setOpts] = useState({ count: config.clipCount, min: config.clipMin, max: config.clipMax });
   const clips = useMemo(() => [...project.clips].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)), [project.clips]);
-  const setStatus = (cid, status) => patch({ clips: project.clips.map((c) => (c.id === cid ? { ...c, status } : c)) });
+  const setStatus = async (cid, status) => {
+    const prev = project.clips.find((c) => c.id === cid)?.status;
+    await patch({ clips: project.clips.map((c) => (c.id === cid ? { ...c, status } : c)) });
+    // Keeping a clip starts finding the speaker in the background, so the editor is ready.
+    if (status === 'kept' && config.trackOnKeep !== false) {
+      api.post(`/api/projects/${project.id}/clips/${cid}/track`).then((r) => trackJob(r.job)).catch(() => {});
+    }
+    if (status === 'skipped') toast({ text: 'Clip skipped.', action: { label: 'Undo', run: () => patch({ clips: project.clips.map((c) => (c.id === cid ? { ...c, status: prev } : c)) }) } });
+  };
   const kept = project.clips.filter((c) => c.status === 'kept' || c.status === 'exported').length;
   const playClip = (c) => { const v = player.current; if (v) { v.currentTime = c.start; v.play(); } };
   const addHere = async () => {
@@ -247,11 +298,11 @@ function ClipsStep({ project, src, player, patch, busy, start, onEdit }) {
       <div className="stack" style={{ position: 'sticky', top: 0, gap: 18 }}>
         <section className="glass panel stack">
           <video ref={player} className="player" src={src} controls preload="metadata" />
-          <button className="btn sm" style={{ justifySelf: 'start' }} onClick={addHere}>+ Make a clip from here</button>
+          <button className="btn sm" style={{ justifySelf: 'start' }} onClick={addHere}><Plus size={14} />Make a clip from here</button>
         </section>
         <section className="glass strong panel stack">
           <h3>Find clips</h3>
-          <label className="field">Looking for something specific? <span className="hint">Optional — e.g. “forgiveness”, “the fishing story”</span>
+          <label className="field">Topic <span className="hint">Optional, like “forgiveness”</span>
             <input className="input" value={topic} onChange={(e) => setTopic(e.target.value)} />
           </label>
           <div className="row">
@@ -260,19 +311,21 @@ function ClipsStep({ project, src, player, patch, busy, start, onEdit }) {
             <label className="field grow">Max sec<input className="input" type="number" value={opts.max} onChange={(e) => setOpts({ ...opts, max: e.target.value })} /></label>
           </div>
           <div className="row between">
-            <span className="muted small">{config.llmProvider === 'none' ? 'Offline scoring' : `Offline scoring + ${config.llmProvider}`}. Kept clips are never replaced.</span>
-            <button className="btn primary" disabled={busy} onClick={() => start('propose', { prompt: topic, ...opts })}>{busy ? 'Finding…' : project.clips.length ? 'Find again' : 'Find clips'}</button>
+            <span className="muted small">Kept clips stay put.</span>
+            {!job && <button className="btn primary" onClick={() => start('propose', { prompt: topic, ...opts })}><Wand2 size={15} />{project.clips.length ? 'Find again' : 'Find clips'}</button>}
           </div>
+          {job && <InlineJob job={job} label="Finding clips…" />}
         </section>
       </div>
       <div className="stack" style={{ gap: 12 }}>
         <div className="row between">
           <h2>{clips.length} clips</h2>
-          <button className="btn primary" disabled={!kept} onClick={async () => { const r = await api.post(`/api/projects/${project.id}/export-all`); r.jobs.forEach(trackJob); }}>
-            Export {kept || ''} kept
+          <button className="btn primary" disabled={!kept} title={kept ? '' : 'Keep at least one clip first'} onClick={() => setExportKept(true)}>
+            <Download size={15} />Export {kept || ''} kept…
           </button>
+          {exportKept && <ExportDialog project={project} clips={project.clips.filter((c) => c.status === 'kept' || c.status === 'exported')} onClose={() => setExportKept(false)} />}
         </div>
-        {!clips.length && <div className="glass empty"><p>No clips yet — press “Find clips”.</p></div>}
+        {!clips.length && <div className="glass empty"><ScissorsLineDashed size={40} /><h3>No clips yet</h3><p>Press Find clips.</p></div>}
         <div className="clip-list">
           {clips.map((c) => (
             <div key={c.id} className={`glass clip-card ${c.status === 'skipped' ? 'skipped' : ''}`} onClick={() => playClip(c)}>
@@ -292,7 +345,7 @@ function ClipsStep({ project, src, player, patch, busy, start, onEdit }) {
               <div className="stack" onClick={(e) => e.stopPropagation()}>
                 {c.status === 'kept' || c.status === 'exported'
                   ? <button className="btn sm" onClick={() => setStatus(c.id, 'proposed')}>✓ Kept</button>
-                  : <button className="btn primary sm" onClick={() => setStatus(c.id, 'kept')}>Keep</button>}
+                  : <button className="btn primary sm" onClick={() => setStatus(c.id, 'kept')} title="Keep this clip">Keep</button>}
                 <button className="btn sm" onClick={() => onEdit(c.id)}>Edit</button>
                 {c.status !== 'skipped'
                   ? <button className="btn ghost sm" onClick={() => setStatus(c.id, 'skipped')}>Skip</button>
@@ -311,20 +364,18 @@ function ExportsStep({ project }) {
   const done = project.clips.filter((c) => c.export);
   const [copied, setCopied] = useState(null);
   const postText = (c) => [c.title, c.summary, (c.hashtags || []).map((h) => `#${h.replace(/\s+/g, '')}`).join(' ')].filter(Boolean).join('\n\n');
-  if (!done.length) return <div className="glass empty"><h3>Nothing exported yet</h3><p>Keep a few clips, then export them.</p></div>;
+  if (!done.length) return <div className="glass empty"><Download size={40} /><h3>Nothing exported yet</h3><p>Export a clip and it shows up here.</p></div>;
   return (
     <div className="projects" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
       {done.map((c) => (
         <div key={c.id} className="glass" style={{ padding: 10, display: 'grid', gap: 10 }}>
-          {c.export.rel
-            ? <video className="vframe" style={{ aspectRatio: '9/16', width: '100%' }} src={`${media(project.id, c.export.rel)}?v=${encodeURIComponent(c.export.at)}`} poster={media(project.id, c.export.thumb)} controls preload="none" />
-            : <img className="vframe" style={{ objectFit: 'cover' }} src={media(project.id, c.export.thumb)} alt="" />}
+          <video className="vframe" style={{ aspectRatio: `${c.export.width || 9}/${c.export.height || 16}`, width: '100%' }} src={`/exports/${encodeURIComponent(project.id)}/${c.id}?v=${encodeURIComponent(c.export.at)}`} poster={media(project.id, c.export.thumb)} controls preload="none" />
           <strong>{c.title}</strong>
           <span className="muted small">{Math.round(c.export.length)}s · {new Date(c.export.at).toLocaleString()}</span>
           <div className="row wrap">
-            <button className="btn primary sm" onClick={() => go({ name: 'social', compose: { projectId: project.id, clipId: c.id } })}>Post / schedule</button>
-            <button className="btn sm" onClick={() => api.post('/api/reveal', { path: c.export.file })}>Show in Finder</button>
-            <button className="btn sm" onClick={async () => { await navigator.clipboard.writeText(postText(c)); setCopied(c.id); setTimeout(() => setCopied(null), 1500); }}>{copied === c.id ? 'Copied!' : 'Copy post text'}</button>
+            <button className="btn primary sm" onClick={() => go({ name: 'social', compose: { projectId: project.id, clipId: c.id } })}><Send size={13} />Post or schedule</button>
+            <button className="btn sm" onClick={() => api.post('/api/reveal', { path: c.export.file })}><FolderOpen size={13} />Show in Finder</button>
+            <button className="btn sm" onClick={async () => { await navigator.clipboard.writeText(postText(c)); setCopied(c.id); setTimeout(() => setCopied(null), 1500); }}><Copy size={13} />{copied === c.id ? 'Copied' : 'Copy post text'}</button>
           </div>
         </div>
       ))}

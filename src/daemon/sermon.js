@@ -89,13 +89,13 @@ export function detectSermon(words, duration) {
   }
   let start = bins[run.a].start;
   let end = bins[run.b].end;
-  reasons.push(`Longest stretch of continuous speech: ${Math.round((end - start) / 60)} min.`);
+  reasons.push(`${Math.round((end - start) / 60)} minutes of steady speaking.`);
 
   const cueStart = snap(sentences, start, START_CUES, 150, 'start');
-  if (cueStart != null) { start = cueStart; reasons.push('Start lines up with a sermon opener (e.g. "turn with me to…").'); }
+  if (cueStart != null) { start = cueStart; reasons.push('Starts at an opener like “turn with me to”.'); }
   // End: the last closing cue inside the final 4 minutes of the run.
   const closers = sentences.filter((s) => s.start <= end + 60 && s.start >= end - 240 && END_CUES.some((c) => c.test(s.text)));
-  if (closers.length) { end = closers.at(-1).end; reasons.push('End lines up with a closing ("let\'s pray" / "amen").'); }
+  if (closers.length) { end = closers.at(-1).end; reasons.push('Ends at a closing like “let\'s pray”.'); }
 
   // Snap edges to sentence boundaries.
   const first = sentences.find((s) => s.end > start);
@@ -105,7 +105,7 @@ export function detectSermon(words, duration) {
 
   const share = totalTalk ? run.talkBins / totalTalk : 0;
   let confidence = 0.35 + 0.4 * share + (cueStart != null ? 0.15 : 0) + (closers.length ? 0.1 : 0);
-  if (end - start < 8 * 60) { confidence -= 0.25; reasons.push('That is short for a sermon — check the range.'); }
+  if (end - start < 8 * 60) { confidence -= 0.25; reasons.push('Short for a sermon. Check the range.'); }
   return {
     start: Math.max(0, +start.toFixed(2)), end: +end.toFixed(2),
     confidence: +Math.max(0.05, Math.min(0.98, confidence)).toFixed(2),

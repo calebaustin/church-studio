@@ -1,18 +1,28 @@
 // Finds and runs the outside programs the daemon leans on: ffmpeg, ffprobe, yt-dlp, Python.
-// Pattern from VGP Clips (src/tools.js), extended for macOS: an Electron app launched from
-// Finder does not inherit the shell PATH, so Homebrew folders are searched explicitly.
+// Resolution order (first that exists wins):
+//   1. <NAME>_PATH env override
+//   2. tools bundled in the packaged app (SC_RESOURCES/bin, SC_RESOURCES/sc-media)
+//   3. npm-bundled static ffmpeg/ffprobe (dev)
+//   4. the project .venv (yt-dlp, python)
+//   5. Homebrew / system folders (a Finder-launched app doesn't inherit the shell PATH)
+// Code lives in ROOT; user data lives in HOME (Application Support when packaged).
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-export const DATA_DIR = process.env.SC_DATA_DIR || path.join(ROOT, 'data');
-export const PROJECTS_DIR = path.join(ROOT, 'projects');
+export const HOME = process.env.SC_HOME || ROOT;
+export const RESOURCES = process.env.SC_RESOURCES || null;
+export const DATA_DIR = process.env.SC_DATA_DIR || path.join(HOME, 'data');
+export const PROJECTS_DIR = path.join(HOME, 'projects');
 export const SCRIPTS_DIR = path.join(ROOT, 'scripts');
+export const ASSETS_DIR = RESOURCES && existsSync(path.join(RESOURCES, 'assets')) ? path.join(RESOURCES, 'assets') : path.join(ROOT, 'assets');
 
 const EXTRA_BIN_DIRS = ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin'];
 const found = new Map();
+const require = createRequire(import.meta.url);
 
 export function venvBin(name) {
   const dir = process.platform === 'win32' ? 'Scripts' : 'bin';
@@ -20,12 +30,27 @@ export function venvBin(name) {
   return path.join(ROOT, '.venv', dir, exe);
 }
 
-/** Resolve a tool: env override, then the project venv, then Homebrew/system folders, then PATH. */
+function npmStatic(name) {
+  try {
+    if (name === 'ffmpeg') return require('ffmpeg-static');
+    if (name === 'ffprobe') return require('@ffprobe-installer/ffprobe').path;
+  } catch { /* not installed */ }
+  return null;
+}
+
+/** The frozen media helper (PyInstaller) shipped inside the packaged app, if present. */
+export function mediaHelper() {
+  const p = RESOURCES && path.join(RESOURCES, 'sc-media', 'sc-media');
+  return p && existsSync(p) ? p : null;
+}
+
 export function tool(name) {
   if (found.has(name)) return found.get(name);
   const exe = process.platform === 'win32' ? `${name}.exe` : name;
   const candidates = [
     process.env[`${name.toUpperCase().replace(/-/g, '_')}_PATH`],
+    RESOURCES && path.join(RESOURCES, 'bin', exe),
+    npmStatic(name),
     venvBin(name),
     ...EXTRA_BIN_DIRS.map((d) => path.join(d, exe)),
   ].filter(Boolean);
@@ -40,6 +65,29 @@ export function python() {
 }
 
 /**
+ * Command for one of our Python scripts (transcribe, render_clip) or yt-dlp. In the packaged app
+ * these all live in one frozen binary: `sc-media <script> ...args`.
+ */
+export function pyCommand(script, args) {
+  const helper = mediaHelper();
+  if (helper) return [helper, [script, ...args]];
+  if (script === 'yt-dlp') return [tool('yt-dlp'), args];
+  return [python(), [path.join(SCRIPTS_DIR, `${script}.py`), ...args]];
+}
+
+/** Env every child gets: our ffmpeg/ffprobe for the Python scripts, unbuffered output. */
+export function childEnv() {
+  return {
+    ...process.env,
+    PATH: [...EXTRA_BIN_DIRS, process.env.PATH].join(path.delimiter),
+    PYTHONUNBUFFERED: '1',
+    FFMPEG_PATH: tool('ffmpeg'),
+    FFPROBE_PATH: tool('ffprobe'),
+    SC_ASSETS: ASSETS_DIR,
+  };
+}
+
+/**
  * Run a program and collect its output. Rejects on a non-zero exit with the tail of stderr.
  * `onStderr`/`onStdout` stream chunks (used for progress). `signal` lets a job cancel it.
  */
@@ -48,7 +96,7 @@ export function run(cmd, args, { cwd = ROOT, input, onStderr, onStdout, signal }
     const child = spawn(cmd, args, {
       cwd,
       windowsHide: true,
-      env: { ...process.env, PATH: [...EXTRA_BIN_DIRS, process.env.PATH].join(path.delimiter), PYTHONUNBUFFERED: '1' },
+      env: childEnv(),
     });
     let stdout = '';
     let stderr = '';
@@ -100,8 +148,8 @@ export async function toolStatus() {
   const checks = [
     ['ffmpeg', tool('ffmpeg'), ['-version'], true],
     ['ffprobe', tool('ffprobe'), ['-version'], true],
-    ['yt-dlp', tool('yt-dlp'), ['--version'], true],
-    ['python', python(), ['--version'], true],
+    ['yt-dlp', ...pyCommand('yt-dlp', ['--version']), true],
+    ...(mediaHelper() ? [['media engine', mediaHelper(), ['version'], true]] : [['python', python(), ['--version'], true]]),
   ];
   const out = [];
   for (const [name, bin, args, required] of checks) {
@@ -112,8 +160,8 @@ export async function toolStatus() {
       out.push({ name, ok: false, required, path: bin, error: e.message.slice(0, 200) });
     }
   }
-  // Python packages the pipeline needs.
-  try {
+  // Python packages the pipeline needs (dev installs only; the packaged helper has them built in).
+  if (!mediaHelper()) try {
     const { stdout } = await run(python(), ['-c',
       'import importlib.util as u, json; print(json.dumps({m: bool(u.find_spec(m)) for m in ["faster_whisper","cv2","numpy","PIL"]}))']);
     const mods = JSON.parse(stdout.trim());

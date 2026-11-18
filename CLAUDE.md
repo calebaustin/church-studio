@@ -1,7 +1,6 @@
 # Sermon Clips — Claude Code kickoff
 
-You are working in `/Users/caleb/Documents/AI Docs/Sermon Clips`. This is a **planning-only** stage:
-do not build the app yet unless asked. Read this file and the docs in `docs/` first.
+You are working in `/Users/caleb/Documents/AI Docs/Sermon Clips`. Read this file and the docs in `docs/` first. The app is built; see README.md for how to run and package it.
 
 ## What we're building
 A **local desktop app** (own window, no browser tab, no login) that downloads a sermon video
@@ -49,6 +48,10 @@ Then `vgp-clips-main.zip` (editor/export/looks). Then `Autocrop-vertical-main.zi
    the user how to get each key and where it's stored (`config.local.json`).
 4. Then media pipeline: YouTube listing → download → transcribe → clip propose → export.
 5. Keep the UI light + liquid glass from day one; do not copy VGP's dark theme.
+
+## UI
+Read `docs/ui-ux-guide.md` before building any screen, and follow it. Use only the tokens in
+`src/ui/styles.css`; never hard-code colors. Plain, short copy: no em dashes, no over-explaining.
 
 ## Conventions
 - Local data in `data/` and `config.local.json` (gitignored). Project files under `projects/`.

@@ -163,6 +163,58 @@ def camera_path(picks, n_frames: int, fps: float, crop_frac: float) -> tuple[np.
     return cam, info
 
 
+def ease_in_out(u: np.ndarray) -> np.ndarray:
+    """Sine ease: starts and ends at rest, so the move never jerks."""
+    u = np.clip(u, 0.0, 1.0)
+    return 0.5 - 0.5 * np.cos(np.pi * u)
+
+
+def glide_path(picks, n_frames: int, fps: float, crop_frac: float) -> tuple[np.ndarray, dict]:
+    """One continuous move: where the speaker settles at the start -> where they are at the end,
+    eased across the whole clip. Steadier than following every step."""
+    ts = np.array([p[0] for p in picks], dtype=float)
+    xs = np.array([p[1] if p[1] is not None else np.nan for p in picks], dtype=float)
+    found = np.isfinite(xs)
+    info = {"samples": len(xs), "found": int(found.sum()), "motion": "glide"}
+    if found.sum() < max(2, 0.2 * len(xs)):
+        info["fallback"] = True
+        return np.full(n_frames, 0.5), info
+    dur = n_frames / fps
+    window = min(3.0, max(1.0, dur * 0.2))
+    head = xs[(ts <= window) & found]
+    tail = xs[(ts >= dur - window) & found]
+    allx = xs[found]
+    a = float(np.median(head)) if head.size else float(np.median(allx[: max(1, len(allx) // 4)]))
+    b = float(np.median(tail)) if tail.size else float(np.median(allx[-max(1, len(allx) // 4):]))
+    if abs(b - a) < crop_frac * 0.08:  # barely moved: hold one steady frame
+        a = b = float(np.median(allx))
+    info.update({"from": round(a, 4), "to": round(b, 4), "fallback": False})
+    u = np.arange(n_frames) / max(1, n_frames - 1)
+    return a + (b - a) * ease_in_out(u), info
+
+
+def cue_path(cues, n_frames: int, fps: float, default_x: float = 0.5) -> np.ndarray:
+    """Framing from manual cues: each cue {t, x, move: 'cut'|'glide', dur} sets a new position at
+    time t (seconds into the clip), either instantly or with an eased glide over `dur` seconds."""
+    cues = sorted([c for c in cues or [] if c.get("x") is not None], key=lambda c: float(c.get("t", 0)))
+    t = np.arange(n_frames) / fps
+    if not cues:
+        return np.full(n_frames, default_x)
+    out = np.full(n_frames, float(cues[0]["x"]))
+    cur = float(cues[0]["x"])
+    for c in cues[1:]:
+        t0, x1 = float(c["t"]), float(c["x"])
+        if c.get("move") == "glide":
+            d = max(0.1, float(c.get("dur", 1.5)))
+            seg = (t >= t0)
+            u = (t[seg] - t0) / d
+            out[seg] = cur + (x1 - cur) * ease_in_out(u)
+        else:
+            out[t >= t0] = x1
+        cur = x1
+    return out
+
+
 # ---------------------------------------------------------------- cuts / timing
 
 def in_keep(t: float, keep) -> bool:
@@ -194,7 +246,12 @@ def remap_words(words, clip_start: float, keep):
 
 # ---------------------------------------------------------------- captions
 
-def load_font(path: str, style: str | None, size: int):
+def load_font(path: str, style: str | None, size: int, index: int | None = None):
+    if index is not None:
+        try:
+            return ImageFont.truetype(path, size, index=int(index))
+        except OSError:
+            pass
     if style and path.lower().endswith(".ttc"):
         for idx in range(0, 24):
             try:
@@ -236,9 +293,9 @@ class Captions:
 
     def __init__(self, words, theme: dict, W: int, H: int, hook: str | None, clip_len: float):
         self.W, self.H = W, H
-        self.k = W / 1080
+        self.k = min(W, H) / 1080
         self.theme = theme
-        self.font = load_font(theme["fontFile"], theme.get("fontStyle"), int(theme.get("size", 78) * self.k))
+        self.font = load_font(theme["fontFile"], theme.get("fontStyle"), int(theme.get("size", 78) * self.k), theme.get("fontIndex"))
         self.cache: dict = {}
         self.events = []  # (start, end, group_idx, active_idx)
         self.groups = group_words(words, int(theme.get("words", 3)))
@@ -260,8 +317,8 @@ class Captions:
 
     def _layout(self, toks):
         """Wrap tokens into lines that fit 86% of the width. Returns [(line tokens, widths)]."""
-        maxw = self.W * 0.86
-        space = self.font.getlength(" ")
+        maxw = self.W * float(self.theme.get("maxWidth", 0.86))
+        space = self.font.getlength(" ") + (22 * self.k if self.theme.get("highlight") == "pill" else 0)
         lines, cur, curw = [], [], 0.0
         for i, t in enumerate(toks):
             w = self.font.getlength(t)
@@ -282,37 +339,44 @@ class Captions:
         toks = [self._text(w["w"]) for w in self.groups[gi]]
         lines, space = self._layout(toks)
         asc, desc = self.font.getmetrics()
-        line_h = int((asc + desc) * 1.12)
+        line_h = int((asc + desc) * float(th.get("lineHeight", 1.12)))
         outline = int(th.get("outline", 6) * self.k)
-        pad = outline + int(24 * self.k)
+        pad = outline + int(24 * self.k) + (int(16 * self.k) if th.get("highlight") == "pill" else 0)
         widths = [sum(w for _, _, w in ln) + space * (len(ln) - 1) for ln in lines]
         img_w = int(max(widths) + 2 * pad)
         img_h = int(line_h * len(lines) + 2 * pad)
         layer = Image.new("RGBA", (img_w, img_h), (0, 0, 0, 0))
         d = ImageDraw.Draw(layer)
-        color = hex_rgba(th.get("color", "#FFFFFF"))
-        active = hex_rgba(th.get("active", "#FFD54A"))
-        stroke = hex_rgba(th.get("outlineColor", "#000000"))
+        op = lambda key, d=1.0: int(255 * max(0.0, min(1.0, float(th.get(key, d)))))
+        color = hex_rgba(th.get("color", "#FFFFFF"), op("colorOpacity"))
+        active = hex_rgba(th.get("active", "#FFD54A"), op("activeOpacity"))
+        future = hex_rgba(th.get("future") or th.get("color", "#FFFFFF"), op("futureOpacity", th.get("colorOpacity", 1.0)))
+        stroke = hex_rgba(th.get("outlineColor", "#000000"), op("outlineOpacity"))
         box = th.get("highlight") == "box"
-        box_color = hex_rgba(th.get("boxColor", "#FFFFFF"), 235)
+        pill = th.get("highlight") == "pill"
+        box_color = hex_rgba(th.get("boxColor", "#FFFFFF"), op("boxOpacity", 0.92))
         r = int(18 * self.k)
         if box:  # one soft box behind the whole group
             d.rounded_rectangle([pad * 0.4, pad * 0.4, img_w - pad * 0.4, img_h - pad * 0.4], radius=r, fill=box_color)
         y = pad
         for ln, lw in zip(lines, widths):
-            x = (img_w - lw) / 2
+            x = pad if self.theme.get("align") == "left" else (img_w - lw) / 2
             for idx, tok, w in ln:
                 is_active = idx == wi
-                fill = active if is_active else color
-                if box and is_active:
+                fill = active if is_active else (color if idx < wi else future)
+                if pill and is_active:  # rounded box behind the spoken word only
+                    px = 14 * self.k
+                    d.rounded_rectangle([x - px, y + line_h * 0.04, x + w + px, y + line_h * 0.96],
+                                        radius=int(12 * self.k), fill=box_color)
+                elif box and is_active:
                     d.rounded_rectangle([x - 8 * self.k, y + 2, x + w + 8 * self.k, y + line_h - 2],
                                         radius=int(10 * self.k), fill=hex_rgba(th.get("active", "#000000"), 40))
                 d.text((x, y), tok, font=self.font, fill=fill,
-                       stroke_width=0 if box else outline, stroke_fill=stroke)
+                       stroke_width=0 if (box or pill) else outline, stroke_fill=stroke)
                 x += w + space
             y += line_h
         shadow = float(th.get("shadow", 0.35))
-        if shadow > 0 and not box:
+        if shadow > 0 and not box and not pill:
             alpha = layer.getchannel("A").filter(ImageFilter.GaussianBlur(10 * self.k))
             alpha = alpha.point(lambda v: int(v * shadow))
             shade = Image.new("RGBA", layer.size, (0, 0, 0, 0))
@@ -321,7 +385,10 @@ class Captions:
         arr = np.array(layer)
         cx = self.W / 2
         cy = self.H * float(th.get("position", 0.68))
-        x0 = int(cx - img_w / 2)
+        if th.get("align") == "left":
+            x0 = int(self.W * (1 - float(th.get("maxWidth", 0.86))) / 2 - pad)
+        else:
+            x0 = int(cx - img_w / 2)
         y0 = int(cy - img_h / 2)
         self.cache[key] = (arr, x0, y0)
         if len(self.cache) > 400:
@@ -329,7 +396,7 @@ class Captions:
         return self.cache[key]
 
     def _render_hook(self):
-        font = load_font(self.theme["fontFile"], self.theme.get("fontStyle"), int(58 * self.k))
+        font = load_font(self.theme["fontFile"], self.theme.get("fontStyle"), int(58 * self.k), self.theme.get("fontIndex"))
         text = self.hook
         maxw = self.W * 0.8
         words, lines, cur = text.split(), [], ""
@@ -390,10 +457,15 @@ def blend(frame: np.ndarray, arr: np.ndarray, x: int, y: int, opacity: float = 1
 
 # ---------------------------------------------------------------- render
 
-def encoder_args(preview: bool) -> list[str]:
+def encoder_args(preview: bool, codec: str = "h264", mbps: float = 12.0) -> list[str]:
+    rate = f"{4 if preview else mbps:g}M"
     if sys.platform == "darwin" and not os.environ.get("SC_SOFTWARE_ENCODER"):
-        return ["-c:v", "h264_videotoolbox", "-b:v", "4M" if preview else "12M", "-allow_sw", "1"]
-    return ["-c:v", "libx264", "-preset", "veryfast" if preview else "medium", "-crf", "23" if preview else "19"]
+        if codec == "hevc":
+            return ["-c:v", "hevc_videotoolbox", "-b:v", rate, "-tag:v", "hvc1", "-allow_sw", "1"]
+        return ["-c:v", "h264_videotoolbox", "-b:v", rate, "-allow_sw", "1"]
+    if codec == "hevc":
+        return ["-c:v", "libx265", "-preset", "fast", "-b:v", rate, "-tag:v", "hvc1"]
+    return ["-c:v", "libx264", "-preset", "veryfast" if preview else "medium", "-b:v", rate, "-maxrate", rate, "-bufsize", f"{2 * (4 if preview else mbps):g}M"]
 
 
 def main() -> None:
@@ -403,7 +475,9 @@ def main() -> None:
     dur = end - start
     fps = float(job.get("fps", 30))
     preview = bool(job.get("preview"))
-    W, H = (540, 960) if preview else (int(job.get("width", 1080)), int(job.get("height", 1920)))
+    W, H = int(job.get("width", 1080)), int(job.get("height", 1920))
+    if preview:
+        W, H = W // 4 * 2, H // 4 * 2
     src_w, src_h = probe_size(src)
     crop = job.get("crop") or {"mode": "auto"}
     mode = crop.get("mode", "auto")
@@ -414,12 +488,19 @@ def main() -> None:
 
     # ---- 1. camera path
     info = {"mode": mode}
+    follow = glide = None
     if mode == "auto" and crop_frac < 0.98:
         picks = pick_speaker(detect_faces(src, start, dur, src_w, src_h))
-        path, extra = camera_path(picks, n_frames, fps, crop_frac)
-        info.update(extra)
-        if extra.get("fallback"):
+        follow, f_info = camera_path(picks, n_frames, fps, crop_frac)
+        glide, g_info = glide_path(picks, n_frames, fps, crop_frac)
+        motion = crop.get("motion", "glide")
+        path = glide if motion == "glide" else follow
+        info.update(g_info if motion == "glide" else f_info)
+        info["motion"] = motion
+        if info.get("fallback"):
             info["note"] = "No steady face found; centred crop used."
+    elif mode == "cues":
+        path = cue_path(crop.get("cues"), n_frames, fps, float(crop.get("x", 0.5)))
     elif mode == "manual":
         path = np.full(n_frames, float(crop.get("x", 0.5)))
     else:
@@ -429,8 +510,12 @@ def main() -> None:
 
     if job.get("trackOut"):
         step = max(1, int(fps / 6))
+        half_ = crop_frac / 2
+        pack = lambda arr: [round(float(v), 4) for v in np.clip(arr, half_, 1 - half_)[::step]]
         Path(job["trackOut"]).write_text(json.dumps({
-            "fps": fps / step, "cropFrac": crop_frac, "x": [round(float(v), 4) for v in path[::step]], "info": info,
+            "fps": fps / step, "cropFrac": crop_frac, "x": pack(path),
+            "follow": pack(follow) if follow is not None else None,
+            "glide": pack(glide) if glide is not None else None, "info": info,
         }))
     if track_only:
         progress(100, "Tracked")
@@ -462,7 +547,7 @@ def main() -> None:
     enc = subprocess.Popen(
         [FFMPEG, "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{W}x{H}", "-r", str(fps),
          "-i", "-", *audio_in, "-map", "0:v", *(["-map", "1:a"] if audio_in else []),
-         *encoder_args(preview), "-pix_fmt", "yuv420p", "-c:a", "copy", "-movflags", "+faststart", "-shortest", out],
+         *encoder_args(preview, job.get("codec", "h264"), float(job.get("mbps", 12))), "-pix_fmt", "yuv420p", "-c:a", "copy", "-movflags", "+faststart", "-shortest", out],
         stdin=subprocess.PIPE, stderr=subprocess.PIPE,
     )
     dec = subprocess.Popen(

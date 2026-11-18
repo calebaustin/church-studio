@@ -18,3 +18,4 @@ dist/
 .DS_Store
 # Reference samples (third-party zips, not part of the app)
 Build Samples/
+build/

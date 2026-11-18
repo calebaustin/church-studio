@@ -1,31 +1,46 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { Clapperboard, Send, Settings as SettingsIcon, WifiOff, LayoutDashboard, MonitorPlay } from 'lucide-react';
 import { api } from './api.js';
 import Library from './screens/Library.jsx';
+import Dashboard from './screens/Dashboard.jsx';
 import Project from './screens/Project.jsx';
 import Settings from './screens/Settings.jsx';
 import Social from './screens/Social.jsx';
 import Onboarding from './screens/Onboarding.jsx';
 import JobsTray from './components/JobsTray.jsx';
+import { Toasts } from './components/Toasts.jsx';
 
 const Ctx = createContext(null);
 export const useApp = () => useContext(Ctx);
 
+const systemDark = () => window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+
+/** Apply an app theme's base tokens; the stylesheet derives the rest. */
 export function applyAppTheme(theme) {
   if (!theme) return;
   const root = document.documentElement;
   for (const [k, v] of Object.entries(theme.tokens || {})) root.style.setProperty(k, v);
-  const dark = theme.tokens?.['--text'] && parseInt(theme.tokens['--text'].slice(1, 3), 16) > 128;
-  root.style.colorScheme = dark ? 'dark' : 'light';
-  root.style.setProperty('--surface-strong', dark ? 'rgba(60,64,90,.75)' : 'rgba(255,255,255,.82)');
+  root.dataset.mode = theme.mode === 'dark' ? 'dark' : 'light';
+}
+
+/** Which theme is showing right now, given the appearance setting. */
+export function activeAppTheme(config, themes) {
+  const dark = config.appearance === 'dark' || (config.appearance !== 'light' && systemDark());
+  const id = dark ? config.appThemeDark : config.appTheme;
+  const fallback = themes.app.find((t) => t.mode === (dark ? 'dark' : 'light')) || themes.app[0];
+  return themes.app.find((t) => t.id === id) || fallback;
 }
 
 export default function App() {
-  const [route, setRoute] = useState({ name: 'library' });
+  const [route, setRoute] = useState({ name: 'home' });
   const [config, setConfig] = useState(null);
   const [keyGuide, setKeyGuide] = useState([]);
-  const [themes, setThemes] = useState({ app: [], video: [], fonts: [] });
+  const [themes, setThemes] = useState({ app: [], video: [], fonts: [], systemFonts: [] });
   const [jobs, setJobs] = useState([]);
+  const [toasts, setToasts] = useState([]);
+  const [needsYou, setNeedsYou] = useState(0);
   const [error, setError] = useState(null);
+  const [, setSchemeTick] = useState(0);
   const listeners = useRef(new Set());
   const lastStatus = useRef(new Map());
 
@@ -45,10 +60,23 @@ export default function App() {
     Promise.all([reloadConfig(), reloadThemes()]).catch((e) => setError(e.message));
   }, [reloadConfig, reloadThemes]);
 
+  // Follow the system light/dark switch live when appearance = system.
   useEffect(() => {
-    if (!config || !themes.app.length) return;
-    applyAppTheme(themes.app.find((t) => t.id === config.appTheme) || themes.app[0]);
-  }, [config?.appTheme, themes]);
+    const mq = window.matchMedia?.('(prefers-color-scheme: dark)');
+    const on = () => setSchemeTick((n) => n + 1);
+    mq?.addEventListener('change', on);
+    return () => mq?.removeEventListener('change', on);
+  }, []);
+  useEffect(() => {
+    if (config && themes.app.length) applyAppTheme(activeAppTheme(config, themes));
+  });
+
+  const toast = useCallback((t) => {
+    const id = Math.random().toString(36).slice(2);
+    setToasts((ts) => [...ts.slice(-3), { id, ...t }]);
+    return id;
+  }, []);
+  const dismissToast = useCallback((id) => setToasts((ts) => ts.filter((t) => t.id !== id)), []);
 
   // Job polling: fast while something runs. Finished jobs notify subscribers once.
   useEffect(() => {
@@ -76,10 +104,26 @@ export default function App() {
     return () => { stop = true; clearTimeout(timer); };
   }, []);
 
+  // Social posts that need a hand-off show as a badge on the nav.
+  useEffect(() => {
+    const load = () => api.get('/api/social/posts').then((r) => setNeedsYou(r.posts.filter((p) => p.status === 'needs-you').length)).catch(() => {});
+    load();
+    const id = setInterval(load, 20000);
+    return () => clearInterval(id);
+  }, [route.name]);
+
   const onJobFinished = useCallback((fn) => {
     listeners.current.add(fn);
     return () => listeners.current.delete(fn);
   }, []);
+
+  // Celebrate finished exports; report failures plainly.
+  useEffect(() => onJobFinished((j) => {
+    if (j.kind === 'export' && j.status === 'done') {
+      toast({ kind: 'export', result: j.result, sticky: true });
+    }
+    if (j.status === 'error' && ['export', 'download', 'transcribe'].includes(j.kind)) toast({ kind: 'error', text: `${j.label} didn't finish: ${j.error?.slice(0, 160)}`, duration: 9000 });
+  }), [onJobFinished, toast]);
 
   const trackJob = useCallback((job) => {
     if (!job) return;
@@ -93,44 +137,63 @@ export default function App() {
     return r.config;
   }, []);
 
-  const value = { route, go: setRoute, config, saveConfig, reloadConfig, keyGuide, themes, reloadThemes, jobs, trackJob, onJobFinished };
+  const value = { route, go: setRoute, config, saveConfig, reloadConfig, keyGuide, themes, reloadThemes, jobs, trackJob, onJobFinished, toast };
 
   if (error) {
     return (
       <div className="app"><div className="backdrop"><i /><i /><i /></div>
         <div className="main" style={{ display: 'grid', placeItems: 'center' }}>
-          <div className="glass strong panel" style={{ maxWidth: 520 }}>
-            <h2>Can't reach the local engine</h2>
-            <p className="muted" style={{ marginTop: 8 }}>{error}</p>
-            <p className="muted small" style={{ marginTop: 8 }}>Run <span className="mono">npm run daemon</span> or restart the app.</p>
+          <div className="glass strong panel stack" style={{ maxWidth: 520 }}>
+            <h2>The local engine isn't answering</h2>
+            <p className="muted">{error}</p>
+            <p className="muted small">Quit Sermon Clips and open it again. If you run it from Terminal, use <span className="mono">npm start</span>.</p>
           </div>
         </div>
       </div>
     );
   }
 
+  const nav = [
+    ['home', 'Dashboard', LayoutDashboard, route.name === 'home'],
+    ['library', 'Sermons', Clapperboard, route.name === 'library' || route.name === 'project'],
+    ['social', 'Social', Send, route.name === 'social'],
+    ['settings', 'Settings', SettingsIcon, route.name === 'settings'],
+  ];
+
   return (
     <Ctx.Provider value={value}>
       <div className="backdrop" aria-hidden="true"><i /><i /><i /></div>
-      <div className={`app ${config?.refraction === false ? '' : 'refract'}`}>
-        <header className="topbar">
+      <div className={`shell ${config?.refraction === false ? '' : 'refract'}`}>
+        <aside className="sidebar glass">
+          <div className="side-drag" />
           <div className="brand"><span className="brand-mark" />Sermon Clips</div>
-          <nav className="nav glass">
-            <button className={route.name === 'library' || route.name === 'project' ? 'on' : ''} onClick={() => setRoute({ name: 'library' })}>Library</button>
-            <button className={route.name === 'social' ? 'on' : ''} onClick={() => setRoute({ name: 'social' })}>Social</button>
-            <button className={route.name === 'settings' ? 'on' : ''} onClick={() => setRoute({ name: 'settings' })}>Settings</button>
+          <nav className="side-nav" aria-label="Main">
+            {nav.map(([name, label, Icon, on]) => (
+              <button key={name} className={on ? 'on' : ''} aria-current={on ? 'page' : undefined} onClick={() => setRoute({ name })}>
+                <Icon size={18} aria-hidden="true" /><span className="grow">{label}</span>
+                {name === 'social' && needsYou > 0 && <span className="badge" aria-label={`${needsYou} posts need you`}>{needsYou}</span>}
+              </button>
+            ))}
           </nav>
-          <div className="spacer" />
-          <span className="chip ok" title="No account, no cloud: everything runs on this Mac"><span className="dot" />Offline · on this Mac</span>
-        </header>
+          <div className="grow" />
+          <div className="side-card">
+            <strong>New service up?</strong>
+            <span className="small" style={{ opacity: 0.75 }}>Grab this week's sermon from your channel.</span>
+            <button className="btn accent sm" onClick={() => setRoute({ name: 'library', pick: true })}><MonitorPlay size={14} />Pick a sermon</button>
+          </div>
+          <span className="side-foot small" title="No account, no cloud. Everything runs on this Mac."><WifiOff size={13} aria-hidden="true" />Offline, on this Mac</span>
+        </aside>
         <main className="main">
-          {!config ? null : route.name === 'settings' ? <Settings section={route.section} />
+          <div className="top-drag" />
+          {!config ? null : route.name === 'settings' ? <Settings section={route.section} key={route.section || 's'} />
             : route.name === 'social' ? <Social compose={route.compose} key={route.compose?.clipId || 'social'} />
-            : route.name === 'project' ? <Project id={route.id} key={route.id} />
-              : <Library />}
+              : route.name === 'project' ? <Project id={route.id} initialStep={route.step} key={route.id + (route.step || '')} />
+                : route.name === 'library' ? <Library openPicker={route.pick} key={route.pick ? 'pick' : 'lib'} />
+                  : <Dashboard />}
         </main>
       </div>
       <JobsTray />
+      <Toasts toasts={toasts} dismiss={dismissToast} />
       {config && !config.onboarded && <Onboarding />}
     </Ctx.Provider>
   );

@@ -3,9 +3,9 @@
 import { existsSync } from 'node:fs';
 import { readFile, writeFile, rename } from 'node:fs/promises';
 import path from 'node:path';
-import { ROOT } from './tools.js';
+import { HOME } from './tools.js';
 
-export const CONFIG_FILE = path.join(ROOT, 'config.local.json');
+export const CONFIG_FILE = path.join(HOME, 'config.local.json');
 
 export const DEFAULTS = {
   onboarded: false,
@@ -26,9 +26,14 @@ export const DEFAULTS = {
   clipMax: 60,
   exportFolder: '',
   exportPattern: '{date} - {title}',
+  appearance: 'system', // light | dark | system
   appTheme: 'sermon-light',
+  appThemeDark: 'midnight-glass',
   refraction: true, // liquid-glass displacement on panels
-  videoTheme: 'clean-white',
+  videoTheme: 'soft-pill',
+  exportOptions: { preset: 'vertical', resolution: '1080', quality: 'high', fps: 30, codec: 'h264', captions: true, hook: true, after: 'reveal' },
+  trackOnKeep: true,
+  weeklyGoal: 5, // clips posted per week, shown on the dashboard
 };
 
 /** Fields that hold secrets: masked on read, only overwritten when a new value is sent. */
@@ -38,25 +43,25 @@ export const SECRET_FIELDS = ['youtubeApiKey', 'anthropicApiKey', 'openaiApiKey'
 export const KEY_GUIDE = [
   {
     field: 'anthropicApiKey', name: 'Anthropic (Claude) API key', optional: true, provider: 'anthropic',
-    purpose: 'Optional. Lets Claude rank clip candidates and write titles/summaries. Off unless you pick Claude as the AI helper.',
+    purpose: 'For the Claude AI helper.',
     steps: ['Go to console.anthropic.com and sign in.', 'Open Settings → API Keys → Create Key.', 'Copy the key (starts with sk-ant-) and paste it here.'],
     link: 'https://console.anthropic.com/settings/keys',
   },
   {
     field: 'openaiApiKey', name: 'OpenAI API key', optional: true, provider: 'openai',
-    purpose: 'Optional alternative AI helper for ranking clips.',
+    purpose: 'For the OpenAI helper.',
     steps: ['Go to platform.openai.com → API keys.', 'Create a new secret key.', 'Paste it here.'],
     link: 'https://platform.openai.com/api-keys',
   },
   {
     field: 'geminiApiKey', name: 'Google Gemini API key', optional: true, provider: 'gemini',
-    purpose: 'Optional alternative AI helper. Has a free tier.',
+    purpose: 'For the Gemini helper. Has a free tier.',
     steps: ['Go to aistudio.google.com/apikey.', 'Create API key.', 'Paste it here.'],
     link: 'https://aistudio.google.com/apikey',
   },
   {
     field: 'youtubeApiKey', name: 'YouTube Data API v3 key', optional: true,
-    purpose: 'Optional. Richer channel listing (descriptions, more than the latest uploads). Listing and downloading already work without it.',
+    purpose: 'Optional. Not needed to list or download videos.',
     steps: ['Open console.cloud.google.com and create a project.', 'APIs & Services → Library → enable "YouTube Data API v3".', 'Credentials → Create credentials → API key. Restrict it to the YouTube Data API.', 'Paste it here.'],
     link: 'https://console.cloud.google.com/apis/library/youtube.googleapis.com',
   },

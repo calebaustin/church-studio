@@ -1,8 +1,9 @@
 // Export a clip: build the render job (cuts, caption words, theme) and run scripts/render_clip.py.
-import { existsSync } from 'node:fs';
-import { mkdir, writeFile, rm } from 'node:fs/promises';
+import { existsSync, statSync } from 'node:fs';
+import { copyFile, mkdir, rename, writeFile, rm } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
-import { run, python, tool, SCRIPTS_DIR } from './tools.js';
+import { run, tool, pyCommand } from './tools.js';
 import { file, getProject, getTranscript, updateProject, projectDir } from './projects.js';
 import { loadConfig } from './config.js';
 import { getVideoTheme, fontFile } from './themes.js';
@@ -56,7 +57,31 @@ function fileName(pattern, project, clip, index) {
   return name.replace(/[\\/:*?"<>|\n\r]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120) || `clip-${clip.id}`;
 }
 
-async function buildJob(project, clip, { preview = false, trackOnly = false } = {}) {
+/** Export presets: where the clip is going decides its shape. */
+export const EXPORT_PRESETS = {
+  vertical: { label: 'Reels · Shorts · TikTok (9:16)', w: 1080, h: 1920 },
+  portrait: { label: 'Instagram / Facebook feed (4:5)', w: 1080, h: 1350 },
+  square: { label: 'Square (1:1)', w: 1080, h: 1080 },
+  landscape: { label: 'YouTube / website (16:9)', w: 1920, h: 1080 },
+};
+const SCALE = { '720': 720 / 1080, '1080': 1, '1440': 1440 / 1080, '2160': 2 };
+const even = (n) => Math.max(2, Math.round(n / 2) * 2);
+
+/** Normalise user export options into renderer settings. */
+export function exportSettings(o = {}) {
+  const preset = EXPORT_PRESETS[o.preset] || EXPORT_PRESETS.vertical;
+  const k = SCALE[String(o.resolution || '1080')] || 1;
+  const quality = { standard: 8, high: 12, max: 20 }[o.quality || 'high'] || 12;
+  const areaK = (preset.w * preset.h * k * k) / (1080 * 1920); // keep bits-per-pixel steady
+  const fps = [24, 25, 30, 60].includes(Number(o.fps)) ? Number(o.fps) : 30;
+  return {
+    width: even(preset.w * k), height: even(preset.h * k), fps,
+    codec: o.codec === 'hevc' ? 'hevc' : 'h264',
+    mbps: Math.round(quality * areaK * (fps === 60 ? 1.5 : 1) * (o.codec === 'hevc' ? 0.6 : 1) * 10) / 10,
+  };
+}
+
+export async function buildJob(project, clip, { preview = false, trackOnly = false, options = {} } = {}) {
   const transcript = await getTranscript(project.id);
   const words = transcript?.words || [];
   const cut = new Set(clip.cutWords || []);
@@ -65,21 +90,22 @@ async function buildJob(project, clip, { preview = false, trackOnly = false } = 
     .filter((w) => w.end > clip.start && w.start < clip.end && !cut.has(w.i))
     .map(({ w, start, end }) => ({ w, start, end }));
   const theme = await getVideoTheme(clip.videoTheme || project.videoTheme || (await loadConfig()).videoTheme);
-  const font = fontFile(theme.font);
+  const font = await fontFile(theme.font);
+  const out = exportSettings(options);
   return {
     source: file(project.id, project.sourceFile),
-    start: clip.start, end: clip.end, fps: 30, width: 1080, height: 1920, preview,
-    crop: clip.crop || { mode: 'auto' },
+    start: clip.start, end: clip.end, preview, ...out,
+    crop: clip.crop || { mode: 'auto', motion: 'glide' },
     keep: trackOnly ? null : keepSegments(words, clip),
     words: clipWords,
-    hook: clip.hook || null,
-    captions: clip.captions !== false,
-    theme: { ...theme, fontFile: font?.file, fontStyle: font?.style },
+    hook: options.hook === false ? null : clip.hook || null,
+    captions: options.captions === false ? false : clip.captions !== false,
+    theme: { ...theme, fontFile: font?.file, fontStyle: font?.style, fontIndex: font?.index ?? null },
   };
 }
 
 function runRender(job, ctx, extraArgs = []) {
-  return run(python(), [path.join(SCRIPTS_DIR, 'render_clip.py'), job, ...extraArgs], {
+  return run(...pyCommand('render_clip', [job, ...extraArgs]), {
     signal: ctx.signal,
     onStderr: (chunk) => {
       const m = [...chunk.matchAll(/PROGRESS (\d+) ?([^\n]*)/g)].pop();
@@ -107,20 +133,23 @@ export async function trackClip(projectId, clipId, ctx) {
   return { track: `tracks/${clip.id}.json` };
 }
 
-export async function exportClip(projectId, clipId, { preview = false } = {}, ctx) {
+export async function exportClip(projectId, clipId, { preview = false, options = {} } = {}, ctx) {
   const project = await getProject(projectId);
   const index = project?.clips.findIndex((c) => c.id === clipId);
   if (!project || index < 0) throw new Error('Clip not found');
   const clip = project.clips[index];
   const config = await loadConfig();
   const exportsDir = path.join(projectDir(projectId), preview ? 'previews' : 'exports');
-  const target = !preview && config.exportFolder && existsSync(config.exportFolder) ? config.exportFolder : exportsDir;
+  const folder = options.folder || config.exportFolder || downloadsDir();
+  const target = !preview && folder && existsSync(folder) ? folder : exportsDir;
   await mkdir(exportsDir, { recursive: true });
   await mkdir(target, { recursive: true });
-  const base = preview ? clip.id : fileName(config.exportPattern || '{date} - {title}', project, clip, index);
+  const pattern = options.fileName?.trim() || config.exportPattern || '{date} - {title}';
+  const presetTag = options.preset && options.preset !== 'vertical' ? ` (${options.preset})` : '';
+  const base = preview ? clip.id : `${fileName(pattern, project, clip, index)}${presetTag}`;
   const out = path.join(target, `${base}.mp4`);
   const thumb = path.join(exportsDir, `${clip.id}.jpg`);
-  const job = await buildJob(project, clip, { preview });
+  const job = await buildJob(project, clip, { preview, options });
   Object.assign(job, { out, thumb });
   const jobFile = path.join(exportsDir, `${clip.id}.job.json`);
   await writeFile(jobFile, JSON.stringify(job));
@@ -136,12 +165,51 @@ export async function exportClip(projectId, clipId, { preview = false } = {}, ct
   await updateProject(projectId, (p) => {
     const c = p.clips.find((x) => x.id === clipId);
     if (!c) return;
-    const info = { file: out, rel: out.startsWith(projectDir(projectId)) ? rel(out) : null, thumb: rel(thumb), at: new Date().toISOString(), length: result.length, crop: result };
+    const info = {
+      file: out, rel: out.startsWith(projectDir(projectId)) ? rel(out) : null, thumb: rel(thumb), at: new Date().toISOString(),
+      length: result.length, width: result.width, height: result.height, bytes: statSync(out).size,
+      preset: options.preset || 'vertical', crop: result,
+    };
     if (preview) c.preview = info;
-    else { c.export = info; c.status = 'exported'; }
+    else {
+      c.export = info;
+      c.exports = [info, ...(c.exports || []).filter((e) => e.file !== out)].slice(0, 12);
+      c.status = 'exported';
+    }
   });
   ctx.progress(100, preview ? 'Preview ready' : `Exported ${path.basename(out)}`);
   return { file: out, ...result };
+}
+
+/** Exports go to ~/Downloads unless the user picks a folder. */
+export function downloadsDir() {
+  const d = path.join(os.homedir(), 'Downloads');
+  return existsSync(d) ? d : null;
+}
+
+/** Move an exported file to another folder (keeps the name; adds " 2" etc. if taken). */
+export async function moveExport(projectId, clipId, folder) {
+  if (!folder || !existsSync(folder)) throw new Error('That folder doesn’t exist.');
+  const project = await getProject(projectId);
+  const clip = project?.clips.find((c) => c.id === clipId);
+  const from = clip?.export?.file;
+  if (!from || !existsSync(from)) throw new Error('The exported file is missing. Export it again.');
+  const ext = path.extname(from);
+  const base = path.basename(from, ext);
+  let to = path.join(folder, `${base}${ext}`);
+  for (let n = 2; existsSync(to) && to !== from; n++) to = path.join(folder, `${base} ${n}${ext}`);
+  if (to === from) return { file: from };
+  try { await rename(from, to); } catch (e) {
+    if (e.code !== 'EXDEV') throw e; // different disk: copy then remove
+    await copyFile(from, to);
+    await rm(from, { force: true });
+  }
+  const rel = (p) => (p.startsWith(projectDir(projectId)) ? path.relative(projectDir(projectId), p) : null);
+  await updateProject(projectId, (p) => {
+    const c = p.clips.find((x) => x.id === clipId);
+    for (const e of [c.export, ...(c.exports || [])]) if (e?.file === from) { e.file = to; e.rel = rel(to); }
+  });
+  return { file: to };
 }
 
 export async function revealInFinder(p) {

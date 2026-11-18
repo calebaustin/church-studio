@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useApp } from '../App.jsx';
 import { api, fmt, openLink } from '../api.js';
+import Modal from '../components/Modal.jsx';
 
 const STATUS = {
   draft: ['chip', 'Draft'], scheduled: ['chip accent', 'Scheduled'], publishing: ['chip warn', 'Publishing…'],
@@ -39,7 +40,7 @@ export default function Social({ compose: initialCompose }) {
       <div className="row between">
         <div className="stack" style={{ gap: 2 }}>
           <h1>Social</h1>
-          <span className="muted">Post clips to your accounts now, schedule them, or keep drafts — all from this Mac.</span>
+          <span className="muted">Post, schedule, and plan your clips.</span>
         </div>
         <button className="btn primary" onClick={() => setComposer({})}>+ New post</button>
       </div>
@@ -49,7 +50,7 @@ export default function Social({ compose: initialCompose }) {
           <button className={tab === 'calendar' ? 'on' : ''} onClick={() => setTab('calendar')}>Calendar</button>
           <button className={tab === 'accounts' ? 'on' : ''} onClick={() => setTab('accounts')}>Accounts ({s.accounts.length})</button>
         </div>
-        <span className="muted small">Scheduled posts go out while Sermon Clips is open. Overdue ones go out when you reopen it.</span>
+        <span className="muted small">Scheduled posts go out while the app is open.</span>
       </div>
       {tab === 'posts' && <Posts s={s} plat={plat} onEdit={(p) => setComposer({ post: p })} onConnect={() => setTab('accounts')} />}
       {tab === 'calendar' && <Calendar s={s} plat={plat} onEdit={(p) => setComposer({ post: p })} onNew={(d) => setComposer({ when: d })} />}
@@ -97,7 +98,7 @@ function PostRow({ post, s, plat, onEdit }) {
   };
   return (
     <div className="glass" style={{ padding: 14, display: 'grid', gridTemplateColumns: '64px 1fr auto', gap: 14, alignItems: 'start' }}>
-      <div style={{ width: 64, aspectRatio: '9/16', borderRadius: 10, overflow: 'hidden', background: 'rgba(20,24,33,.08)' }}>
+      <div style={{ width: 64, aspectRatio: '9/16', borderRadius: 10, overflow: 'hidden', background: 'var(--hover)' }}>
         {thumb && <img src={thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
       </div>
       <div className="stack" style={{ gap: 6 }}>
@@ -137,7 +138,7 @@ function PostRow({ post, s, plat, onEdit }) {
         {['draft', 'scheduled'].includes(post.status) && <button className="btn sm" onClick={() => onEdit(post)}>Edit</button>}
         {['draft', 'scheduled'].includes(post.status) && post.destinations.length > 0 && <button className="btn primary sm" onClick={() => act(() => api.post(`/api/social/posts/${post.id}/publish`))}>Post now</button>}
         {['failed', 'partial'].includes(post.status) && post.destinations.some((d) => d.status === 'failed') && <button className="btn primary sm" onClick={() => act(() => api.post(`/api/social/posts/${post.id}/retry`))}>Retry failed</button>}
-        {post.status !== 'publishing' && <button className="btn ghost sm danger" onClick={() => confirm('Delete this post from Sermon Clips? (Anything already published stays on the platform.)') && act(() => api.del(`/api/social/posts/${post.id}`))}>Delete</button>}
+        {post.status !== 'publishing' && <button className="btn ghost sm danger" onClick={() => confirm(`Delete “${post.title || 'this post'}” from Sermon Clips? Anything already posted stays on the platform.`) && act(() => api.del(`/api/social/posts/${post.id}`))}>Delete</button>}
       </div>
     </div>
   );
@@ -170,14 +171,14 @@ function Calendar({ s, plat, onEdit, onNew }) {
           const list = s.posts.filter((p) => p.status !== 'draft' && when(p).toDateString() === d.toDateString()).sort((a, b) => when(a) - when(b));
           const isPast = d < new Date(new Date().toDateString());
           return (
-            <div key={d.toISOString()} style={{ minHeight: 260, borderRadius: 14, padding: 8, background: d.toDateString() === today ? 'rgba(255,255,255,.85)' : 'rgba(255,255,255,.45)', border: '1px solid var(--line)', display: 'grid', alignContent: 'start', gap: 6 }}>
+            <div key={d.toISOString()} style={{ minHeight: 260, borderRadius: 14, padding: 8, background: d.toDateString() === today ? 'var(--surface-strong)' : 'var(--field)', border: '1px solid var(--line)', display: 'grid', alignContent: 'start', gap: 6 }}>
               <div className="row between small">
                 <b>{d.toLocaleDateString([], { weekday: 'short' })} {d.getDate()}</b>
                 {!isPast && <button className="btn ghost sm" style={{ height: 22, padding: '0 6px' }} title="Schedule a post this day" onClick={() => { const t = new Date(d); t.setHours(d.getDay() === 0 ? 14 : 12, 0, 0, 0); onNew(t); }}>+</button>}
               </div>
               {list.map((p) => (
                 <button key={p.id} onClick={() => ['draft', 'scheduled'].includes(p.status) && onEdit(p)}
-                  style={{ textAlign: 'left', border: 0, borderRadius: 10, padding: '6px 8px', background: '#fff', cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,.06)', display: 'grid', gap: 4 }}>
+                  style={{ textAlign: 'left', border: 0, borderRadius: 10, padding: '6px 8px', background: 'var(--surface-solid)', color: 'var(--text)', cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,.08)', display: 'grid', gap: 4 }}>
                   <span className="small muted">{when(p).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
                   <span className="small" style={{ fontWeight: 600, lineHeight: 1.25 }}>{(p.title || p.caption || 'Post').slice(0, 48)}</span>
                   <span className="row" style={{ gap: 3 }}>{p.destinations.map((x) => <span key={x.accountId} className="dot" style={{ color: plat(x.platform)?.color }} />)}<span className={STATUS[p.status]?.[0]} style={{ height: 18, fontSize: 10.5, marginLeft: 4 }}>{STATUS[p.status]?.[1]}</span></span>
@@ -228,7 +229,7 @@ function Accounts({ s }) {
       )}
       <section className="glass panel stack">
         <h3>Post directly</h3>
-        <p className="muted small">The video uploads straight from this Mac. You create your own access key once; it's stored encrypted in <span className="mono">data/social/</span> and only sent to that platform.</p>
+        <p className="muted small">Uploads straight from this Mac. Keys are stored encrypted.</p>
         <div className="provider-grid">
           {api_.map((p) => (
             <div key={p.id} className={`provider ${connecting?.id === p.id ? 'on' : ''}`} onClick={() => setConnecting(p)}>
@@ -241,7 +242,7 @@ function Accounts({ s }) {
       </section>
       <section className="glass panel stack">
         <h3>Guided hand-off</h3>
-        <p className="muted small">These platforms only allow posting from approved developer apps. Add them to plan and schedule posts — at post time the app copies the caption, shows the video file and opens the upload page for you.</p>
+        <p className="muted small">No direct posting here. At post time we copy the caption, show the file, and open the upload page.</p>
         <div className="provider-grid">
           {manual.map((p) => (
             <div key={p.id} className="provider" onClick={() => act(() => api.post('/api/social/accounts', { platform: p.id }))}>
@@ -351,8 +352,7 @@ function Composer({ s, plat, init, onClose, onConnect }) {
   };
 
   return (
-    <div className="scrim" onClick={onClose}>
-      <div className="glass strong modal stack" style={{ width: 'min(980px, 95vw)', gap: 16 }} onClick={(e) => e.stopPropagation()}>
+    <Modal onClose={onClose} width={1000} label={editing ? 'Edit post' : 'New post'}>
         <div className="row between"><h2>{editing ? 'Edit post' : 'New post'}</h2><button className="btn ghost sm" onClick={onClose}>Close</button></div>
         <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: 20, alignItems: 'start' }}>
           <div className="stack">
@@ -366,10 +366,10 @@ function Composer({ s, plat, init, onClose, onConnect }) {
             {pickMedia && (
               <div className="keycard">
                 <strong>Exported clips</strong>
-                {!s.media.length && <span className="muted small">Export a clip from a sermon first — it shows up here.</span>}
+                {!s.media.length && <span className="muted small">Export a clip first.</span>}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(92px, 1fr))', gap: 8, maxHeight: 260, overflow: 'auto' }}>
                   {s.media.map((m) => (
-                    <button key={m.file} title={m.title} onClick={() => choose(m)} style={{ border: media?.file === m.file ? '2px solid var(--accent)' : '1px solid var(--line)', borderRadius: 12, padding: 0, overflow: 'hidden', background: '#fff', cursor: 'pointer', textAlign: 'left' }}>
+                    <button key={m.file} title={m.title} onClick={() => choose(m)} style={{ border: media?.file === m.file ? '2px solid var(--accent)' : '1px solid var(--line)', borderRadius: 12, padding: 0, overflow: 'hidden', background: 'var(--surface-solid)', color: 'var(--text)', cursor: 'pointer', textAlign: 'left' }}>
                       {m.thumb && <img src={m.thumb} alt="" style={{ width: '100%', aspectRatio: '9/16', objectFit: 'cover', display: 'block' }} />}
                       <span className="small" style={{ display: 'block', padding: '4px 6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.title}</span>
                     </button>
@@ -436,7 +436,6 @@ function Composer({ s, plat, init, onClose, onConnect }) {
             {error && <div className="banner">{error}</div>}
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

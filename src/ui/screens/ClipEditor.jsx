@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../App.jsx';
 import { api, fmt, media } from '../api.js';
-import CaptionOverlay from '../components/CaptionOverlay.jsx';
+import { Undo2, Redo2, Download, Zap, Plus, Trash2, Crosshair, Play, Pause, Send, FolderOpen } from 'lucide-react';
+import CaptionOverlay, { findFont } from '../components/CaptionOverlay.jsx';
+import ExportDialog from '../components/ExportDialog.jsx';
 import { keepSegments, keptLength } from '../captions.js';
+import { sampleTrack, cueX, clampX } from '../framing.js';
 
 const FILLERS = new Set(['um', 'uh', 'uhm', 'umm', 'er', 'erm', 'ah']);
 const FRAME_W = 340;
@@ -27,16 +30,22 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
   const video = useRef(null);
   const [rel, setRel] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [selCue, setSelCue] = useState(null);
+  const drag = useRef(null);
   const saveTimer = useRef(null);
 
   useEffect(() => { h.reset(original); setRel(0); setTrack(null); }, [original?.id]);
 
+  // Edits merge into the stored clip without touching render results.
+  const merged = (cl) => project.clips.map((c) => (c.id === cl.id ? { ...c, ...cl, export: c.export, exports: c.exports, preview: c.preview, status: c.status === 'proposed' ? 'kept' : c.status } : c));
+  const flush = async () => { clearTimeout(saveTimer.current); if (clip !== original) await patch({ clips: merged(clip) }); };
   // Persist edits (debounced). The project file is the source of truth.
   useEffect(() => {
     if (!clip || clip === original) return undefined;
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
-      patch({ clips: project.clips.map((c) => (c.id === clip.id ? { ...c, ...clip, export: c.export, preview: c.preview, status: c.status === 'proposed' ? 'kept' : c.status } : c)) });
+      patch({ clips: merged(clip) });
     }, 450);
     return () => clearTimeout(saveTimer.current);
   }, [clip]);
@@ -108,7 +117,7 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
   const toggle = () => { const v = video.current; if (!v) return; if (v.paused) v.play(); else v.pause(); };
 
   const theme = themes.video.find((t) => t.id === (clip.videoTheme || project.videoTheme || config.videoTheme)) || themes.video[0];
-  const font = themes.fonts.find((f) => f.id === theme?.font);
+  const font = findFont(themes, theme?.font);
   const set = (patchObj) => h.set((c) => ({ ...c, ...patchObj }));
 
   // Crop position for the preview.
@@ -116,13 +125,42 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
   const FH = FRAME_W * 16 / 9;
   const VW = FH * A;
   const mode = clip.crop?.mode || 'auto';
+  const motion = clip.crop?.motion || 'glide';
+  const frac = Math.min(1, FRAME_W / VW);
+  const cues = clip.crop?.cues || [];
   let x = 0.5;
   if (mode === 'manual') x = clip.crop.x ?? 0.5;
-  if (mode === 'auto' && track?.x?.length) x = track.x[Math.max(0, Math.min(track.x.length - 1, Math.floor(rel * track.fps)))];
+  if (mode === 'cues') x = cueX(cues, rel, clip.crop?.x ?? 0.5);
+  if (mode === 'auto' && track) x = sampleTrack((motion === 'follow' ? track.follow : track.glide) || track.x, track.fps, rel);
+  x = clampX(x, frac);
   const left = Math.min(0, Math.max(-(VW - FRAME_W), -(x * VW - FRAME_W / 2)));
   const videoStyle = mode === 'fit'
     ? { width: FRAME_W, height: FRAME_W / A, left: 0, top: (FH - FRAME_W / A) / 2 }
     : { height: FH, width: VW, left };
+
+  const setCrop = (p) => set({ crop: { mode, motion, ...clip.crop, ...p } });
+  const addCue = () => {
+    const t = Math.round(rel * 10) / 10;
+    const next = [...cues.filter((c) => Math.abs(c.t - t) > 0.05), { t, x: Math.round(x * 1000) / 1000, move: cues.length ? 'glide' : 'cut', dur: 1.5 }].sort((a, b) => a.t - b.t);
+    setCrop({ mode: 'cues', cues: next });
+    setSelCue(next.findIndex((c) => c.t === t));
+  };
+  const updateCue = (i, p) => setCrop({ cues: cues.map((c, k) => (k === i ? { ...c, ...p } : c)) });
+  const removeCue = (i) => { setCrop({ cues: cues.filter((_, k) => k !== i) }); setSelCue(null); };
+
+  // Drag the picture sideways to aim the frame (fixed position, or the selected cue).
+  const canDrag = mode === 'manual' || (mode === 'cues' && selCue != null && cues[selCue]);
+  const onPointerDown = (e) => { drag.current = { x0: e.clientX, start: x, moved: false }; e.currentTarget.setPointerCapture(e.pointerId); };
+  const onPointerMove = (e) => {
+    const d = drag.current;
+    if (!d || !canDrag) return;
+    const dx = e.clientX - d.x0;
+    if (Math.abs(dx) > 4) d.moved = true;
+    if (!d.moved) return;
+    const nx = Math.round(clampX(d.start - dx / VW, frac) * 1000) / 1000;
+    if (mode === 'manual') setCrop({ x: nx }); else updateCue(selCue, { x: nx });
+  };
+  const onPointerUp = () => { const d = drag.current; drag.current = null; if (!d?.moved) toggle(); };
 
   const busyKind = (k) => jobs.some((j) => j.kind === k && j.key?.endsWith(clip.id));
   const run = async (kind) => {
@@ -133,6 +171,7 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
 
   return (
     <div className="stack" style={{ gap: 16 }}>
+      {exporting && <ExportDialog project={project} clips={[current || clip]} beforeExport={flush} onClose={() => setExporting(false)} />}
       <div className="glass panel row between wrap" style={{ padding: 12 }}>
         <div className="row grow" style={{ minWidth: 280 }}>
           <button className="btn sm" disabled={idx <= 0} onClick={() => onSelect(project.clips[idx - 1].id)}>‹</button>
@@ -142,16 +181,17 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
           <button className="btn sm" disabled={idx >= project.clips.length - 1} onClick={() => onSelect(project.clips[idx + 1].id)}>›</button>
         </div>
         <div className="row">
-          <button className="btn ghost sm" disabled={!h.canUndo} onClick={h.undo} title="⌘Z">Undo</button>
-          <button className="btn ghost sm" disabled={!h.canRedo} onClick={h.redo} title="⇧⌘Z">Redo</button>
-          <button className="btn sm" disabled={busyKind('preview')} onClick={() => run('preview')}>{busyKind('preview') ? 'Rendering…' : 'Quick render'}</button>
-          <button className="btn primary" disabled={busyKind('export')} onClick={() => run('export')}>{busyKind('export') ? 'Exporting…' : current?.export ? 'Export again' : 'Export 1080×1920'}</button>
+          <button className="btn ghost sm" disabled={!h.canUndo} onClick={h.undo} title="Undo (⌘Z)"><Undo2 size={15} />Undo</button>
+          <button className="btn ghost sm" disabled={!h.canRedo} onClick={h.redo} title="Redo (⇧⌘Z)"><Redo2 size={15} />Redo</button>
+          <button className="btn sm" disabled={busyKind('preview')} onClick={() => run('preview')}><Zap size={14} />{busyKind('preview') ? 'Rendering…' : 'Quick render'}</button>
+          <button className="btn primary" disabled={busyKind('export')} onClick={() => setExporting(true)}><Download size={15} />{busyKind('export') ? 'Exporting…' : current?.export ? 'Export again…' : 'Export…'}</button>
         </div>
       </div>
 
       <div className="editor">
         <div className="stack" style={{ position: 'sticky', top: 0 }}>
-          <div className="vframe" style={{ width: FRAME_W }} onClick={toggle}>
+          <div className={`vframe ${canDrag ? 'draggable' : ''}`} style={{ width: FRAME_W }} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
+            title={canDrag ? 'Drag sideways to aim the frame. Click to play or pause.' : 'Click to play or pause'}>
             <video ref={video} src={media(project.id, project.sourceFile)} style={videoStyle} preload="auto" playsInline />
             {clip.captions !== false && theme && (
               <CaptionOverlay theme={theme} font={font} words={capWords} t={rel} frameWidth={FRAME_W} hook={clip.hook} showHook={outTime < 3.5} />
@@ -159,15 +199,21 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
             {!playing && <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#fff', fontSize: 46, textShadow: '0 4px 20px rgba(0,0,0,.4)', pointerEvents: 'none' }}>▶︎</div>}
           </div>
           <div className="transport" style={{ width: FRAME_W }}>
-            <button className="btn sm" onClick={toggle}>{playing ? 'Pause' : 'Play'}</button>
+            <button className="btn sm" onClick={toggle} aria-label={playing ? 'Pause' : 'Play'}>{playing ? <Pause size={14} /> : <Play size={14} />}{playing ? 'Pause' : 'Play'}</button>
             <input type="range" min="0" max={outLen} step="0.01" value={Math.min(outTime, outLen)} onChange={(e) => seekOut(Number(e.target.value))} />
             <span className="mono">{fmt(outTime)} / {fmt(outLen)}</span>
           </div>
           <p className="muted small" style={{ width: FRAME_W }}>
-            Live preview. {mode === 'auto' && !track ? 'Speaker tracking not analysed yet — showing centre.' : ''}
+            {mode === 'auto' && !track ? 'Showing center until the speaker is found.' : ''}
             {current?.preview && <> · <a href={media(project.id, `previews/${clip.id}.mp4`) + `?v=${encodeURIComponent(current.preview.at)}`} target="_blank" rel="noreferrer">Open last quick render</a></>}
           </p>
-          {current?.export && <div className="banner info" style={{ width: FRAME_W }}>Exported {new Date(current.export.at).toLocaleTimeString()} · <a href="#" onClick={(e) => { e.preventDefault(); api.post('/api/reveal', { path: current.export.file }); }}>Show in Finder</a> · <a href="#" onClick={(e) => { e.preventDefault(); go({ name: 'social', compose: { projectId: project.id, clipId: clip.id } }); }}>Post / schedule</a></div>}
+          {current?.export && (
+            <div className="banner info" style={{ width: FRAME_W, flexWrap: 'wrap' }}>
+              <span>Exported {new Date(current.export.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+              <button className="btn sm" onClick={() => api.post('/api/reveal', { path: current.export.file })}><FolderOpen size={13} />Show</button>
+              <button className="btn sm" onClick={() => go({ name: 'social', compose: { projectId: project.id, clipId: clip.id } })}><Send size={13} />Post</button>
+            </div>
+          )}
         </div>
 
         <section className="glass strong panel">
@@ -195,31 +241,74 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
             </div>
           )}
           {tab === 'crop' && (
-            <div className="stack">
-              <p className="muted">The wide 16:9 video is cropped to 9:16. <b>Follow speaker</b> finds the preacher's face and moves the frame smoothly
-                as they walk — it holds still for small movements and glides for big ones.</p>
-              <div className="seg">
-                {[['auto', 'Follow speaker'], ['center', 'Centre'], ['manual', 'Fixed position'], ['fit', 'Whole frame']].map(([m, l]) => (
-                  <button key={m} className={mode === m ? 'on' : ''} onClick={() => set({ crop: { ...clip.crop, mode: m } })}>{l}</button>
+            <div className="stack" style={{ gap: 14 }}>
+              
+              <div className="choices">
+                {[['auto', 'Follow speaker', 'Moves with the preacher.'],
+                  ['cues', 'By timestamp', 'Cut or glide at moments you pick.'],
+                  ['manual', 'Fixed', 'One steady frame.'],
+                  ['fit', 'Whole frame', 'Full shot, blurred edges.']].map(([m, t, d]) => (
+                  <button key={m} className={`choice ${mode === m ? 'on' : ''}`} onClick={() => setCrop({ mode: m, ...(m === 'manual' && clip.crop?.x == null ? { x } : {}) })}>
+                    <span className="t"><span className="radio" />{t}</span><span className="d">{d}</span>
+                  </button>
                 ))}
               </div>
               {mode === 'auto' && (
                 <div className="keycard">
-                  <div className="row between">
-                    <strong>Speaker tracking</strong>
-                    {track ? <span className={`chip ${track.info?.fallback ? 'warn' : 'ok'}`}>{track.info?.fallback ? 'No steady face — centred' : `Face found in ${track.info?.found}/${track.info?.samples} samples`}</span> : <span className="chip">Not analysed</span>}
+                  <div className="row between wrap">
+                    <strong>Movement</strong>
+                    {busyKind('track') ? <span className="chip warn">Finding the speaker…</span>
+                      : track ? <span className={`chip ${track.info?.fallback ? 'warn' : 'ok'}`}>{track.info?.fallback ? 'No steady face found, so it stays centred' : `Speaker found in ${track.info?.found} of ${track.info?.samples} checks`}</span>
+                        : <span className="chip">Not checked yet</span>}
                   </div>
-                  {track?.x && <PathSpark x={track.x} frac={track.cropFrac} />}
-                  <button className="btn sm" style={{ justifySelf: 'start' }} disabled={busyKind('track')} onClick={() => run('track')}>{busyKind('track') ? 'Analysing…' : track ? 'Analyse again' : 'Analyse speaker movement'}</button>
-                  <span className="muted small">Export always re-tracks, so this is only for the preview.</span>
+                  <div className="seg">
+                    <button className={motion === 'glide' ? 'on' : ''} onClick={() => setCrop({ motion: 'glide' })}>Smooth glide</button>
+                    <button className={motion === 'follow' ? 'on' : ''} onClick={() => setCrop({ motion: 'follow' })}>Follow closely</button>
+                  </div>
+                  <span className="hint">{motion === 'glide'
+                    ? 'One slow move from start to finish.'
+                    : 'Keeps up with lots of walking.'}</span>
+                  {track && (motion === 'follow' ? track.follow : track.glide) && <PathSpark x={(motion === 'follow' ? track.follow : track.glide) || track.x} frac={track.cropFrac} />}
+                  <div className="row">
+                    <button className="btn sm" disabled={busyKind('track')} onClick={() => run('track')}><Crosshair size={14} />{track ? 'Find the speaker again' : 'Find the speaker'}</button>
+                    <button className="btn ghost sm" onClick={() => { setCrop({ mode: 'cues', cues: [{ t: 0, x, move: 'cut', dur: 1.5 }] }); setSelCue(0); }}>Fine-tune with cues</button>
+                  </div>
+                </div>
+              )}
+              {mode === 'cues' && (
+                <div className="keycard">
+                  <div className="row between"><strong>Cues</strong><button className="btn primary sm" onClick={addCue}><Plus size={14} />Add cue at {fmt(rel)}</button></div>
+                  <span className="hint">Add a cue, then drag the picture to aim it.</span>
+                  <div className="cue-track" aria-hidden="true">
+                    {cues.map((c, i) => <i key={i} className={selCue === i ? 'sel' : ''} style={{ left: `${(c.t / (clip.end - clip.start)) * 100}%` }} onClick={() => { setSelCue(i); video.current.currentTime = clip.start + c.t; }} />)}
+                    <b style={{ left: `${(rel / (clip.end - clip.start)) * 100}%` }} />
+                  </div>
+                  {!cues.length && <p className="muted small">No cues yet.</p>}
+                  {cues.map((c, i) => (
+                    <div key={i} className="row wrap" style={{ padding: '6px 8px', borderRadius: 12, background: selCue === i ? 'var(--accent-soft)' : 'transparent' }} onClick={() => setSelCue(i)}>
+                      <button className="btn sm num" title="Jump here" onClick={() => { video.current.currentTime = clip.start + c.t; }}>{fmt(c.t)}.{Math.round((c.t % 1) * 10)}</button>
+                      {i === 0 ? <span className="chip">Opening framing</span> : (
+                        <div className="seg">
+                          <button className={c.move !== 'glide' ? 'on' : ''} onClick={() => updateCue(i, { move: 'cut' })}>Cut</button>
+                          <button className={c.move === 'glide' ? 'on' : ''} onClick={() => updateCue(i, { move: 'glide' })}>Glide</button>
+                        </div>
+                      )}
+                      {i > 0 && c.move === 'glide' && (
+                        <label className="row small">over<input className="input num" style={{ width: 70, minHeight: 30 }} type="number" min="0.2" max="10" step="0.1" value={c.dur ?? 1.5} onChange={(e) => updateCue(i, { dur: Number(e.target.value) })} />s</label>
+                      )}
+                      <input type="range" aria-label="Framing position" min="0" max="1" step="0.005" style={{ width: 120 }} value={c.x} onChange={(e) => updateCue(i, { x: Number(e.target.value) })} />
+                      <button className="btn ghost sm" onClick={() => updateCue(i, { t: Math.round(rel * 10) / 10 })}>Move to playhead</button>
+                      <button className="btn icon sm danger" aria-label="Delete cue" onClick={(e) => { e.stopPropagation(); removeCue(i); }}><Trash2 size={14} /></button>
+                    </div>
+                  ))}
                 </div>
               )}
               {mode === 'manual' && (
-                <label className="field">Position · {Math.round((clip.crop?.x ?? 0.5) * 100)}%
-                  <input type="range" min="0" max="1" step="0.005" value={clip.crop?.x ?? 0.5} onChange={(e) => set({ crop: { mode: 'manual', x: Number(e.target.value) } })} />
+                <label className="field">Position · {Math.round((clip.crop?.x ?? 0.5) * 100)}% <span className="hint">Or drag the picture.</span>
+                  <input type="range" min="0" max="1" step="0.005" value={clip.crop?.x ?? 0.5} onChange={(e) => setCrop({ x: Number(e.target.value) })} />
                 </label>
               )}
-              {mode === 'fit' && <p className="muted small">Shows the whole wide frame over a blurred copy of itself — good for wide stage shots.</p>}
+              
             </div>
           )}
         </section>
@@ -233,7 +322,7 @@ function PathSpark({ x, frac }) {
   const hgt = 46;
   const pts = x.map((v, i) => `${(i / Math.max(1, x.length - 1)) * w},${hgt - v * hgt}`).join(' ');
   return (
-    <svg viewBox={`0 0 ${w} ${hgt}`} style={{ width: '100%', height: hgt, background: 'rgba(255,255,255,.6)', borderRadius: 10 }} preserveAspectRatio="none">
+    <svg viewBox={`0 0 ${w} ${hgt}`} style={{ width: '100%', height: hgt, background: 'var(--field)', borderRadius: 10 }} preserveAspectRatio="none">
       <polyline points={pts} fill="none" stroke="var(--accent)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
       <title>Where the 9:16 frame sits across the wide video over time (crop is {Math.round(frac * 100)}% of the width)</title>
     </svg>
@@ -278,7 +367,7 @@ function WordsTab({ words, clip, set, cut, rel, outLen, seek }) {
         <button className="btn ghost sm" disabled={!cut.size} onClick={() => set({ cutWords: [] })}>Restore all words</button>
         <span className="chip accent">{fmt(outLen)} long</span>
       </div>
-      <p className="muted small">Click a word to cut it (or bring it back). Click a grey word outside the clip to extend the clip to it. Double-click to jump there.</p>
+      <p className="muted small">Click a word to cut it. Click a grey word to extend the clip. Double-click to jump there.</p>
       <div className="words">
         {words.slice(lo, hi + 1).map((w, k) => {
           const i = lo + k;

@@ -12,7 +12,11 @@ function startDaemon() {
   return new Promise((resolve, reject) => {
     daemon = fork(path.join(ROOT, 'src', 'daemon', 'server.js'), [], {
       cwd: ROOT,
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', SC_PORT: String(PORT) },
+      env: {
+        ...process.env, ELECTRON_RUN_AS_NODE: '1', SC_PORT: String(PORT),
+        // Packaged: data in ~/Library/Application Support/Sermon Clips, bundled tools in Resources.
+        ...(app.isPackaged ? { SC_HOME: app.getPath('userData'), SC_RESOURCES: process.resourcesPath } : {}),
+      },
       stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
     });
     const timer = setTimeout(() => reject(new Error('Daemon did not start in 15 s')), 15000);
@@ -51,7 +55,7 @@ app.whenReady().then(async () => {
   try {
     await startDaemon();
   } catch (e) {
-    dialog.showErrorBox('Sermon Clips could not start', `${e.message}\n\nRun scripts/setup.sh and try again.`);
+    dialog.showErrorBox('Sermon Clips couldn’t start', app.isPackaged ? e.message : `${e.message}\n\nRun scripts/setup.sh and try again.`);
     app.quit();
     return;
   }

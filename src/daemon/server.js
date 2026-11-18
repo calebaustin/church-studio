@@ -5,15 +5,16 @@ import { createReadStream, existsSync, statSync } from 'node:fs';
 
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { ROOT, toolStatus } from './tools.js';
+import { ROOT, PROJECTS_DIR, toolStatus } from './tools.js';
 import { loadConfig, saveConfig, mask, KEY_GUIDE } from './config.js';
 import * as jobs from './jobs.js';
 import { listProjects, getProject, updateProject, deleteProject, getTranscript, projectDir } from './projects.js';
-import { listChannel, downloadToProject, importLocalFile } from './youtube.js';
+import { listChannel, downloadToProject, importLocalFile, scoutVideo } from './youtube.js';
 import { transcribeProject } from './transcribe.js';
 import { proposeClips } from './pipeline.js';
-import { exportClip, trackClip, revealInFinder } from './render.js';
-import { listThemes, saveTheme, deleteTheme } from './themes.js';
+import { exportClip, trackClip, revealInFinder, EXPORT_PRESETS, moveExport, downloadsDir } from './render.js';
+import { listThemes, saveTheme, deleteTheme, refreshSystemFonts, bundledFontDir } from './themes.js';
+import { makeThumbs } from './thumbs.js';
 import { testProvider } from './ai.js';
 import { binTranscript } from './sermon.js';
 import * as social from './social/hub.js';
@@ -26,7 +27,7 @@ const UI_DIR = path.join(ROOT, 'dist', 'ui');
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json',
   '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.mp4': 'video/mp4', '.webm': 'video/webm',
-  '.mov': 'video/quicktime', '.m4a': 'audio/mp4', '.woff2': 'font/woff2', '.ico': 'image/x-icon',
+  '.mov': 'video/quicktime', '.m4a': 'audio/mp4', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.otf': 'font/otf', '.ico': 'image/x-icon',
 };
 
 class HttpError extends Error {
@@ -77,6 +78,8 @@ route('POST', '/api/ai/test', async (_p, b) => {
 
 // ---------------------------------------------------------------- themes
 route('GET', '/api/themes', () => listThemes());
+route('POST', '/api/fonts/refresh', async () => { await refreshSystemFonts(); return listThemes(); });
+route('GET', '/api/export/presets', () => ({ presets: EXPORT_PRESETS }));
 route('POST', '/api/themes/:kind', async ({ kind }, b) => ({ theme: await saveTheme(kind, b) }));
 route('DELETE', '/api/themes/:kind/:id', async ({ kind, id }) => { await deleteTheme(kind, id); return { ok: true }; });
 
@@ -92,14 +95,20 @@ route('GET', '/api/youtube/channel', async (_p, _b, url) => {
   return { channel, items: channelCache.items };
 });
 
+route('POST', '/api/youtube/scout', async (_p, b) => {
+  if (!/^https?:\/\/(www\.|m\.)?(youtube\.com|youtu\.be)\//i.test(b.url || '')) throw new HttpError(400, 'Paste a YouTube link.');
+  try { return await scoutVideo(b.url); } catch (e) { throw new HttpError(502, `Couldn't read that video: ${e.message.slice(-200)}`); }
+});
+
 // ---------------------------------------------------------------- projects
 route('GET', '/api/projects', async () => ({ projects: await listProjects() }));
 
 route('POST', '/api/projects', async (_p, b) => {
   if (b.url) {
     if (!/^https?:\/\/(www\.|m\.)?(youtube\.com|youtu\.be)\//i.test(b.url)) throw new HttpError(400, 'Paste a YouTube link.');
-    const job = jobs.enqueue({ kind: 'download', label: b.title ? `Download “${b.title}”` : 'Download video', key: `dl:${b.url}` },
-      (ctx) => downloadToProject(b.url, ctx));
+    const range = b.start != null && b.end != null ? { start: Number(b.start), end: Number(b.end) } : null;
+    const job = jobs.enqueue({ kind: 'download', label: b.title ? `Download “${b.title}”` : 'Download video', key: `dl:${b.url}:${range ? range.start : ''}` },
+      (ctx) => downloadToProject(b.url, ctx, null, range));
     return { job: jobs.view(job) };
   }
   if (b.file) {
@@ -136,7 +145,7 @@ route('GET', '/api/projects/:id/transcript', async ({ id }) => {
 
 const projectJob = (kind, label, fn) => async ({ id }, b) => {
   const project = await requireProject(id);
-  const job = jobs.enqueue({ kind, label: `${label} — ${project.title}`, projectId: id, key: `${kind}:${id}:${b.clipId || ''}` }, (ctx) => fn(id, b, ctx, project));
+  const job = jobs.enqueue({ kind, label: `${label}: ${project.title}`, projectId: id, key: `${kind}:${id}:${b.clipId || ''}` }, (ctx) => fn(id, b, ctx, project));
   return { job: jobs.view(job) };
 };
 
@@ -144,6 +153,7 @@ route('POST', '/api/projects/:id/download', projectJob('download', 'Download', (
   if (!p.sourceUrl) throw new Error('This project came from a local file.');
   return downloadToProject(p.sourceUrl, ctx, p);
 }));
+route('POST', '/api/projects/:id/thumbs', projectJob('thumbs', 'Scene strip', (id, _b, ctx) => makeThumbs(id, ctx)));
 route('POST', '/api/projects/:id/transcribe', projectJob('transcribe', 'Transcribe', (id, b, ctx) => transcribeProject(id, b, ctx)));
 route('POST', '/api/projects/:id/propose', projectJob('propose', 'Find clips', (id, b, ctx) => proposeClips(id, b, ctx)));
 
@@ -161,24 +171,36 @@ route('POST', '/api/projects/:id/clips', async ({ id }, b) => {
   return { clip, project };
 });
 
-const clipJob = (kind, label, fn) => async ({ id, cid }) => {
+const clipJob = (kind, label, fn) => async ({ id, cid }, b = {}) => {
   const project = await requireProject(id);
   const clip = project.clips.find((c) => c.id === cid);
   if (!clip) throw new HttpError(404, 'Clip not found');
-  const job = jobs.enqueue({ kind, label: `${label} “${clip.title.slice(0, 40)}”`, projectId: id, key: `${kind}:${id}:${cid}` }, (ctx) => fn(id, cid, ctx));
+  const job = jobs.enqueue({ kind, label: `${label} “${clip.title.slice(0, 40)}”`, projectId: id, key: `${kind}:${id}:${cid}` }, (ctx) => fn(id, cid, ctx, b));
   return { job: jobs.view(job) };
 };
+/** Export result plus what the celebration toast needs. */
+async function exportWithInfo(id, cid, ctx, options) {
+  const r = await exportClip(id, cid, { options }, ctx);
+  const p = await getProject(id);
+  const c = p.clips.find((x) => x.id === cid);
+  return { ...r, after: options.after || 'reveal', projectId: id, clipId: cid, title: c?.title, thumb: c?.export?.thumb ? `/media/${encodeURIComponent(id)}/${c.export.thumb}` : null, bytes: c?.export?.bytes };
+}
 route('POST', '/api/projects/:id/clips/:cid/track', clipJob('track', 'Track speaker in', (id, cid, ctx) => trackClip(id, cid, ctx)));
 route('POST', '/api/projects/:id/clips/:cid/preview', clipJob('preview', 'Preview', (id, cid, ctx) => exportClip(id, cid, { preview: true }, ctx)));
-route('POST', '/api/projects/:id/clips/:cid/export', clipJob('export', 'Export', (id, cid, ctx) => exportClip(id, cid, {}, ctx)));
+route('POST', '/api/projects/:id/clips/:cid/export', clipJob('export', 'Export', (id, cid, ctx, b) => exportWithInfo(id, cid, ctx, b.options || {})));
 
-route('POST', '/api/projects/:id/export-all', async ({ id }) => {
+route('POST', '/api/projects/:id/clips/:cid/move', async ({ id, cid }, b) => {
+  try { return await moveExport(id, cid, String(b.folder || '')); } catch (e) { throw new HttpError(400, e.message); }
+});
+route('GET', '/api/export/defaults', () => ({ folder: downloadsDir() }));
+
+route('POST', '/api/projects/:id/export-all', async ({ id }, b) => {
   const project = await requireProject(id);
   const chosen = project.clips.filter((c) => c.status === 'kept' || c.status === 'exported');
   if (!chosen.length) throw new HttpError(400, 'Keep at least one clip first.');
   const out = chosen.map((c) => jobs.view(jobs.enqueue(
     { kind: 'export', label: `Export “${c.title.slice(0, 40)}”`, projectId: id, key: `export:${id}:${c.id}` },
-    (ctx) => exportClip(id, c.id, {}, ctx),
+    (ctx) => exportWithInfo(id, c.id, ctx, b.options || {}),
   )));
   return { jobs: out };
 });
@@ -186,8 +208,15 @@ route('POST', '/api/projects/:id/export-all', async ({ id }) => {
 route('POST', '/api/reveal', async (_p, b) => {
   const cfg = await loadConfig();
   const target = path.resolve(String(b.path || ''));
-  const allowed = [path.join(ROOT, 'projects'), cfg.exportFolder].filter(Boolean).map((d) => path.resolve(d));
-  if (!allowed.some((d) => target.startsWith(d + path.sep)) || !existsSync(target)) throw new HttpError(400, 'Not an export file');
+  const allowed = [PROJECTS_DIR, cfg.exportFolder, downloadsDir()].filter(Boolean).map((d) => path.resolve(d));
+  let ok = allowed.some((d) => target.startsWith(d + path.sep));
+  if (!ok) { // any file this app exported, wherever the user chose to save it
+    for (const summary of await listProjects()) {
+      const p = await getProject(summary.id);
+      if (p?.clips.some((c) => [c.export, ...(c.exports || [])].some((e) => e?.file && path.resolve(e.file) === target))) { ok = true; break; }
+    }
+  }
+  if (!ok || !existsSync(target)) throw new HttpError(400, 'Not an export file');
   await revealInFinder(target);
   return { ok: true };
 });
@@ -239,6 +268,37 @@ route('GET', '/api/social/media', async () => {
   return { media: out.sort((a, b) => String(b.at).localeCompare(String(a.at))) };
 });
 
+// ---------------------------------------------------------------- dashboard
+/** Everything the home dashboard needs in one call: exports, posts, sermons, work in progress. */
+route('GET', '/api/stats', async () => {
+  const projects = [];
+  const exports = [];
+  let kept = 0;
+  let proposed = 0;
+  for (const summary of await listProjects()) {
+    const p = await getProject(summary.id);
+    if (!p) continue;
+    projects.push({ ...summary, proposed: p.clips.filter((c) => c.status === 'proposed').length, sermon: p.sermon ? { start: p.sermon.start, end: p.sermon.end } : null });
+    for (const c of p.clips) {
+      if (c.status === 'kept' || c.status === 'exported') kept++;
+      if (c.status === 'proposed') proposed++;
+      for (const e of c.exports?.length ? c.exports : c.export ? [c.export] : []) {
+        exports.push({ at: e.at, length: e.length, projectId: p.id, clipId: c.id, title: c.title, sermon: p.title, thumb: e.thumb ? `/media/${encodeURIComponent(p.id)}/${e.thumb}` : null });
+      }
+    }
+  }
+  const posts = await socialStore.listPosts();
+  const accounts = await socialStore.listAccounts();
+  return {
+    projects, exports: exports.sort((a, b) => String(b.at).localeCompare(String(a.at))), kept, proposed,
+    posts: posts.map(({ id, title, caption, status, scheduledAt, publishedAt, created, destinations, media }) => ({
+      id, title, caption, status, scheduledAt, publishedAt, created, destinations: destinations.map((d) => ({ platform: d.platform, status: d.status })),
+      thumb: media?.projectId && media?.clipId ? exports.find((e) => e.clipId === media.clipId)?.thumb || null : null,
+    })),
+    accounts: accounts.length,
+  };
+});
+
 // ---------------------------------------------------------------- jobs
 route('GET', '/api/jobs', (_p, _b, url) => ({ jobs: jobs.listJobs({ projectId: url.searchParams.get('projectId') || undefined }) }));
 route('GET', '/api/jobs/:jid', ({ jid }) => {
@@ -287,6 +347,12 @@ const server = http.createServer(async (req, res) => {
       }
       throw new HttpError(404, 'Not found');
     }
+    if (url.pathname.startsWith('/fonts/')) { // bundled caption fonts for the preview's @font-face
+      const f = safeJoin(bundledFontDir, decodeURIComponent(url.pathname.slice(7)));
+      if (!f || !existsSync(f)) throw new HttpError(404, 'No such font');
+      res.setHeader('cache-control', 'max-age=86400');
+      return streamFile(req, res, f);
+    }
     if (url.pathname === '/oauth/google/callback') {
       const page = (title, msg) => `<!doctype html><meta charset="utf-8"><title>${title}</title><body style="font:16px -apple-system,system-ui;display:grid;place-items:center;height:100vh;margin:0;background:#EEF2F8;color:#141821"><div style="background:#fff;padding:32px 40px;border-radius:22px;box-shadow:0 12px 32px -12px rgba(30,40,80,.25);max-width:460px"><h2 style="margin:0 0 8px">${title}</h2><p style="color:#5E6676;margin:0">${msg}</p></div>`;
       const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -297,6 +363,13 @@ const server = http.createServer(async (req, res) => {
       } catch (e) {
         return res.end(page('Couldn’t connect YouTube', esc(e.message)));
       }
+    }
+    const ex = url.pathname.match(/^\/exports\/([^/]+)\/([^/]+)$/);
+    if (ex) { // the exported video for a clip, wherever it was saved
+      const p = await getProject(decodeURIComponent(ex[1])).catch(() => null);
+      const c = p?.clips.find((x) => x.id === decodeURIComponent(ex[2]));
+      if (!c?.export?.file || !existsSync(c.export.file)) throw new HttpError(404, 'No export');
+      return streamFile(req, res, c.export.file);
     }
     if (url.pathname.startsWith('/media/')) {
       const [, , id, ...rest] = url.pathname.split('/');
