@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { Clapperboard, Send, Settings as SettingsIcon, HardDrive, LayoutDashboard, LayoutGrid, MonitorPlay, PenLine, Shapes, FolderHeart, UserRound } from 'lucide-react';
+import { Settings as SettingsIcon, HardDrive, LayoutDashboard, MonitorPlay, UserRound } from 'lucide-react';
+import { enabledTools, isOn } from './tools.js';
+import { makeDockIcon } from './dockIcon.js';
 import { api, fmt as fmtClock } from './api.js';
 import Library from './screens/Library.jsx';
 import Dashboard from './screens/Dashboard.jsx';
@@ -37,15 +39,17 @@ export function activeAppTheme(config, themes) {
   return themes.app.find((t) => t.id === id) || fallback;
 }
 
-/** Selah mark: white lines on the theme's accent (green by default in the app icon). */
-function BrandMark() {
-  return (
-    <span className="brand-mark" aria-hidden="true">
-      <svg viewBox="0 0 180 180"><g fill="none" stroke="currentColor" strokeWidth="11" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="56" y="26" width="68" height="128" rx="14" /><path d="M90 50V98M74 66H106M70 120H110M80 134H100" />
-      </g></svg>
-    </span>
-  );
+/** The church's logo for the sidebar and Dock: the one picked in Settings, else the first in Logos. */
+export function useChurchLogo(config) {
+  const [logo, setLogo] = useState(null);
+  useEffect(() => {
+    if (!config) return;
+    api.get('/api/library').then((l) => {
+      const logos = l.items.filter((i) => i.folder === 'Logos' && i.kind === 'image');
+      setLogo(logos.find((i) => i.rel === config.appLogo) || logos[0] || null);
+    }).catch(() => setLogo(null));
+  }, [config?.appLogo, config == null]);
+  return logo;
 }
 
 export default function App() {
@@ -163,8 +167,19 @@ export default function App() {
   }, []);
 
   // Social posts that need a hand-off show as a badge on the nav.
+  const seenDue = useRef(new Set());
   useEffect(() => {
-    const load = () => api.get('/api/social/posts').then((r) => setNeedsYou(r.posts.filter((p) => p.status === 'needs-you').length)).catch(() => {});
+    const load = () => api.get('/api/social/posts').then((r) => {
+      const due = r.posts.filter((p) => p.status === 'needs-you');
+      setNeedsYou(due.length);
+      // A post you post by hand just came due: one reminder per post.
+      for (const p of due) {
+        if (seenDue.current.has(p.id)) continue;
+        if (seenDue.current.size) notify('reminders', 'A post is ready for you', p.title || p.caption?.slice(0, 80) || 'Open Social to post it.');
+        seenDue.current.add(p.id);
+      }
+      if (!seenDue.current.size) seenDue.current.add('_');
+    }).catch(() => {});
     load();
     const id = setInterval(load, 20000);
     return () => clearInterval(id);
@@ -175,6 +190,20 @@ export default function App() {
     return () => listeners.current.delete(fn);
   }, []);
 
+  // Mac notifications: only when Church Studio isn't the app in front, and only for long work.
+  const notify = useCallback((kind, title, body) => {
+    if (!window.desktop?.notify || document.hasFocus()) return;
+    if (configRef.current?.notify?.[kind] === false) return;
+    window.desktop.notify({ title, body });
+  }, []);
+  const configRef = useRef(config); configRef.current = config;
+  useEffect(() => onJobFinished((j) => {
+    const done = j.status === 'done';
+    const names = { transcribe: 'Transcript ready', download: 'Download finished', import: 'Recording added', export: 'Clip exported', 'clean-audio': 'Clean audio saved', update: 'Update downloaded' };
+    if (done && names[j.kind]) notify('jobs', names[j.kind], j.label.replace(/^[^:]+:\s*/, ''));
+    if (j.status === 'error' && names[j.kind]) notify('jobs', `${j.label} didn't finish`, (j.error || '').slice(0, 120));
+  }), [onJobFinished, notify]);
+
   // Celebrate finished exports; report failures plainly.
   useEffect(() => onJobFinished((j) => {
     if (j.kind === 'export' && j.status === 'done') {
@@ -182,7 +211,7 @@ export default function App() {
     }
     if (j.status === 'done' && (j.kind === 'download' || j.kind === 'import') && j.result?.projectId) {
       const r = j.result;
-      const what = r.range ? `Sermon downloaded (${fmtClock(r.range.start)} to ${fmtClock(r.range.end)})` : j.kind === 'import' ? 'Video added' : 'Video downloaded';
+      const what = r.range ? `Sermon downloaded (${fmtClock(r.range.start)} to ${fmtClock(r.range.end)})` : j.kind === 'import' ? (r.height ? 'Video added' : 'Recording added') : 'Video downloaded';
       toast({ text: `${what}. ${r.summary || ''}`.trim(), duration: 9000, action: { label: 'Open', run: () => setRoute({ name: 'project', id: r.projectId }) } });
     }
     if (j.status === 'done' && j.kind === 'transcribe') toast({ text: `Transcribed ${j.result?.words?.toLocaleString() || ''} words. Check the sermon range next.`, duration: 7000 });
@@ -201,7 +230,17 @@ export default function App() {
     return r.config;
   }, []);
 
-  const value = { route, go, setGuard, confirmLeave, config, saveConfig, reloadConfig, keyGuide, themes, reloadThemes, jobs, trackJob, onJobFinished, toast };
+  // Their church, front and center: logo in the sidebar and in the Dock.
+  const [logoTick, setLogoTick] = useState(0);
+  const logo = useChurchLogo(config ? { ...config, _t: logoTick } : null);
+  useEffect(() => {
+    if (!config || !window.desktop?.setDockIcon) return;
+    if (config.dockLogo === false || !logo) { window.desktop.setDockIcon(null); return; }
+    makeDockIcon({ logoUrl: logo.url, brandColor: config.brandColors?.[0], ink: config.brandColors?.[2] })
+      .then((png) => window.desktop.setDockIcon(png)).catch(() => {});
+  }, [logo?.url, config?.dockLogo, config?.brandColors?.[0]]);
+
+  const value = { route, go, logo, refreshLogo: () => setLogoTick((n) => n + 1), setGuard, confirmLeave, config, saveConfig, reloadConfig, keyGuide, themes, reloadThemes, jobs, trackJob, onJobFinished, toast };
 
   if (error) {
     return (
@@ -219,12 +258,7 @@ export default function App() {
 
   const nav = [
     ['home', 'Dashboard', LayoutDashboard, route.name === 'home'],
-    ['projects', 'All projects', LayoutGrid, route.name === 'projects'],
-    ['library', 'Sermons', Clapperboard, route.name === 'library' || route.name === 'project'],
-    ['social', 'Social', Send, route.name === 'social'],
-    ['writing', 'Writing', PenLine, route.name === 'writing'],
-    ['graphics', 'Graphics', Shapes, route.name === 'graphics'],
-    ['assets', 'Brand library', FolderHeart, route.name === 'assets'],
+    ...(config ? enabledTools(config) : []).map((t) => [t.id, t.label, t.icon, route.name === t.id || (t.id === 'library' && route.name === 'project')]),
   ];
   const bottomNav = [
     ['me', 'My App', UserRound, route.name === 'me'],
@@ -237,7 +271,10 @@ export default function App() {
       <div className={`shell ${config?.refraction === false ? '' : 'refract'}`}>
         <aside className="sidebar glass">
           <div className="side-drag" />
-          <div className="brand"><BrandMark /><span>Church Studio</span></div>
+          <div className="brand">
+            {logo && <img className="brand-logo" src={logo.url} alt="" />}
+            <span>Church Studio</span>
+          </div>
           <nav className="side-nav" aria-label="Main">
             {nav.map(([name, label, Icon, on]) => (
               <button key={name} className={on ? 'on' : ''} aria-current={on ? 'page' : undefined} onClick={() => go({ name })}>
@@ -247,11 +284,11 @@ export default function App() {
             ))}
           </nav>
           <div className="grow" />
-          <div className="side-card">
+          {isOn(config, 'library') && <div className="side-card">
             <strong>New service up?</strong>
             <span className="small" style={{ opacity: 0.75 }}>Grab this week's sermon from your channel.</span>
             <button className="btn accent sm" onClick={() => go({ name: 'library', pick: true })}><MonitorPlay size={14} />Pick a sermon</button>
-          </div>
+          </div>}
           <nav className="side-nav side-bottom" aria-label="You">
             {bottomNav.map(([name, label, Icon, on]) => (
               <button key={name} className={on ? 'on' : ''} aria-current={on ? 'page' : undefined} onClick={() => go({ name })}>
@@ -274,7 +311,7 @@ export default function App() {
                 : route.name === 'library' ? <Library openPicker={route.pick} key={route.pick ? 'pick' : 'lib'} />
                   : route.name === 'writing' ? <Writing project={route.project} key={route.project || 'w'} />
                     : route.name === 'projects' ? <AllProjects />
-                    : route.name === 'graphics' ? <Graphics image={route.image} design={route.design} key={route.image || route.design || 'g'} />
+                    : route.name === 'graphics' ? <Graphics image={route.image} design={route.design} event={route.event} key={route.image || route.design || route.event?.id || 'g'} />
                       : route.name === 'assets' ? <BrandLibrary />
                         : route.name === 'me' ? <MyApp />
                   : <Dashboard />}

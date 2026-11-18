@@ -3,8 +3,14 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('desktop', {
   isDesktop: true,
   pickVideo: () => ipcRenderer.invoke('pick-video'),
+  pickMedia: () => ipcRenderer.invoke('pick-media'),
   pickFolder: () => ipcRenderer.invoke('pick-folder'),
   pickFiles: () => ipcRenderer.invoke('pick-files'),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   printDoc: (opts) => ipcRenderer.invoke('print-doc', opts),
+  notify: (n) => ipcRenderer.invoke('notify', n),
+  setDockIcon: (png) => ipcRenderer.invoke('set-dock-icon', png),
+  displays: () => ipcRenderer.invoke('displays'),
+  presentOpen: (opts) => ipcRenderer.invoke('present-open', opts),
+  presentClose: () => ipcRenderer.invoke('present-close'),
 });

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../App.jsx';
 import { api, fmt, fmtEta, media } from '../api.js';
-import { ArrowLeft, Square, Wand2, Download, Trash2, Plus, Send, FolderOpen, Copy, ScissorsLineDashed } from 'lucide-react';
+import { ArrowLeft, Square, Wand2, Download, Trash2, Plus, Send, FolderOpen, Copy, ScissorsLineDashed, AudioLines, ChevronDown, FileText, PenLine } from 'lucide-react';
+import AudioCleanup from '../components/AudioCleanup.jsx';
 import ClipEditor from './ClipEditor.jsx';
 import { StatusChip } from './Library.jsx';
 import Filmstrip from '../components/Filmstrip.jsx';
@@ -23,6 +24,12 @@ export function InlineJob({ job, label }) {
       </div>
     </div>
   );
+}
+
+/** Video, or a simple audio player for recordings without a picture. */
+function Player({ player, src, audioOnly }) {
+  if (audioOnly) return <div className="player audio-player"><AudioLines size={42} aria-hidden="true" /><audio ref={player} src={src} controls preload="metadata" /></div>;
+  return <video ref={player} className="player" src={src} controls preload="metadata" />;
 }
 
 export function parseTime(s) {
@@ -62,7 +69,8 @@ export default function Project({ id, initialStep, initialClip }) {
 
   useEffect(() => {
     load().then((p) => {
-      const fallback = p.status !== 'transcribed' ? 'transcribe' : p.clips.length ? 'clips' : 'sermon';
+      const audioOnly = p.media && !p.media.width;
+      const fallback = p.status !== 'transcribed' ? 'transcribe' : audioOnly ? 'text' : p.clips.length ? 'clips' : 'sermon';
       if (initialStep === 'edit' && p.clips.length) { setSelected((p.clips.find((c) => c.id === initialClip) || p.clips.find((c) => c.status === 'kept' || c.status === 'exported') || p.clips[0]).id); setStep('edit'); }
       else setStep(fallback);
     }).catch(() => go({ name: 'library' }));
@@ -96,12 +104,18 @@ export default function Project({ id, initialStep, initialClip }) {
   if (!project || !step) return <div className="page"><p className="muted">Loading…</p></div>;
   const src = project.sourceFile ? media(id, project.sourceFile) : null;
   const transcribed = project.status === 'transcribed';
-  const steps = [
+  const audioOnly = Boolean(project.media && !project.media.width);
+  const steps = audioOnly ? [
+    ['transcribe', 'Transcribe', transcribed],
+    ['sermon', 'Trim', project.sermon?.confirmed],
+    ['text', 'Transcript', false],
+  ] : [
     ['transcribe', 'Transcribe', transcribed],
     ['sermon', 'Find the sermon', project.sermon?.confirmed],
     ['clips', 'Pick clips', project.clips.some((c) => c.status === 'kept' || c.status === 'exported')],
     ['edit', 'Edit & export', project.clips.some((c) => c.export)],
     ['exports', 'Exports', false],
+    ['text', 'Transcript', false],
   ];
 
   return (
@@ -134,12 +148,12 @@ export default function Project({ id, initialStep, initialClip }) {
       )}
 
       {step === 'transcribe' && (
-        <TranscribeStep project={project} src={src} player={player} job={jobOf('transcribe') || jobOf('download')} onStart={(range) => start('transcribe', range)} />
+        <TranscribeStep project={project} src={src} player={player} audioOnly={audioOnly} job={jobOf('transcribe') || jobOf('download')} onStart={(range) => start('transcribe', range)} />
       )}
       {step === 'sermon' && transcript && (
-        <SermonStep project={project} transcript={transcript} src={src} player={player} patch={patch}
+        <SermonStep project={project} transcript={transcript} src={src} player={player} patch={patch} audioOnly={audioOnly}
           busy={busyKind('propose')} job={jobOf('propose')}
-          onConfirm={async (range) => { await patch({ sermon: { ...range, confirmed: true } }); start('propose', {}); }} />
+          onConfirm={async (range) => { await patch({ sermon: { ...range, confirmed: true } }); if (audioOnly) setStep('text'); else start('propose', {}); }} />
       )}
       {step === 'clips' && (
         <ClipsStep project={project} src={src} player={player} patch={patch} busy={busyKind('propose')} job={jobOf('propose')} start={start}
@@ -150,36 +164,39 @@ export default function Project({ id, initialStep, initialClip }) {
           onSelect={setSelected} patch={patch} jobs={busy} />
       )}
       {step === 'exports' && <ExportsStep project={project} />}
+      {step === 'text' && transcript && <TranscriptStep project={project} />}
     </div>
   );
 }
 
-function TranscribeStep({ project, src, player, job, onStart }) {
+function TranscribeStep({ project, src, player, job, onStart, audioOnly }) {
   const { config } = useApp();
   const [mode, setMode] = useState('all');
+  const [cleanup, setCleanup] = useState(project.audioCleanup || null);
+  const [showClean, setShowClean] = useState(Boolean(project.audioCleanup));
   const [range, setRange] = useState({ start: 0, end: project.media?.duration || 0 });
   const cur = () => player.current?.currentTime || 0;
   return (
     <div className="stack" style={{ gap: 18 }}>
       <div className="grid2" style={{ gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 1fr)' }}>
         <section className="glass panel stack">
-          {src ? <video ref={player} className="player" src={src} controls preload="metadata" /> : <div className="player" style={{ display: 'grid', placeItems: 'center', color: '#aab' }}>Downloading…</div>}
-          {src && <Filmstrip project={project} player={player} range={mode === 'range' ? range : null}
+          {src ? <Player player={player} src={src} audioOnly={audioOnly} /> : <div className="player" style={{ display: 'grid', placeItems: 'center', color: '#aab' }}>Downloading…</div>}
+          {src && !audioOnly && <Filmstrip project={project} player={player} range={mode === 'range' ? range : null}
             onSetStart={mode === 'range' ? (t) => setRange((r) => ({ ...r, start: t })) : null}
             onSetEnd={mode === 'range' ? (t) => setRange((r) => ({ ...r, end: t })) : null} />}
         </section>
         <section className="glass strong panel stack" style={{ gap: 14 }}>
           <div className="stack" style={{ gap: 4 }}>
             <span className="eyebrow">Step 1</span>
-            <h2>Transcribe the video</h2>
-            <p className="muted">Turns speech into timed text for captions and clips.</p>
+            <h2>{audioOnly ? 'Transcribe the recording' : 'Transcribe the video'}</h2>
+            <p className="muted">{audioOnly ? 'Turns speech into text you can read, search and share.' : 'Turns speech into timed text for captions and clips.'}</p>
           </div>
           <div className="stack" style={{ gap: 6 }} role="radiogroup" aria-label="What to transcribe">
             <h3>What should we transcribe?</h3>
             <div className="choices" style={{ gridTemplateColumns: '1fr' }}>
               <button role="radio" aria-checked={mode === 'all'} className={`choice ${mode === 'all' ? 'on' : ''}`} onClick={() => setMode('all')}>
-                <span className="t"><span className="radio" />The whole video</span>
-                <span className="d">We'll find the sermon for you.</span>
+                <span className="t"><span className="radio" />{audioOnly ? 'The whole recording' : 'The whole video'}</span>
+                <span className="d">{audioOnly ? 'Trim it afterward if you like.' : "We'll find the sermon for you."}</span>
               </button>
               <button role="radio" aria-checked={mode === 'range'} className={`choice ${mode === 'range' ? 'on' : ''}`} onClick={() => setMode('range')}>
                 <span className="t"><span className="radio" />Just the sermon</span>
@@ -194,9 +211,20 @@ function TranscribeStep({ project, src, player, job, onStart }) {
               <span className="hint num">{fmt(Math.max(0, range.end - range.start))}</span>
             </div>
           )}
+          <div className="stack" style={{ gap: 8 }}>
+            <button className="disclose" aria-expanded={showClean} onClick={() => setShowClean(!showClean)}>
+              <AudioLines size={15} aria-hidden="true" /><span className="grow">Clean up the sound{cleanup ? ' · on' : ''}</span><ChevronDown size={15} className="chev" aria-hidden="true" />
+            </button>
+            {showClean && (
+              <>
+                <span className="hint">Helps with noisy or distant recordings. Clips from this sermon use it too.</span>
+                <AudioCleanup value={cleanup} onChange={setCleanup} source={src ? { projectId: project.id } : null} compact />
+              </>
+            )}
+          </div>
           {job ? <InlineJob job={job} /> : (
             <button className="btn primary lg" disabled={!src || (mode === 'range' && !(range.end > range.start))}
-              onClick={() => onStart(mode === 'range' ? range : {})}><Wand2 size={16} />{mode === 'range' ? 'Transcribe sermon' : 'Transcribe video'}</button>
+              onClick={() => onStart({ ...(mode === 'range' ? range : {}), cleanup })}><Wand2 size={16} />{mode === 'range' ? 'Transcribe sermon' : audioOnly ? 'Transcribe recording' : 'Transcribe video'}</button>
           )}
         </section>
       </div>
@@ -230,7 +258,7 @@ function Timeline({ duration, bins, range, clips = [], player, onSeek }) {
   );
 }
 
-function SermonStep({ project, transcript, src, player, onConfirm, busy, job }) {
+function SermonStep({ project, transcript, src, player, onConfirm, busy, job, audioOnly }) {
   const s = project.sermon || { start: 0, end: project.media?.duration };
   const [range, setRange] = useState({ start: s.start, end: s.end });
   const duration = project.media?.duration || transcript.words.at(-1)?.end || 1;
@@ -245,7 +273,7 @@ function SermonStep({ project, transcript, src, player, onConfirm, busy, job }) 
     <div className="stack" style={{ gap: 18 }}>
       <div className="grid2" style={{ gridTemplateColumns: '1.4fr 1fr' }}>
         <section className="glass panel stack">
-          <video ref={player} className="player" src={src} controls preload="metadata" />
+          <Player player={player} src={src} audioOnly={audioOnly} />
           <Timeline duration={duration} bins={transcript.bins} range={range} player={player} onSeek={seek} />
           <Filmstrip project={project} player={player} range={range} onSetStart={(t) => setRange((r) => ({ ...r, start: t }))} onSetEnd={(t) => setRange((r) => ({ ...r, end: t }))} />
           <div className="row small muted"><span className="row"><span className="dot" style={{ color: 'var(--accent)' }} />Speaking</span><span className="row"><span className="dot" style={{ color: 'var(--muted)' }} />Music or quiet</span></div>
@@ -382,6 +410,51 @@ function ExportsStep({ project }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+/** The transcript as text: read it, copy it, save it, or write from it. */
+function TranscriptStep({ project }) {
+  const { go, toast } = useApp();
+  const [whole, setWhole] = useState(!project.sermon?.confirmed);
+  const [text, setText] = useState(null);
+  useEffect(() => { api.get(`/api/projects/${project.id}/transcript/text?format=${whole ? 'all' : 'txt'}`).then((r) => setText(r.text)).catch((e) => setText(e.message)); }, [project.id, whole]);
+  const save = async (format) => {
+    try {
+      const r = await api.post(`/api/projects/${project.id}/transcript/save`, { format });
+      toast({ text: 'Saved to Downloads.', action: { label: 'Show', run: () => api.post('/api/reveal', { path: r.file }) } });
+    } catch (e) { toast({ kind: 'error', text: e.message }); }
+  };
+  const words = text ? text.split('\n\n').slice(1).join(' ').split(/\s+/).filter(Boolean).length : 0;
+  return (
+    <div className="grid2" style={{ gridTemplateColumns: 'minmax(0, 1.6fr) minmax(260px, 1fr)', alignItems: 'start' }}>
+      <section className="glass panel stack">
+        <div className="row between wrap">
+          <h2>Transcript</h2>
+          {project.sermon?.confirmed && (
+            <div className="seg sm">
+              <button className={!whole ? 'on' : ''} onClick={() => setWhole(false)}>{project.media?.width ? 'Sermon only' : 'Trimmed'}</button>
+              <button className={whole ? 'on' : ''} onClick={() => setWhole(true)}>Everything</button>
+            </div>
+          )}
+        </div>
+        <div className="transcript-read">{text == null ? <span className="muted">Loading…</span> : text.split('\n\n').slice(1).map((p, k) => <p key={k}>{p}</p>)}</div>
+      </section>
+      <section className="glass strong panel stack" style={{ position: 'sticky', top: 0 }}>
+        <span className="eyebrow">{words.toLocaleString()} words</span>
+        <h3>Take it with you</h3>
+        <div className="stack" style={{ gap: 8 }}>
+          <button className="btn" onClick={() => { navigator.clipboard.writeText(text || ''); toast({ text: 'Copied the transcript.' }); }}><Copy size={14} />Copy text</button>
+          <button className="btn" onClick={() => save('txt')}><FileText size={14} />Save as text</button>
+          <button className="btn" onClick={() => save('timed')}><FileText size={14} />Text with times</button>
+          <button className="btn" onClick={() => save('srt')}><Download size={14} />Captions (.srt)</button>
+          <button className="btn" onClick={() => save('vtt')}><Download size={14} />Captions (.vtt)</button>
+        </div>
+        <hr className="hairline" />
+        <button className="btn primary" onClick={() => go({ name: 'writing', project: project.id })}><PenLine size={14} />Write from it</button>
+        <span className="hint">Blog post, email, small group guide and social captions.</span>
+      </section>
     </div>
   );
 }

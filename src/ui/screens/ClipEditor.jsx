@@ -11,6 +11,7 @@ import { CaptionStyleFields, HookStyleFields } from '../components/VideoThemeEdi
 import { keepSegments, keptLength } from '../captions.js';
 import { sampleTrack, cueX, clampX } from '../framing.js';
 import ColorField from '../components/ColorField.jsx';
+import AudioCleanup from '../components/AudioCleanup.jsx';
 
 const FILLERS = new Set(['um', 'uh', 'uhm', 'umm', 'er', 'erm', 'ah']);
 const FRAME_W = 340;
@@ -389,7 +390,7 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
 
         <section className="glass strong panel">
           <div className="tabs">
-            {[['words', 'Words & trim'], ['text', 'Title & hook'], ['look', 'Captions'], ['crop', 'Framing'], ['gfx', 'Graphics']].map(([k, l]) => (
+            {[['words', 'Words & trim'], ['text', 'Title & hook'], ['look', 'Captions'], ['crop', 'Framing'], ['gfx', 'Graphics'], ['sound', 'Sound']].map(([k, l]) => (
               <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>
             ))}
           </div>
@@ -476,6 +477,17 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
                 )}
                 <button className="btn ghost sm" onClick={() => go({ name: 'graphics' })}>Open Graphics</button>
               </div>
+            </div>
+          )}
+
+          {tab === 'sound' && (
+            <div className="stack" style={{ gap: 12 }}>
+              <div className="row between wrap">
+                <h3>Clean up the sound</h3>
+                {clip.audioCleanup === undefined && project.audioCleanup && <span className="chip">Using the sermon's setting</span>}
+              </div>
+              <AudioCleanup value={clip.audioCleanup === undefined ? project.audioCleanup : clip.audioCleanup} onChange={(v) => set({ audioCleanup: v })} source={{ projectId: project.id }} compact />
+              <span className="hint">Applies when you preview or export this clip.</span>
             </div>
           )}
 

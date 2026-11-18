@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import {
   AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical,
   ArrowLeft, BringToFront, Check, ChevronDown, ChevronLeft, ChevronRight, Circle, Copy, Download, Grid3x3, Image as ImageIcon,
-  Magnet, Minus, Play, Plus, QrCode, Redo2, SendToBack, Shapes, Square, Trash2, Type, Undo2, Shuffle, X,
+  Magnet, Minus, MonitorUp, Hexagon, Smartphone, Laptop, Eraser, ImageOff, Play, RefreshCw, Plus, QrCode, Redo2, SendToBack, Shapes, Square, Trash2, Type, Undo2, Shuffle, X,
 } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { api } from '../api.js';
@@ -10,9 +10,10 @@ import ColorField from '../components/ColorField.jsx';
 import FontMenu, { useFamilies } from '../components/FontMenu.jsx';
 import LibraryPicker from '../components/LibraryPicker.jsx';
 import Popover, { PopList } from '../components/Popover.jsx';
-import { KINDS, blankPage, cohesive, loadAssets, onColor, page as newPage, renderPage, shape as newShape, text as newText, uid } from './model.js';
+import { DEVICE_ASPECT, KINDS, SHAPES, blankPage, cohesive, loadAssets, onColor, page as newPage, renderPage, shape as newShape, svgColors, text as newText, uid } from './model.js';
 import { snapMove } from './snap.js';
 import { exportDesign } from './exporters.js';
+import { BLACK_KEYS, NEXT_KEYS, PREV_KEYS, PresentHere, PresenterConsole, openChannel } from './Presenter.jsx';
 
 const clone = (x) => JSON.parse(JSON.stringify(x));
 const isTyping = (el) => el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
@@ -33,46 +34,6 @@ function PageThumb({ doc, pg, width = 132 }) {
 }
 PageThumb.cache = {};
 
-// ---------------------------------------------------------------- present mode
-function Present({ doc, start, onClose }) {
-  const [i, setI] = useState(start);
-  const ref = useRef(null);
-  const wrap = useRef(null);
-  const cache = useRef({});
-  useEffect(() => {
-    wrap.current?.requestFullscreen?.().catch(() => {});
-    const key = (e) => {
-      if (['ArrowRight', 'ArrowDown', ' ', 'PageDown', 'Enter'].includes(e.key)) { e.preventDefault(); setI((n) => Math.min(doc.pages.length - 1, n + 1)); }
-      if (['ArrowLeft', 'ArrowUp', 'PageUp', 'Backspace'].includes(e.key)) { e.preventDefault(); setI((n) => Math.max(0, n - 1)); }
-      if (e.key === 'Escape') onClose();
-    };
-    const fs = () => { if (!document.fullscreenElement) onClose(); };
-    window.addEventListener('keydown', key);
-    document.addEventListener('fullscreenchange', fs);
-    return () => { window.removeEventListener('keydown', key); document.removeEventListener('fullscreenchange', fs); if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); };
-  }, [doc.pages.length, onClose]);
-  useEffect(() => {
-    (async () => {
-      const pg = doc.pages[i];
-      await loadAssets(pg, cache.current);
-      await document.fonts.ready;
-      const k = Math.min(window.innerWidth / doc.size.w, window.innerHeight / doc.size.h) * (window.devicePixelRatio || 1);
-      if (ref.current) renderPage(ref.current, doc, pg, k, cache.current);
-    })();
-  }, [i, doc]);
-  return (
-    <div ref={wrap} className="present" onClick={() => setI((n) => Math.min(doc.pages.length - 1, n + 1))}>
-      <canvas ref={ref} style={{ maxWidth: '100vw', maxHeight: '100vh', aspectRatio: `${doc.size.w}/${doc.size.h}` }} />
-      <div className="present-bar" onClick={(e) => e.stopPropagation()}>
-        <button className="rt-btn" aria-label="Previous" onClick={() => setI((n) => Math.max(0, n - 1))}><ChevronLeft size={18} /></button>
-        <span className="num">{i + 1} / {doc.pages.length}</span>
-        <button className="rt-btn" aria-label="Next" onClick={() => setI((n) => Math.min(doc.pages.length - 1, n + 1))}><ChevronRight size={18} /></button>
-        <button className="rt-btn" aria-label="Stop presenting" onClick={onClose}><X size={18} /></button>
-      </div>
-    </div>
-  );
-}
-
 // ---------------------------------------------------------------- editor
 export default function DesignEditor({ id, onClose }) {
   const { toast, config } = useApp();
@@ -89,6 +50,11 @@ export default function DesignEditor({ id, onClose }) {
   const [exportOpen, setExportOpen] = useState(false);
   const [busy, setBusy] = useState(null);
   const [presenting, setPresenting] = useState(null);
+  const [presentOpen, setPresentOpen] = useState(false);
+  const [displays, setDisplays] = useState([]);
+  const [show, setShow] = useState(null); // live on a second screen: { index, black, doc, display }
+  const [consoleOpen, setConsoleOpen] = useState(true);
+  const chan = useRef(null);
   const [lines, setLines] = useState(null);
   const [stage, setStage] = useState({ w: 800, h: 600 });
   const past = useRef([]); const future = useRef([]);
@@ -236,7 +202,10 @@ export default function DesignEditor({ id, onClose }) {
       } else if (d.mode === 's' && it.type === 'shape') {
         const h = Math.max(0.003, p.y - y0); it.h = +h.toFixed(4); it.y = +(y0 + h / 2).toFixed(4);
       } else if (d.mode === 'se') {
-        if (it.type === 'shape') {
+        if (it.type === 'shape' && DEVICE_ASPECT[it.shape]) {
+          const w = Math.max(0.05, p.x - x0); const h = (w * doc.size.w) / doc.size.h / DEVICE_ASPECT[it.shape];
+          it.w = +w.toFixed(4); it.h = +h.toFixed(4); it.x = +(x0 + w / 2).toFixed(4); it.y = +(y0 + h / 2).toFixed(4);
+        } else if (it.type === 'shape') {
           const w = Math.max(0.01, p.x - x0); const h = Math.max(0.003, p.y - y0);
           it.w = +w.toFixed(4); it.h = +h.toFixed(4); it.x = +(x0 + w / 2).toFixed(4); it.y = +(y0 + h / 2).toFixed(4);
         } else {
@@ -254,7 +223,7 @@ export default function DesignEditor({ id, onClose }) {
   // Keyboard
   useEffect(() => {
     const key = (e) => {
-      if (presenting || isTyping(document.activeElement) || editing) return;
+      if (presenting != null || (show && consoleOpen) || isTyping(document.activeElement) || editing) return;
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
       if (mod && e.key.toLowerCase() === 'd') { e.preventDefault(); duplicateItem(); return; }
@@ -271,6 +240,72 @@ export default function DesignEditor({ id, onClose }) {
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
   });
+
+  // ---- second-screen show
+  const showRef = useRef(show); showRef.current = show;
+  const docRef = useRef(doc); docRef.current = doc;
+  const sendState = (st) => chan.current?.post({ type: 'state', doc: st.doc, index: st.index, black: st.black });
+  const goLive = (index, opts = {}) => setShow((st) => {
+    if (!st) return st;
+    const d = docRef.current;
+    const next = { ...st, index: Math.max(0, Math.min(d.pages.length - 1, index)), black: opts.black ?? false, doc: d };
+    sendState(next);
+    return next;
+  });
+  const endShow = () => {
+    chan.current?.post({ type: 'end' });
+    window.desktop?.presentClose?.();
+    chan.current?.close(); chan.current = null;
+    setShow(null);
+  };
+  const startShow = async (display) => {
+    setPresentOpen(false);
+    chan.current?.close();
+    chan.current = openChannel((m) => {
+      const st = showRef.current;
+      if (!st) return;
+      if (m.type === 'hello') sendState(st);
+      if (m.type === 'bye') endShow();
+      if (m.type === 'key') {
+        if (NEXT_KEYS.includes(m.key)) goLive(st.index + 1);
+        else if (PREV_KEYS.includes(m.key)) goLive(st.index - 1);
+        else if (BLACK_KEYS.includes(m.key)) goLive(st.index, { black: !st.black });
+      }
+    });
+    const st = { index: pi, black: false, doc, display: display?.label || null };
+    setShow(st);
+    setConsoleOpen(true);
+    if (window.desktop?.presentOpen) {
+      const r = await window.desktop.presentOpen({ displayId: display?.id ?? null });
+      if (!r?.ok) { toast({ kind: 'error', text: r?.error || 'Could not open the audience screen.' }); endShow(); }
+    } else {
+      window.open('/#present-out', 'church-studio-present', 'width=960,height=540');
+    }
+  };
+  const openPresentMenu = async () => {
+    setPresentOpen(!presentOpen);
+    if (window.desktop?.displays) setDisplays(await window.desktop.displays().catch(() => []));
+  };
+  useEffect(() => () => { if (chan.current) { chan.current.post({ type: 'end' }); window.desktop?.presentClose?.(); chan.current.close(); } }, []);
+  // Clicker and keys while live. In the console every key works; while editing, only Page Up and Page Down.
+  useEffect(() => {
+    if (!show) return undefined;
+    const key = (e) => {
+      const st = showRef.current;
+      if (!consoleOpen) {
+        if (e.key === 'PageDown') { e.preventDefault(); goLive(st.index + 1); }
+        if (e.key === 'PageUp') { e.preventDefault(); goLive(st.index - 1); }
+        return;
+      }
+      if (isTyping(document.activeElement)) return;
+      if (NEXT_KEYS.includes(e.key)) { e.preventDefault(); goLive(st.index + 1); }
+      else if (PREV_KEYS.includes(e.key)) { e.preventDefault(); goLive(st.index - 1); }
+      else if (BLACK_KEYS.includes(e.key)) goLive(st.index, { black: !st.black });
+    };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  }, [show != null, consoleOpen]);
+  const livePending = show && doc && JSON.stringify([doc.pages[show.index], doc.palette, doc.tint]) !== JSON.stringify([show.doc.pages[show.index], show.doc.palette, show.doc.tint]);
 
   const runExport = async (format) => {
     setExportOpen(false);
@@ -305,7 +340,24 @@ export default function DesignEditor({ id, onClose }) {
           <button className={`rt-btn ${snap ? 'on' : ''}`} title="Snap to page center, edges and other items (hold Option to skip)" aria-label="Smart guides" aria-pressed={snap} onClick={() => setSnap(!snap)}><Magnet size={16} /></button>
           <button className={`rt-btn ${grid ? 'on' : ''}`} title="Show and snap to a grid" aria-label="Grid" aria-pressed={grid} onClick={() => setGrid(!grid)}><Grid3x3 size={16} /></button>
         </div>
-        {multi && <button className="btn sm" onClick={() => setPresenting(pi)}><Play size={14} />Present</button>}
+        {show ? (
+          <div className="row" style={{ gap: 6 }}>
+            <span className="pc-live sm"><span className="status-dot" aria-hidden="true" />Live · {show.index + 1}</span>
+            {livePending && <button className="btn sm" onClick={() => goLive(show.index, { black: show.black })}><RefreshCw size={13} />Update screen</button>}
+            <button className="btn sm" onClick={() => setConsoleOpen(true)}><MonitorUp size={14} />Console</button>
+          </div>
+        ) : (
+          <div style={{ position: 'relative' }}>
+            <button className="btn sm" data-pop-trigger onClick={openPresentMenu}><Play size={14} />Present<ChevronDown size={13} /></button>
+            <Popover open={presentOpen} onClose={() => setPresentOpen(false)} align="right" width={280}>
+              <PopList onPick={(v) => { if (v === 'here') { setPresentOpen(false); setPresenting(pi); } else startShow(v === 'window' ? null : displays.find((x) => String(x.id) === v)); }} items={[
+                { label: 'On this screen', value: 'here', hint: 'Full screen. Esc to stop.' },
+                ...displays.filter((x) => !x.primary).map((x) => ({ label: `To ${x.label}`, value: String(x.id), hint: 'Audience sees the slides. You get notes and the next slide.' })),
+                ...(displays.filter((x) => !x.primary).length ? [] : [{ label: 'To a second screen', value: 'window', hint: window.desktop?.isDesktop ? 'No second screen found. Opens a window you can drag to a projector.' : 'Opens a window you can drag to a projector.' }]),
+              ]} />
+            </Popover>
+          </div>
+        )}
         <div style={{ position: 'relative' }}>
           <button className="btn primary sm" data-pop-trigger disabled={Boolean(busy)} onClick={() => setExportOpen(!exportOpen)}><Download size={14} />{busy || 'Export'}<ChevronDown size={14} /></button>
           <Popover open={exportOpen} onClose={() => setExportOpen(false)} align="right" width={250}>
@@ -335,7 +387,16 @@ export default function DesignEditor({ id, onClose }) {
             <button aria-label="Square" title="Square" onClick={() => addItem(newShape({ w: 0.3, h: 0.3 * (doc.size.w / doc.size.h), fill: colors[1] }))}><Square size={22} /></button>
             <button aria-label="Rounded box" title="Rounded box" onClick={() => addItem(newShape({ w: 0.5, h: 0.12, radius: 40, fill: '#FFFFFF', opacity: 0.85 }))}><span className="dz-rounded" /></button>
             <button aria-label="Circle" title="Circle" onClick={() => addItem(newShape({ shape: 'ellipse', w: 0.25, h: 0.25 * (doc.size.w / doc.size.h), fill: colors[4] || colors[1] }))}><Circle size={22} /></button>
+            <button aria-label="Hexagon" title="Hexagon" onClick={() => addItem(newShape({ shape: 'hexagon', w: 0.3, h: 0.26 * (doc.size.w / doc.size.h), fill: colors[0] }))}><Hexagon size={22} /></button>
+            <button aria-label="Arch" title="Arch" onClick={() => addItem(newShape({ shape: 'arch', w: 0.3, h: 0.42 * (doc.size.w / doc.size.h), fill: colors[4] || colors[1] }))}><span className="dz-arch" /></button>
+            <button aria-label="Blob" title="Blob" onClick={() => addItem(newShape({ shape: 'blob', w: 0.34, h: 0.3 * (doc.size.w / doc.size.h), fill: colors[1] }))}><span className="dz-blob" /></button>
             <button aria-label="Line" title="Line" onClick={() => addItem(newShape({ w: 0.5, h: 3 / doc.size.h, fill: onColor(fill) }))}><Minus size={22} /></button>
+          </div>
+          <span className="eyebrow">Frames</span>
+          <div className="row wrap" style={{ gap: 6 }}>
+            <button className="btn sm" onClick={() => addItem(newShape({ frame: true, w: 0.44, h: 0.32 * (doc.size.w / doc.size.h), radius: 24, fill: colors[2] || '#555' }))}><ImageIcon size={13} />Photo frame</button>
+            <button className="btn sm" onClick={() => addItem(newShape({ shape: 'iphone', frame: true, w: 0.22, h: (0.22 * doc.size.w) / doc.size.h / DEVICE_ASPECT.iphone, fill: colors[0] }))}><Smartphone size={13} />iPhone</button>
+            <button className="btn sm" onClick={() => addItem(newShape({ shape: 'macbook', frame: true, w: 0.56, h: (0.56 * doc.size.w) / doc.size.h / DEVICE_ASPECT.macbook, fill: colors[0] }))}><Laptop size={13} />MacBook</button>
           </div>
           <hr className="hairline" />
           <span className="eyebrow">Images</span>
@@ -359,9 +420,9 @@ export default function DesignEditor({ id, onClose }) {
                 ))}
                 {b && !editing && (
                   <div className="dz-sel" style={{ left: b.x0 * dispW, top: b.y0 * dispH, width: (b.x1 - b.x0) * dispW, height: (b.y1 - b.y0) * dispH }}>
-                    {item?.type !== 'image' && item?.type !== 'qr' && <i className="h w" onPointerDown={(e) => startResize(e, 'w')} />}
-                    {item?.type !== 'image' && item?.type !== 'qr' && <i className="h e" onPointerDown={(e) => startResize(e, 'e')} />}
-                    {item?.type === 'shape' && <i className="h s" onPointerDown={(e) => startResize(e, 's')} />}
+                    {item?.type !== 'image' && item?.type !== 'qr' && !DEVICE_ASPECT[item?.shape] && <i className="h w" onPointerDown={(e) => startResize(e, 'w')} />}
+                    {item?.type !== 'image' && item?.type !== 'qr' && !DEVICE_ASPECT[item?.shape] && <i className="h e" onPointerDown={(e) => startResize(e, 'e')} />}
+                    {item?.type === 'shape' && !DEVICE_ASPECT[item?.shape] && <i className="h s" onPointerDown={(e) => startResize(e, 's')} />}
                     <i className="h se" onPointerDown={(e) => startResize(e, 'se')} />
                   </div>
                 )}
@@ -435,11 +496,40 @@ export default function DesignEditor({ id, onClose }) {
               )}
               {item.type === 'shape' && (
                 <>
-                  <div className="row" style={{ gap: 10 }}><ColorField label="Fill" value={item.fill} onChange={(c) => setItem({ fill: c }, { record: false })} swatches={colors} /></div>
-                  {item.shape !== 'ellipse' && <label className="field">Corners · {item.radius || 0}<input type="range" min="0" max="200" value={item.radius || 0} onChange={(e) => setItem({ radius: Number(e.target.value) }, { record: false })} /></label>}
+                  {!DEVICE_ASPECT[item.shape] && !item.erase && (
+                    <label className="field">Shape
+                      <select className="input" value={item.shape || 'rect'} onChange={(e) => setItem({ shape: e.target.value })}>
+                        {SHAPES.filter(([k]) => !DEVICE_ASPECT[k]).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                      </select>
+                    </label>
+                  )}
+                  {!item.erase && (
+                    <div className="keycard stack" style={{ gap: 8 }}>
+                      <strong className="small">{DEVICE_ASPECT[item.shape] ? 'Screen' : 'Photo'}</strong>
+                      {item.photo ? (
+                        <div className="row wrap" style={{ gap: 6 }}>
+                          <button className="btn sm" onClick={() => setPicker('frame')}><ImageIcon size={13} />Change photo</button>
+                          <button className="btn sm ghost" onClick={() => setItem({ photo: null, frame: true })}><ImageOff size={13} />Remove photo</button>
+                        </div>
+                      ) : (
+                        <div className="row wrap" style={{ gap: 6 }}>
+                          <button className="btn sm primary" onClick={() => setPicker('frame')}><ImageIcon size={13} />{item.frame ? 'Replace with a photo' : 'Fill with a photo'}</button>
+                          {item.frame && <button className="btn sm" onClick={() => setItem({ frame: false })}>Make it solid</button>}
+                        </div>
+                      )}
+                      {item.frame && !item.photo && <span className="hint">The pattern only shows while you edit. Exports show the color.</span>}
+                    </div>
+                  )}
+                  {!item.photo && !item.erase && <div className="row" style={{ gap: 10 }}><ColorField label={DEVICE_ASPECT[item.shape] ? 'Screen color' : 'Fill'} value={item.fill} onChange={(c) => setItem({ fill: c }, { record: false })} swatches={colors} /></div>}
+                  {(item.shape || 'rect') === 'rect' && <label className="field">Corners · {item.radius || 0}<input type="range" min="0" max="200" value={item.radius || 0} onChange={(e) => setItem({ radius: Number(e.target.value) }, { record: false })} /></label>}
+                  {!DEVICE_ASPECT[item.shape] && (
+                    <label className="switch"><input type="checkbox" checked={Boolean(item.erase)} onChange={(e) => setItem({ erase: e.target.checked })} /><Eraser size={14} />Use as an eraser</label>
+                  )}
+                  {item.erase && <span className="hint">Cuts a see-through hole in everything behind it. Move it up or down to choose what it erases.</span>}
                 </>
               )}
               {item.type === 'image' && <label className="field">Corners · {item.radius || 0}<input type="range" min="0" max="200" value={item.radius || 0} onChange={(e) => setItem({ radius: Number(e.target.value) }, { record: false })} /></label>}
+              {item.type === 'image' && /\.svg$/i.test(item.rel) && <SvgColors item={item} cache={cache.current} swatches={colors} onChange={(recolor) => setItem({ recolor }, { record: false })} />}
               {item.type === 'qr' && (
                 <>
                   <label className="field">Link<input className="input" value={item.url} onChange={(e) => setItem({ url: e.target.value }, { record: false })} placeholder="https://yourchurch.org/give" /></label>
@@ -507,14 +597,20 @@ export default function DesignEditor({ id, onClose }) {
       </div>
 
       {picker && (
-        <LibraryPicker folder={picker === 'logo' ? 'Logos' : 'All'} title={picker === 'logo' ? 'Pick a logo' : picker === 'bg' ? 'Pick a background photo' : 'Pick a photo'} onClose={() => setPicker(null)}
+        <LibraryPicker folder={picker === 'logo' ? 'Logos' : 'All'} title={picker === 'logo' ? 'Pick a logo' : picker === 'bg' ? 'Pick a background photo' : picker === 'frame' ? 'Pick a photo for this shape' : 'Pick a photo'} onClose={() => setPicker(null)}
           onPick={(i) => {
             if (picker === 'bg') setPage({ bg: { ...pg.bg, type: 'image', image: i.rel, darken: pg.bg?.darken || 0.3 } });
+            else if (picker === 'frame') setItem({ photo: i.rel });
             else addItem({ id: uid(), type: 'image', rel: i.rel, x: 0.5, y: picker === 'logo' ? 0.88 : 0.5, w: picker === 'logo' ? 0.18 : 0.5, opacity: 1 });
             setPicker(null);
           }} />
       )}
-      {presenting != null && <Present doc={doc} start={presenting} onClose={() => setPresenting(null)} />}
+      {presenting != null && <PresentHere doc={doc} start={presenting} onClose={() => setPresenting(null)} />}
+      {show && consoleOpen && (
+        <PresenterConsole doc={doc} live={show} pending={livePending} displayName={show.display}
+          onGo={(k) => goLive(k)} onBlack={() => goLive(show.index, { black: !show.black })} onPush={() => goLive(show.index, { black: show.black })}
+          onEdit={() => { setPi(show.index); setSel(null); setConsoleOpen(false); }} onStop={endShow} />
+      )}
     </div>
   );
 }
@@ -534,6 +630,22 @@ function LinePicker({ lines, onPick }) {
           ))}
         </div>
       </Popover>
+    </div>
+  );
+}
+
+/** Change the colors inside an SVG: each color it uses gets its own swatch. */
+function SvgColors({ item, cache, swatches, onChange }) {
+  const [list, setList] = useState(null);
+  useEffect(() => { svgColors(item.rel, cache).then(setList).catch(() => setList([])); }, [item.rel]);
+  if (!list?.length) return null;
+  const map = item.recolor || {};
+  return (
+    <div className="stack" style={{ gap: 8 }}>
+      <div className="row between"><strong className="small">Colors in this SVG</strong>{Object.keys(map).length > 0 && <button className="btn ghost sm" onClick={() => onChange({})}>Reset</button>}</div>
+      <div className="row wrap" style={{ gap: 8 }}>
+        {list.map((c, k) => <ColorField key={c} label={`Color ${k + 1}`} value={map[c] || c} swatches={swatches} onChange={(v) => onChange({ ...map, [c]: v })} />)}
+      </div>
     </div>
   );
 }

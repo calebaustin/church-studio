@@ -38,12 +38,22 @@ export const DEFAULTS = {
   brandFonts: { heading: 'Montserrat', body: 'Montserrat' },
   dismissed: {}, // setup checklists the user closed
   churchInfo: { name: '', address: '', website: '', phone: '', email: '', times: '' }, // printed footers
+  appLogo: '', // brand library path of the logo for the sidebar and Dock; empty means the first in Logos
+  dockLogo: true, // show the church logo in the Dock
+  pcoAppId: '', // Planning Center personal access token
+  pcoSecret: '',
+  calendarIcal: '', // any calendar link (.ics), like Subsplash, Tithe.ly or Google
+  calendarPublicOnly: true, // only events shown in Church Center
+  lastCalendarFetch: null,
+  notify: { jobs: true, reminders: true }, // Mac notifications
+  toolOrder: [], // sidebar order (tool ids); empty means the default order
+  toolsOff: [], // tools the person turned off
   autoUpdateCheck: true,
   lastUpdateCheck: null,
 };
 
 /** Fields that hold secrets: masked on read, only overwritten when a new value is sent. */
-export const SECRET_FIELDS = ['youtubeApiKey', 'anthropicApiKey', 'openaiApiKey', 'geminiApiKey'];
+export const SECRET_FIELDS = ['pcoSecret', 'youtubeApiKey', 'anthropicApiKey', 'openaiApiKey', 'geminiApiKey'];
 
 /** Shown on the Settings screen: what each key is for and how to get it. */
 export const KEY_GUIDE = [

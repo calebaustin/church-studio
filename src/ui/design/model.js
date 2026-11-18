@@ -116,9 +116,9 @@ export const TEMPLATES = [
     B(ctx, { text: 'Psalm 23:1', size: 38, weight: 700, x: 0.5, y: 0.76, color: ctx.c[0] }),
   ] })] },
   { id: 'post-event', kind: 'post', name: 'Event', build: (ctx) => [page({ bg: solid(ctx.c[0]), items: [
-    H(ctx, { text: 'Family Night', size: 120, x: 0.5, y: 0.22, w: 0.85, color: onColor(ctx.c[0]) }),
-    B(ctx, { text: 'Friday, 6pm · Fellowship Hall\nFood, games and worship for all ages.', size: 42, x: 0.5, y: 0.4, w: 0.8, color: onColor(ctx.c[0]) }),
-    { id: uid(), type: 'qr', url: 'https://example.org/signup', x: 0.5, y: 0.68, w: 0.28, color: onColor(ctx.c[0]) },
+    H(ctx, { text: ctx.ev?.title || 'Family Night', size: fit(ctx.ev?.title, 120, 80, 18), x: 0.5, y: 0.22, w: 0.85, color: onColor(ctx.c[0]) }),
+    B(ctx, { text: ctx.ev ? [ctx.ev.when, ctx.ev.place].filter(Boolean).join(' · ') + (ctx.ev.summary ? `\n${ctx.ev.summary.slice(0, 90)}` : '') : 'Friday, 6pm · Fellowship Hall\nFood, games and worship for all ages.', size: 42, x: 0.5, y: 0.4, w: 0.8, color: onColor(ctx.c[0]) }),
+    { id: uid(), type: 'qr', url: ctx.ev?.link || 'https://example.org/signup', x: 0.5, y: 0.68, w: 0.28, color: onColor(ctx.c[0]) },
     B(ctx, { text: 'Scan to sign up', size: 34, weight: 700, x: 0.5, y: 0.89, color: onColor(ctx.c[0]) }),
   ] })] },
   { id: 'post-welcome', kind: 'post', name: 'New here?', build: (ctx) => [page({ bg: mesh(31, 0.1), items: [
@@ -150,9 +150,9 @@ export const TEMPLATES = [
     page({ bg: mesh(22, 0.25), items: [H(ctx, { text: 'Watch the full message', size: 100, x: 0.5, y: 0.45, w: 0.8 }), shape({ x: 0.5, y: 0.6, w: 0.5, h: 0.05, fill: '#FFFFFF', radius: 60 }), B(ctx, { text: 'Link in bio', size: 40, weight: 700, x: 0.5, y: 0.6, color: ctx.c[2] })] }),
   ] },
   { id: 'story-event', kind: 'story', name: 'Event countdown', build: (ctx) => [page({ bg: mesh(55, 0.2), items: [
-    B(ctx, { text: '3 DAYS TO GO', size: 46, weight: 700, letter: 8, x: 0.5, y: 0.3 }),
-    H(ctx, { text: 'Easter at Church Name', size: 128, x: 0.5, y: 0.46, w: 0.84 }),
-    B(ctx, { text: 'Sunday · 9am and 11am', size: 46, x: 0.5, y: 0.62 }),
+    B(ctx, { text: ctx.ev?.countdown || '3 DAYS TO GO', size: 46, weight: 700, letter: 8, x: 0.5, y: 0.3 }),
+    H(ctx, { text: ctx.ev?.title || 'Easter at Church Name', size: fit(ctx.ev?.title, 128, 84, 20), x: 0.5, y: 0.46, w: 0.84 }),
+    B(ctx, { text: ctx.ev?.when || 'Sunday · 9am and 11am', size: 46, x: 0.5, y: 0.62, w: 0.84 }),
   ] })] },
   // thumbnails
   { id: 'thumb-sermon', kind: 'thumbnail', name: 'Sermon thumbnail', build: (ctx) => [page({ bg: mesh(3, 0.25), items: [
@@ -234,11 +234,123 @@ export function loadImage(src) {
   return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
 }
 const qrKey = (it) => `qr:${it.url}:${it.color}`;
+const svgKey = (it) => `svg:${it.rel}:${JSON.stringify(it.recolor)}`;
+
+// ---------------------------------------------------------------- SVG colors
+const COLOR_RE = /((?:fill|stroke|stop-color|color)\s*[:=]\s*["']?)(#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\))/g;
+const normColor = (c) => {
+  const v = c.trim().toLowerCase();
+  if (/^#[0-9a-f]{3}$/.test(v)) return `#${v.slice(1).split('').map((x) => x + x).join('')}`;
+  if (/^#[0-9a-f]{8}$/.test(v)) return v.slice(0, 7);
+  const m = v.match(/^rgba?\(([^)]*)\)/);
+  if (m) { const [r, g, b] = m[1].split(',').map((x) => parseFloat(x)); return `#${[r, g, b].map((n) => Math.round(n || 0).toString(16).padStart(2, '0')).join('')}`; }
+  return v;
+};
+async function svgText(rel, cache) {
+  const k = `svgtext:${rel}`;
+  if (!(k in cache)) cache[k] = await fetch(libUrl(rel)).then((r) => (r.ok ? r.text() : null)).catch(() => null);
+  return cache[k];
+}
+/** The distinct colors an SVG uses, most used first. One with no colors draws in black. */
+export async function svgColors(rel, cache) {
+  const txt = await svgText(rel, cache);
+  if (!txt) return [];
+  const count = new Map();
+  for (const m of txt.matchAll(COLOR_RE)) { const c = normColor(m[2]); count.set(c, (count.get(c) || 0) + 1); }
+  if (!count.size) return ['#000000'];
+  return [...count.entries()].sort((a, b) => b[1] - a[1]).map(([c]) => c).filter((c) => /^#[0-9a-f]{6}$/.test(c)).slice(0, 8);
+}
+export function recolorSvg(txt, map) {
+  let out = txt.replace(COLOR_RE, (all, pre, c) => (map[normColor(c)] ? `${pre}${map[normColor(c)]}` : all));
+  if (map['#000000'] && !COLOR_RE.test(txt)) out = out.replace(/<svg\b/i, `<svg fill="${map['#000000']}"`);
+  COLOR_RE.lastIndex = 0;
+  return out;
+}
+
+// ---------------------------------------------------------------- shapes, photo frames and devices
+export const SHAPES = [
+  ['rect', 'Square'], ['ellipse', 'Circle'], ['hexagon', 'Hexagon'], ['arch', 'Arch'], ['blob', 'Blob'], ['iphone', 'iPhone'], ['macbook', 'MacBook'],
+];
+export const DEVICE_ASPECT = { iphone: 0.49, macbook: 1.55 }; // width / height
+function shapePath(ctx, kind, x, y, w, h, r) {
+  ctx.beginPath();
+  if (kind === 'ellipse') { ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2); return; }
+  if (kind === 'hexagon') {
+    const pts = [[0.25, 0], [0.75, 0], [1, 0.5], [0.75, 1], [0.25, 1], [0, 0.5]];
+    pts.forEach(([px, py], i) => (i ? ctx.lineTo(x + px * w, y + py * h) : ctx.moveTo(x + px * w, y + py * h)));
+    ctx.closePath(); return;
+  }
+  if (kind === 'arch') {
+    const rr = Math.min(w / 2, h);
+    ctx.moveTo(x, y + h); ctx.lineTo(x, y + rr); ctx.arc(x + w / 2, y + rr, w / 2, Math.PI, 0); ctx.lineTo(x + w, y + h); ctx.closePath(); return;
+  }
+  if (kind === 'blob') {
+    const p = [[0.5, 0.02], [0.9, 0.18], [0.98, 0.6], [0.7, 0.97], [0.25, 0.92], [0.03, 0.55], [0.15, 0.15]].map(([px, py]) => [x + px * w, y + py * h]);
+    ctx.moveTo((p[0][0] + p[6][0]) / 2, (p[0][1] + p[6][1]) / 2);
+    for (let i = 0; i < p.length; i++) { const a = p[i]; const b = p[(i + 1) % p.length]; ctx.quadraticCurveTo(a[0], a[1], (a[0] + b[0]) / 2, (a[1] + b[1]) / 2); }
+    ctx.closePath(); return;
+  }
+  const rr = Math.max(0, Math.min(r, w / 2, h / 2));
+  ctx.roundRect ? ctx.roundRect(x, y, w, h, rr) : ctx.rect(x, y, w, h);
+}
+function drawCover(ctx, img, x, y, w, h) {
+  const r = Math.max(w / img.width, h / img.height);
+  ctx.drawImage(img, x + (w - img.width * r) / 2, y + (h - img.height * r) / 2, img.width * r, img.height * r);
+}
+/** An empty photo spot: soft stripes and a small picture icon, shown only while editing. */
+function drawPlaceholder(ctx, x, y, w, h, color) {
+  ctx.save(); ctx.clip();
+  ctx.fillStyle = color; ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = 'rgba(255,255,255,.16)'; ctx.lineWidth = Math.max(2, w / 60);
+  for (let d = -h; d < w; d += Math.max(10, w / 9)) { ctx.beginPath(); ctx.moveTo(x + d, y + h); ctx.lineTo(x + d + h, y); ctx.stroke(); }
+  const s = Math.min(w, h) * 0.22; const cx = x + w / 2; const cy = y + h / 2;
+  ctx.fillStyle = 'rgba(255,255,255,.85)';
+  ctx.beginPath(); ctx.roundRect(cx - s / 2, cy - s * 0.38, s, s * 0.76, s * 0.12); ctx.fill();
+  ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(cx - s * 0.4, cy + s * 0.28); ctx.lineTo(cx - s * 0.1, cy - s * 0.06); ctx.lineTo(cx + s * 0.1, cy + s * 0.12); ctx.lineTo(cx + s * 0.22, cy); ctx.lineTo(cx + s * 0.4, cy + s * 0.28); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx + s * 0.2, cy - s * 0.16, s * 0.08, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+/** Fill a shape: a photo, an empty photo spot, or a solid color. */
+function fillShape(ctx, it, kind, x, y, w, h, r, cache, placeholders) {
+  shapePath(ctx, kind, x, y, w, h, r);
+  const img = it.photo ? cache[it.photo] : null;
+  if (img) { ctx.save(); ctx.clip(); drawCover(ctx, img, x, y, w, h); ctx.restore(); }
+  else if (it.frame && placeholders) drawPlaceholder(ctx, x, y, w, h, it.fill || '#8A94A6');
+  else { ctx.fillStyle = it.fill || '#FFFFFF'; ctx.fill(); }
+}
+function drawDevice(ctx, it, x, y, w, h, cache, placeholders) {
+  if (it.shape === 'iphone') {
+    ctx.fillStyle = '#121316'; shapePath(ctx, 'rect', x, y, w, h, w * 0.17); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = Math.max(1, w * 0.008); ctx.stroke();
+    const b = w * 0.04;
+    fillShape(ctx, it, 'rect', x + b, y + b, w - 2 * b, h - 2 * b, w * 0.135, cache, placeholders);
+    ctx.fillStyle = '#121316'; shapePath(ctx, 'rect', x + w * 0.35, y + b + h * 0.018, w * 0.3, h * 0.03, h * 0.015); ctx.fill();
+    return;
+  }
+  const lidH = h * 0.92; const lidX = x + w * 0.07; const lidW = w * 0.86;
+  ctx.fillStyle = '#1B1C1F'; shapePath(ctx, 'rect', lidX, y, lidW, lidH, w * 0.025); ctx.fill();
+  const b = w * 0.018;
+  fillShape(ctx, it, 'rect', lidX + b, y + b, lidW - 2 * b, lidH - 2 * b * 1.4, w * 0.008, cache, placeholders);
+  ctx.fillStyle = '#1B1C1F'; shapePath(ctx, 'rect', x + w * 0.46, y + b, w * 0.08, h * 0.022, h * 0.008); ctx.fill();
+  const g = ctx.createLinearGradient(0, y + lidH, 0, y + h);
+  g.addColorStop(0, '#D7DADF'); g.addColorStop(1, '#9EA3AB');
+  ctx.fillStyle = g; ctx.beginPath();
+  ctx.moveTo(x, y + lidH); ctx.lineTo(x + w, y + lidH); ctx.lineTo(x + w * 0.985, y + h); ctx.lineTo(x + w * 0.015, y + h); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,.18)'; shapePath(ctx, 'rect', x + w * 0.43, y + lidH, w * 0.14, (h - lidH) * 0.35, (h - lidH) * 0.2); ctx.fill();
+}
 
 /** Load photos, logos and QR codes a page needs into the cache. */
 export async function loadAssets(pg, cache) {
-  const need = [...(pg.bg?.type === 'image' && pg.bg.image ? [pg.bg.image] : []), ...pg.items.filter((i) => i.type === 'image').map((i) => i.rel)];
+  const need = [...(pg.bg?.type === 'image' && pg.bg.image ? [pg.bg.image] : []), ...pg.items.filter((i) => i.type === 'image').map((i) => i.rel),
+    ...pg.items.filter((i) => i.type === 'shape' && i.photo).map((i) => i.photo)];
   for (const rel of need) if (!(rel in cache)) cache[rel] = await loadImage(libUrl(rel)).catch(() => null);
+  // SVGs with changed colors: rewrite the file's colors and draw that version.
+  for (const it of pg.items.filter((i) => i.type === 'image' && /\.svg$/i.test(i.rel) && i.recolor && Object.keys(i.recolor).length)) {
+    const key = svgKey(it);
+    if (key in cache) continue;
+    const txt = await svgText(it.rel, cache);
+    cache[key] = txt ? await loadImage(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(recolorSvg(txt, it.recolor))}`).catch(() => null) : null;
+  }
   for (const it of pg.items.filter((i) => i.type === 'qr' && i.url)) {
     const key = qrKey(it);
     if (!(key in cache)) cache[key] = await loadImage(await QRCode.toDataURL(it.url, { margin: 1, width: 600, color: { dark: it.color || '#000000', light: '#00000000' } })).catch(() => null);
@@ -255,7 +367,7 @@ function roundRect(ctx, x, y, w, h, r) {
  * Draw a page. Returns each item's box in page fractions {x0, y0, x1, y1}, used for selection,
  * snapping and inline editing. `skip` hides one item (while it is edited in place).
  */
-export function renderPage(canvas, doc, pg, scale, cache, { skip } = {}) {
+export function renderPage(canvas, doc, pg, scale, cache, { skip, placeholders = true } = {}) {
   const W = Math.max(1, Math.round(doc.size.w * scale)); const H = Math.max(1, Math.round(doc.size.h * scale));
   if (canvas.width !== W) canvas.width = W;
   if (canvas.height !== H) canvas.height = H;
@@ -283,12 +395,13 @@ export function renderPage(canvas, doc, pg, scale, cache, { skip } = {}) {
     ctx.globalAlpha = it.opacity ?? 1;
     if (it.type === 'shape') {
       const w = it.w * W; const h = it.h * H; const x = it.x * W - w / 2; const y = it.y * H - h / 2;
-      ctx.fillStyle = it.fill || '#FFFFFF';
-      if (it.shape === 'ellipse') { ctx.beginPath(); ctx.ellipse(it.x * W, it.y * H, w / 2, h / 2, 0, 0, Math.PI * 2); ctx.fill(); }
-      else { roundRect(ctx, x, y, w, h, (it.radius || 0) * k); ctx.fill(); }
+      // An eraser cuts through everything drawn under it, background included.
+      if (it.erase) { ctx.globalCompositeOperation = 'destination-out'; ctx.fillStyle = '#000'; shapePath(ctx, it.shape, x, y, w, h, (it.radius || 0) * k); ctx.fill(); }
+      else if (DEVICE_ASPECT[it.shape]) drawDevice(ctx, it, x, y, w, h, cache, placeholders);
+      else fillShape(ctx, it, it.shape, x, y, w, h, (it.radius || 0) * k, cache, placeholders);
       boxes[it.id] = { x0: it.x - it.w / 2, x1: it.x + it.w / 2, y0: it.y - it.h / 2, y1: it.y + it.h / 2 };
     } else if (it.type === 'image' || it.type === 'qr') {
-      const img = it.type === 'qr' ? cache[qrKey(it)] : cache[it.rel];
+      const img = it.type === 'qr' ? cache[qrKey(it)] : (it.recolor && cache[svgKey(it)]) || cache[it.rel];
       const w = it.w * W; const h = img ? (img.height / img.width) * w : w;
       const x = it.x * W - w / 2; const y = it.y * H - h / 2;
       if (img && it.id !== skip) {
@@ -322,6 +435,6 @@ export async function pageDataUrl(doc, pg, scale, cache, type = 'image/png', qua
   await loadAssets(pg, cache);
   await document.fonts.ready;
   const c = document.createElement('canvas');
-  renderPage(c, doc, pg, scale, cache);
+  renderPage(c, doc, pg, scale, cache, { placeholders: false });
   return c.toDataURL(type, quality);
 }

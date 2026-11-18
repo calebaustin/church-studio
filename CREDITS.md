@@ -3,7 +3,8 @@
 Church Studio is built on these open-source projects and libraries. Thank you to their authors.
 
 **Bundled with the app:** Electron, React, Vite, lucide-react, qrcode, jsPDF, PptxGenJS, the Anthropic SDK,
-ffmpeg, yt-dlp, faster-whisper, OpenCV, NumPy, Pillow, and the Montserrat typeface (SIL Open Font License).
+ffmpeg, yt-dlp, faster-whisper, OpenCV, NumPy, Pillow, and the Montserrat and Caveat typefaces (SIL Open Font License).
+The same list appears in the app under Settings › Thank you.
 
 **Ideas and patterns adapted from (MIT, BSD or Apache licensed):** clipsmith (offline clip scoring, sentence
 splitting, word re-timing), AI-Youtube-Shorts-Generator (speaker-following crop), LightPost (encrypted

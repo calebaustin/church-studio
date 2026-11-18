@@ -4,6 +4,7 @@ import { api, fmt, openLink } from '../api.js';
 import { MessageSquare } from 'lucide-react';
 import { checkCaption } from '../captionCheck.js';
 import Modal from '../components/Modal.jsx';
+import { EventCard, RefreshEvents, eventTime, useChurchEvents } from '../components/ChurchEvents.jsx';
 
 const STATUS = {
   draft: ['chip', 'Draft'], scheduled: ['chip accent', 'Scheduled'], publishing: ['chip warn', 'Publishing…'],
@@ -151,6 +152,8 @@ function PostRow({ post, s, plat, onEdit }) {
 // ------------------------------------------------------------------ calendar (full month)
 function Calendar({ s, plat, onEdit, onNew }) {
   const [offset, setOffset] = useState(0);
+  const cal = useChurchEvents();
+  const [ev, setEv] = useState(null);
   const month = useMemo(() => { const d = new Date(); d.setDate(1); d.setHours(0, 0, 0, 0); d.setMonth(d.getMonth() + offset); return d; }, [offset]);
   const start = new Date(month); start.setDate(1 - month.getDay());
   const days = Array.from({ length: 42 }, (_, i) => new Date(start.getTime() + i * 86400000));
@@ -162,6 +165,7 @@ function Calendar({ s, plat, onEdit, onNew }) {
       <div className="row between">
         <h3>{month.toLocaleDateString([], { month: 'long', year: 'numeric' })}</h3>
         <div className="row">
+          <RefreshEvents cal={cal} />
           <button className="btn icon sm" aria-label="Previous month" onClick={() => setOffset(offset - 1)}>‹</button>
           <button className="btn sm" onClick={() => setOffset(0)}>This month</button>
           <button className="btn icon sm" aria-label="Next month" onClick={() => setOffset(offset + 1)}>›</button>
@@ -173,12 +177,19 @@ function Calendar({ s, plat, onEdit, onNew }) {
           const list = s.posts.filter((p) => p.status !== 'draft' && when(p).toDateString() === d.toDateString()).sort((a, b) => when(a) - when(b));
           const out = d.getMonth() !== month.getMonth();
           const past = d < todayStart;
+          const evs = cal.events.filter((e) => new Date(e.start).toDateString() === d.toDateString());
           return (
             <div key={d.toISOString()} className={`month-cell ${out ? 'out' : ''} ${d.toDateString() === today ? 'today' : ''}`}>
               <div className="row between">
                 <span className="small num" style={{ fontWeight: 600 }}>{d.getDate()}</span>
                 {!past && <button className="btn ghost sm" style={{ minHeight: 20, padding: '0 6px' }} aria-label={`Schedule a post on ${d.toDateString()}`} onClick={() => { const t = new Date(d); t.setHours(12, 0, 0, 0); onNew(t); }}>+</button>}
               </div>
+              {evs.slice(0, 2).map((e) => (
+                <button key={e.id} className="month-event" onClick={() => setEv(e)} title={`${e.title} · ${eventTime(e)}`}>
+                  <span className="truncate">{e.allDay ? '' : `${eventTime(e)} `}{e.title}</span>
+                </button>
+              ))}
+              {evs.length > 2 && <span className="muted small">+{evs.length - 2} events</span>}
               {list.slice(0, 3).map((p) => (
                 <button key={p.id} className="month-post" onClick={() => ['draft', 'scheduled'].includes(p.status) && onEdit(p)} title={p.title || p.caption}>
                   <span className="row" style={{ gap: 2 }}>{p.destinations.slice(0, 4).map((x) => <span key={x.accountId} className="dot" style={{ color: plat(x.platform)?.color, width: 6, height: 6 }} />)}</span>
@@ -190,7 +201,12 @@ function Calendar({ s, plat, onEdit, onNew }) {
           );
         })}
       </div>
-      {s.posts.some((p) => p.status === 'draft') && <p className="muted small">Drafts show on the calendar once you schedule them.</p>}
+      <div className="row wrap" style={{ gap: 14 }}>
+        {cal.linked ? <span className="row small muted"><span className="month-event-key" />Church events from {cal.source || 'your calendar'}</span>
+          : <span className="small muted">Connect Planning Center or your church calendar in Settings to see events here.</span>}
+        {s.posts.some((p) => p.status === 'draft') && <span className="muted small">Drafts show on the calendar once you schedule them.</span>}
+      </div>
+      {ev && <EventCard event={ev} onClose={() => setEv(null)} onPlanPost={(e) => { const t = new Date(e.start); t.setDate(t.getDate() - 2); t.setHours(12, 0, 0, 0); onNew(t < new Date() ? new Date(Date.now() + 3600_000) : t); }} />}
     </section>
   );
 }

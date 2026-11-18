@@ -1,7 +1,22 @@
-# Church Studio
+<p align="center"><img src="docs/images/header.png" alt="Church Studio" width="100%"></p>
 
-A Mac app that turns a sermon into short, captioned clips and helps you post them.
-No login, no cloud, no API keys required.
+Church Studio is a full communications studio built for churches, all in one Mac app. Start with Sunday's
+sermon and turn it into captioned clips, a transcript, a blog post, an email, a small group guide, social
+graphics and a slide deck you can present on a second screen. Plan and post to your social accounts on a
+calendar that sits next to your church's Planning Center events, with your logo, colors and fonts everywhere.
+It all runs on your Mac with no account, no cloud and no AI required, so a small staff or a volunteer can do
+in an afternoon what used to take a week.
+
+<details>
+<summary><strong>Screenshots</strong></summary>
+
+| | |
+|---|---|
+| ![Dashboard](docs/images/dashboard.png) **Dashboard** shows what's next and only the tools you use. | ![Graphics](docs/images/graphics.png) **Graphics** with five template packs, photo frames and device mockups. |
+| ![Transcribe](docs/images/transcribe.png) **Transcribe** any recording, with one-tap audio cleanup. | ![Presenter](docs/images/presenter.png) **Present** to a second screen with notes, next slide and live edits. |
+| ![Calendar](docs/images/calendar.png) **Calendar** with your church events beside your posts. | ![Settings](docs/images/settings.png) **Your tools**: turn tools on or off and set their order. |
+
+</details>
 
 ## Run it
 
@@ -25,9 +40,13 @@ transcription. The build is unsigned, so the first launch needs right-click > Op
 
 ## How it works
 
-1. **Add a sermon.** Pick from your channel or paste a link. Before downloading, the app reads YouTube's
+1. **Add a sermon.** Pick from your channel, paste a link, or open any audio or video file on your Mac
+   (a class, a podcast, a phone recording). Before downloading, the app reads YouTube's
    captions and finds the sermon. "Just the sermon" downloads at full speed, then keeps only that part.
-2. **Transcribe** with faster-whisper on this Mac (word timings).
+2. **Transcribe** with faster-whisper on this Mac (word timings). Optional audio cleanup first: Clear voice,
+   Loud room, Far from the mic, Recorded outside, Hum or buzz, or Phone or laptop, with a strength slider and a
+   before and after sample. Plain ffmpeg filters, no AI. Clips use the same cleanup, and any recording can get a
+   cleaned copy. Transcripts save as text, text with times, or .srt and .vtt captions.
 3. **Confirm the sermon** on a timeline and scene strip.
 4. **Clips** are suggested by offline scoring tuned for preaching. An optional AI helper can rerank them.
 5. **Edit:** live preview, word cuts, trims, pause trimming (you pick the length), a movable themed hook, the
@@ -51,8 +70,12 @@ More tools:
 - **Graphics:** a design home ("What will you design today?") for presentations, social posts, carousels,
   stories, thumbnails, flyers, sermon notes and custom sizes. Multi-page designs, templates in your brand
   colors and fonts, "From a sermon" (slides, carousels, stories and notes built from the transcript),
-  smart alignment guides and grid snapping, inline text editing, present mode, and export to PNG, PDF or
-  PowerPoint (with speaker notes). Saved graphics can go into a clip as a corner logo or an end card.
+  smart alignment guides and grid snapping, inline text editing, and export to PNG, PDF or PowerPoint (with
+  speaker notes). Five template packs (Natural, Smooth, Bold, Youth, Traditional) with photo spots instead of
+  stock photos. Any shape can hold a photo or work as an eraser, there are iPhone and MacBook frames, and SVG
+  colors can be changed one by one. Present on this screen, or to a second screen with a presenter console
+  (next slide, notes, timer, black screen, clicker support) where edits to the live slide wait until you press
+  Update screen. Saved graphics can go into a clip as a corner logo or an end card.
 - **Brand library:** a normal folder in Documents (Photos, Logos, Graphics, Brand, Writing) that every tool uses,
   with a brand kit (colors, including "colors from my logo", and heading and body fonts) and a setup checklist.
 - **All projects:** sermons, clips, writing and designs in one place, with folders (drag items onto them),
@@ -62,10 +85,20 @@ More tools:
   still from the sermon video. Your logo and church info go in the footer.
 - **Status:** the sidebar says "Working locally", or "Working with Claude" (or another helper). If the helper
   hits a usage limit, the app quietly works locally and shows a note.
+- **Church calendar:** connect Planning Center (a personal access token) or any calendar link (.ics) from
+  Subsplash, Tithe.ly, Google or Outlook. Events show on the social calendar and the dashboard, and become
+  graphics in one click. Checked once a week, on Monday mornings, or when you press refresh.
+- **Your tools:** a welcome window on first run asks what kinds of work you do. Turn tools on or off and set their
+  order anytime in Settings; the menu and dashboard follow.
+- **Your logo:** the menu shows your church logo, and the Dock icon becomes your logo with a small CS badge.
+- **Notifications:** a Mac notification when a long task finishes or a post you share by hand is due, only while
+  the app is in the background.
+- **Feedback:** Settings › Send feedback takes a star rating and a note. With a relay set up (`relay/`,
+  `feedbackUrl` in package.json) it becomes a GitHub issue without the sender needing an account.
 - **Workspaces:** separate brands or ministries, each with its own settings, sermons, accounts and library.
 - **My App:** your setup at a glance, plus ideas based on your sermon topics.
 
-Name ideas and icon mockups: `docs/NAMING.md`.
+Open-source credits: `CREDITS.md`, also shown in Settings › Thank you.
 
 ## Updates
 
@@ -80,8 +113,9 @@ electron/        window + preload
 src/daemon/      local HTTP daemon on 127.0.0.1:4317 (job queue, media, social)
 src/ui/          React + Vite UI (liquid glass, light and dark themes)
 scripts/         setup.sh, build-app.sh, transcribe.py, render_clip.py, list_fonts.py, sc_media.py
-assets/fonts/    Montserrat (OFL) for captions
-docs/            plan, architecture, social hub, UI guide
+assets/fonts/    Montserrat and Caveat (OFL)
+docs/            architecture, theming, social hub, releasing, README images
+relay/           optional feedback relay (Cloudflare Worker)
 ```
 
 ## Notes

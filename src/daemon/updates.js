@@ -15,6 +15,23 @@ import { downloadsDir } from './render.js';
 const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 export const VERSION = pkg.version;
 export const UPDATE_REPO = process.env.SC_UPDATE_REPO || pkg.updateRepo || null;
+// Where in-app feedback goes: a small relay that files it on GitHub, so nobody needs an account.
+export const FEEDBACK_URL = process.env.SC_FEEDBACK_URL || pkg.feedbackUrl || null;
+
+/** Send feedback (stars, a note, or a request for a connection). Falls back to a GitHub issue page. */
+export async function sendFeedback({ kind = 'feedback', stars = null, text = '', name = '' }) {
+  const body = { kind: String(kind).slice(0, 30), stars: stars ? Math.max(1, Math.min(5, Number(stars))) : null, text: String(text).slice(0, 4000), name: String(name).slice(0, 80), version: VERSION };
+  if (!body.text.trim() && !body.stars) throw new Error('Add a few words or a star rating first.');
+  if (FEEDBACK_URL) {
+    const r = await fetch(FEEDBACK_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) });
+    if (!r.ok) throw new Error(`Couldn't send it right now (${r.status}). Try again later.`);
+    return { sent: true };
+  }
+  if (!UPDATE_REPO) throw new Error('Feedback is not set up for this copy.');
+  const title = body.kind === 'connection' ? `Connection request: ${body.text.split('\n')[0].slice(0, 60)}` : `${body.stars ? `${'★'.repeat(body.stars)} ` : ''}Feedback from Church Studio ${VERSION}`;
+  const md = `${body.stars ? `Rating: ${'★'.repeat(body.stars)}${'☆'.repeat(5 - body.stars)}\n\n` : ''}${body.text}\n\n---\nChurch Studio ${VERSION}${body.name ? ` · ${body.name}` : ''}`;
+  return { sent: false, url: `https://github.com/${UPDATE_REPO}/issues/new?${new URLSearchParams({ title, body: md, labels: body.kind })}` };
+}
 
 /** "1.2.10" > "1.2.9". Pre-release tags sort before the release. */
 export function newer(a, b) {

@@ -5,9 +5,12 @@ import {
 } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { api } from '../api.js';
-import Modal from '../components/Modal.jsx';
+import Modal, { ModalHead } from '../components/Modal.jsx';
 import DesignEditor from '../design/DesignEditor.jsx';
-import { KINDS, SIZE_PRESETS, TEMPLATES, blankPage, loadAssets, page as newPage, renderPage, uid } from '../design/model.js';
+import { KINDS, SIZE_PRESETS, TEMPLATES as BASE_TEMPLATES, blankPage, loadAssets, page as newPage, renderPage, uid } from '../design/model.js';
+import { PACKS, PACK_TEMPLATES } from '../design/packs.js';
+
+const TEMPLATES = [...BASE_TEMPLATES, ...PACK_TEMPLATES];
 
 export { cohesive } from '../design/model.js';
 
@@ -45,7 +48,7 @@ function newDoc(kind, tpl, ctx, size) {
   const k = KINDS[kind];
   return {
     id: uid(), name: tpl ? tpl.name : `Untitled ${k.label.toLowerCase()}`, kind,
-    size: size || { w: k.w, h: k.h }, palette: ctx.c, tint: { color: '#FF9A62', amount: 0 },
+    size: size || { w: k.w, h: k.h }, palette: tpl?.pack ? [...PACKS[tpl.pack].c] : ctx.c, tint: { color: '#FF9A62', amount: 0 },
     pages: tpl ? tpl.build(ctx) : [blankPage(kind, ctx)],
   };
 }
@@ -66,13 +69,24 @@ function TemplateThumb({ tpl, ctx }) {
 }
 TemplateThumb.cache = {};
 
-export default function Graphics({ image, design }) {
+/** What an event looks like on a graphic: "Sunday, Nov 22 · 6 PM". */
+export function eventForDesign(e) {
+  const d = new Date(e.start);
+  const day = d.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
+  const time = e.allDay ? '' : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(':00', '');
+  const days = Math.ceil((new Date(d.toDateString()) - new Date(new Date().toDateString())) / 86400000);
+  return { title: e.title, when: [day, time].filter(Boolean).join(' · '), place: e.location?.split(',')[0] || '', summary: e.summary || '', link: e.link || null,
+    countdown: days > 1 ? `${days} DAYS TO GO` : days === 1 ? 'TOMORROW' : 'TODAY' };
+}
+
+export default function Graphics({ image, design, event }) {
   const { toast } = useApp();
   const ctx = useBrandCtx();
   const [open, setOpen] = useState(design || null);
   const [designs, setDesigns] = useState(null);
   const [tab, setTab] = useState('home');
   const [kind, setKind] = useState(null);
+  const [pack, setPack] = useState(null);
   const [q, setQ] = useState('');
   const [modal, setModal] = useState(null); // 'sermon' | 'custom'
   const load = () => api.get('/api/designs').then((r) => setDesigns(r.designs)).catch(() => setDesigns([]));
@@ -88,10 +102,18 @@ export default function Graphics({ image, design }) {
     create(d);
   }, [image]);
 
+  // From a church calendar event: an event post with its name, time and place filled in.
+  useEffect(() => {
+    if (!event) return;
+    const d = newDoc('post', TEMPLATES.find((t) => t.id === 'post-event'), { ...ctx, ev: eventForDesign(event) });
+    d.name = event.title;
+    create(d);
+  }, [event]);
+
   if (open) return <DesignEditor id={open} onClose={() => setOpen(null)} />;
 
   const ql = q.trim().toLowerCase();
-  const tpls = TEMPLATES.filter((t) => (!kind || t.kind === kind) && (!ql || `${t.name} ${KINDS[t.kind].label}`.toLowerCase().includes(ql)));
+  const tpls = TEMPLATES.filter((t) => (!kind || t.kind === kind) && (!pack || t.pack === pack) && (!ql || `${t.name} ${KINDS[t.kind].label}`.toLowerCase().includes(ql)));
   const mine = (designs || []).filter((d) => !ql || d.name.toLowerCase().includes(ql));
   const pick = (k) => {
     if (k === 'sermon') return setModal('sermon');
@@ -161,6 +183,15 @@ export default function Graphics({ image, design }) {
           <h2>{kind ? `${KINDS[kind].label} templates` : ql ? 'Results' : 'Templates'}</h2>
           {kind && <span className="muted small">{KINDS[kind].hint} · {KINDS[kind].w}×{KINDS[kind].h}</span>}
         </div>
+        <div className="row wrap" style={{ gap: 6 }} role="radiogroup" aria-label="Template pack">
+          <button className={`pill-choice ${!pack ? 'on' : ''}`} onClick={() => setPack(null)}>All styles</button>
+          {Object.entries(PACKS).map(([id, P]) => (
+            <button key={id} className={`pill-choice pack-chip ${pack === id ? 'on' : ''}`} title={P.about} onClick={() => { setPack(pack === id ? null : id); setTab('templates'); }}>
+              <span className="pack-dots">{P.c.slice(0, 3).map((c) => <i key={c} style={{ background: c }} />)}</span>{P.name}
+            </button>
+          ))}
+        </div>
+        {pack && <span className="hint">{PACKS[pack].about} No stock photos: click a photo spot to add your own, or make it a solid shape.</span>}
         <div className="dz-grid-cards">
           {kind && (
             <button className="dz-card glass dz-blank" onClick={() => create(newDoc(kind, null, ctx))}>
@@ -171,7 +202,7 @@ export default function Graphics({ image, design }) {
           {tpls.map((t) => (
             <button key={t.id} className="dz-card glass dz-tpl" onClick={() => create(newDoc(t.kind, t, ctx))}>
               <span className="dz-card-cover"><TemplateThumb tpl={t} ctx={ctx} /></span>
-              <span className="dz-card-meta"><span className="stack" style={{ gap: 0 }}><strong className="small">{t.name}</strong><span className="muted" style={{ fontSize: 12 }}>{KINDS[t.kind].label}</span></span></span>
+              <span className="dz-card-meta"><span className="stack" style={{ gap: 0 }}><strong className="small">{t.name}</strong><span className="muted" style={{ fontSize: 12 }}>{KINDS[t.kind].label}{t.pack ? ` · ${PACKS[t.pack].name} pack` : ''}</span></span></span>
             </button>
           ))}
           {ql && mine.map((d) => (
@@ -190,9 +221,6 @@ export default function Graphics({ image, design }) {
   );
 }
 
-const ModalHead = ({ title, onClose }) => (
-  <div className="row between"><h2>{title}</h2><button className="setup-close" style={{ position: 'static' }} aria-label="Close" onClick={onClose}><X size={16} /></button></div>
-);
 
 function FromSermon({ ctx, onClose, onCreate }) {
   const [projects, setProjects] = useState(null);

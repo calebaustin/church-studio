@@ -572,7 +572,8 @@ def main() -> None:
         expr = "+".join(f"between(t,{s:.3f},{e:.3f})" for s, e in keep)
         subprocess.run(
             [FFMPEG, "-y", "-loglevel", "error", "-ss", f"{start:.3f}", "-t", f"{dur:.3f}", "-i", src, "-vn",
-             "-af", f"aselect='{expr}',asetpts=N/SR/TB,afade=t=in:d=0.05,afade=t=out:st={max(0, out_len - 0.12):.3f}:d=0.12",
+             "-af", f"aselect='{expr}',asetpts=N/SR/TB" + (f",{job['audioFilter']}" if job.get("audioFilter") else "")
+             + f",afade=t=in:d=0.05,afade=t=out:st={max(0, out_len - 0.12):.3f}:d=0.12",
              "-c:a", "aac", "-b:a", "192k", str(audio)],
             check=True,
         )

@@ -2,6 +2,28 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## 0.4.0 · November 18, 2026
+
+### New
+- **Welcome and your tools.** A short welcome on first run asks what kinds of work you do. Turn tools on or off and put them in your order anytime in Settings › Your tools. The menu and dashboard only show what you use.
+- **Transcribe any recording.** Open an audio or video file from your Mac, like a class, a podcast or a phone recording. Read the transcript, copy it, or save it as text, text with times, or caption files.
+- **Audio cleanup.** Six presets (Clear voice, Loud room, Far from the mic, Recorded outside, Hum or buzz, Phone or laptop) with a strength slider and a before and after sample. Works for transcripts and clips, or save a clean copy of any recording. No AI needed.
+- **Present to a second screen.** Slides go full screen on the projector while you get the next slide, notes, a timer and a black screen button. Clickers work. Edits to the live slide wait until you press Update screen.
+- **Template packs.** Natural, Smooth, Bold, Youth and Traditional, each with a welcome post, a verse post, an event story and sermon slides. No stock photos: click a photo spot to add your own or make it solid.
+- **More design tools.** Any shape can hold a photo or work as an eraser. New hexagon, arch and blob shapes, iPhone and MacBook frames, and color swatches for each color inside an SVG.
+- **Church calendar.** Connect Planning Center or any calendar link (Subsplash, Tithe.ly, Google, Outlook). Events show on the social calendar and dashboard and turn into an event graphic in one click. Checked every Monday morning, or press refresh.
+- **Your logo, front and center.** The menu shows your church logo, and the Dock icon becomes your logo with a small CS badge.
+- **Notifications.** A Mac notification when a transcript, download or export finishes, or when a post you share by hand is due. Only while Church Studio is in the background.
+- **Show in Finder** for anything in All projects.
+- **Send feedback** with a star rating, and **Thank you**, a page for the open-source projects Church Studio is built on.
+
+### Changed
+- New app icon: CS in Caveat.
+- Folder tips in All projects moved into an info button.
+
+### Fixed
+- Present no longer ends right after it starts.
+
 ## 0.3.0 · November 18, 2026
 
 ### New

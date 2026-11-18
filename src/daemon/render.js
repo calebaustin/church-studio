@@ -9,6 +9,7 @@ import { loadConfig } from './config.js';
 import { getVideoTheme, fontFile } from './themes.js';
 import { speakerPrior, saveLast, pickEditSettings } from './prefs.js';
 import { libraryFile } from './library.js';
+import { audioFilter } from './audio.js';
 
 /**
  * Parts of the clip to keep, in seconds from its start. Removes cut words and, when asked,
@@ -108,6 +109,8 @@ export async function buildJob(project, clip, { preview = false, trackOnly = fal
     hook: options.hook === false ? null : clip.hook || null,
     captions: options.captions === false ? false : clip.captions !== false,
     theme: { ...theme, fontFile: font?.file, fontStyle: font?.style, fontIndex: font?.index ?? null },
+    // Audio cleanup: the clip's own setting, else the sermon's.
+    audioFilter: audioFilter(clip.audioCleanup !== undefined ? clip.audioCleanup : project.audioCleanup),
   };
 }
 

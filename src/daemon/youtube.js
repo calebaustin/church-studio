@@ -195,7 +195,7 @@ export async function importLocalFile(filePath, ctx) {
   if (!st?.isFile()) throw new Error('File not found.');
   const title = path.basename(filePath).replace(/\.[^.]+$/, '');
   const project = await createProject({ title });
-  ctx.progress(5, 'Copying video into the project…');
+  ctx.progress(5, 'Copying the file into the project…');
   const ext = path.extname(filePath).toLowerCase() || '.mp4';
   const dest = file(project.id, `source${ext}`);
   await copyFile(filePath, dest);
@@ -217,7 +217,7 @@ async function finishIngest(id, source, ctx) {
   });
   await makeThumbs(id, null).catch((e) => console.error('[thumbs]', e.message));
   const size = (await stat(source)).size;
-  const summary = `${project.title}: ${fmtDur(media.duration)}, ${media.height}p, ${(size / 1073741824 >= 1 ? `${(size / 1073741824).toFixed(1)} GB` : `${Math.round(size / 1048576)} MB`)}`;
-  ctx.progress(100, project.range ? 'Sermon downloaded' : 'Video ready');
+  const summary = `${project.title}: ${fmtDur(media.duration)}, ${media.height ? `${media.height}p` : 'audio'}, ${(size / 1073741824 >= 1 ? `${(size / 1073741824).toFixed(1)} GB` : `${Math.round(size / 1048576)} MB`)}`;
+  ctx.progress(100, project.range ? 'Sermon downloaded' : media.height ? 'Video ready' : 'Recording ready');
   return { projectId: project.id, title: project.title, duration: media.duration, height: media.height, bytes: size, range: project.range || null, summary };
 }

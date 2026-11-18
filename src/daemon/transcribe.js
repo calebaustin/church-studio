@@ -7,20 +7,24 @@ import { run, tool, pyCommand } from './tools.js';
 import { file, getProject, updateProject } from './projects.js';
 import { loadConfig } from './config.js';
 import { detectSermon } from './sermon.js';
+import { audioFilter } from './audio.js';
 import { normalizeWords, normalizeText, WHISPER_HINT } from './scripture.js';
 
-export async function transcribeProject(id, { start = null, end = null } = {}, ctx) {
+export async function transcribeProject(id, { start = null, end = null, cleanup } = {}, ctx) {
   const project = await getProject(id);
   if (!project?.sourceFile) throw new Error('The video has not finished downloading.');
   const config = await loadConfig();
   const source = file(id, project.sourceFile);
   const wav = file(id, 'audio.wav');
 
-  ctx.progress(2, 'Extracting audio…');
+  // Cleanup chosen here is remembered for the clips too.
+  if (cleanup !== undefined) await updateProject(id, (p) => { p.audioCleanup = cleanup?.preset && cleanup.preset !== 'none' ? { preset: cleanup.preset, amount: Number(cleanup.amount ?? 0.5) } : null; });
+  const af = audioFilter(cleanup !== undefined ? cleanup : project.audioCleanup);
+  ctx.progress(2, af ? 'Extracting and cleaning up the audio…' : 'Extracting audio…');
   const range = [];
   if (start != null) range.push('-ss', String(start));
   if (end != null) range.push('-t', String(end - (start ?? 0)));
-  await run(tool('ffmpeg'), ['-y', '-loglevel', 'error', ...range, '-i', source, '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', wav], { signal: ctx.signal });
+  await run(tool('ffmpeg'), ['-y', '-loglevel', 'error', ...range, '-i', source, '-vn', ...(af ? ['-af', af] : []), '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', wav], { signal: ctx.signal });
 
   ctx.progress(6, `Transcribing with Whisper (${config.whisperModel})… the first run downloads the model.`);
   const { stdout } = await run(...pyCommand('transcribe', [wav, '--model', config.whisperModel, '--offset', String(start ?? 0), '--hotwords', WHISPER_HINT]), {

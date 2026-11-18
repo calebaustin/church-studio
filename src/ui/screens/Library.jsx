@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useApp } from '../App.jsx';
-import { Check, MonitorPlay, FolderOpen, Link2, Clapperboard } from 'lucide-react';
+import { Check, MonitorPlay, FolderOpen, Link2, Clapperboard, AudioLines, FileAudio } from 'lucide-react';
+import CleanAudioDialog from '../components/CleanAudioDialog.jsx';
 import { api, desktop, fmt, media } from '../api.js';
 import Modal from '../components/Modal.jsx';
 import AddVideo from '../components/AddVideo.jsx';
@@ -13,6 +14,7 @@ export default function Library({ openPicker = false }) {
   const [error, setError] = useState(null);
   const [picker, setPicker] = useState(openPicker);
   const [adding, setAdding] = useState(null); // { url, title } being looked at before download
+  const [cleaning, setCleaning] = useState(false);
 
   const load = () => api.get('/api/projects').then((r) => setProjects(r.projects));
   useEffect(() => { load(); }, []);
@@ -32,7 +34,7 @@ export default function Library({ openPicker = false }) {
     } catch (e) { setError(e.message); }
   };
   const openFile = async () => {
-    const file = await desktop?.pickVideo();
+    const file = await (desktop?.pickMedia || desktop?.pickVideo)?.();
     if (file) add({ file });
   };
 
@@ -52,7 +54,13 @@ export default function Library({ openPicker = false }) {
               onKeyDown={(e) => e.key === 'Enter' && url.trim() && setAdding({ url: url.trim() })} />
             <button className="btn" disabled={!url.trim()} onClick={() => setAdding({ url: url.trim() })}><Link2 size={14} />Add link</button>
           </div>
-          {desktop?.pickVideo && <button className="btn ghost" onClick={openFile}><FolderOpen size={15} />Open a video file from this Mac…</button>}
+          {desktop?.pickVideo && (
+            <div className="row wrap" style={{ gap: 8 }}>
+              <button className="btn" onClick={openFile}><FileAudio size={15} />Transcribe a file from this Mac</button>
+              <button className="btn ghost" onClick={() => setCleaning(true)}><AudioLines size={15} />Clean up a recording</button>
+            </div>
+          )}
+          {desktop?.pickVideo && <span className="hint">Audio or video: a class, a podcast, a recording from your phone.</span>}
           {error && <div className="banner">{error}</div>}
         </div>
       </section>
@@ -91,6 +99,7 @@ export default function Library({ openPicker = false }) {
         ))}
       </div>
       {picker && <ChannelPicker onClose={() => setPicker(false)} onAdd={(v) => { setPicker(false); setAdding({ url: v.url, title: v.title }); }} />}
+      {cleaning && <CleanAudioDialog onClose={() => setCleaning(false)} />}
       {adding && <AddVideo url={adding.url} title={adding.title} onClose={() => setAdding(null)} onAdd={(body) => { setAdding(null); add(body); }} />}
     </div>
   );

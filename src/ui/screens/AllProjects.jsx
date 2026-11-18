@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Clapperboard, Clock, Film, Folder, FolderOpen, FolderPlus, LayoutGrid, MoreHorizontal, PenLine, Pencil,
+  Clapperboard, Clock, Info, Film, Folder, FolderOpen, FolderPlus, LayoutGrid, MoreHorizontal, PenLine, Pencil,
   RotateCcw, Search, Shapes, Star, Trash2, X,
 } from 'lucide-react';
 import { useApp } from '../App.jsx';
@@ -50,6 +50,22 @@ function FolderTile({ f, on, onOpen, onDrop }) {
   );
 }
 
+function FolderTip() {
+  const [open, setOpen] = useState(false);
+  return (
+    <span style={{ position: 'relative', display: 'inline-flex' }}>
+      <button className="seo-info" data-pop-trigger aria-label="About folders" title="About folders" onClick={() => setOpen(!open)}><Info size={12} /></button>
+      <Popover open={open} onClose={() => setOpen(false)} width={280}>
+        <div className="seo-pop">
+          <strong>Folders</strong>
+          <span>Group a series, an event or a season. Drag items onto a folder.</span>
+          <span>A file or project can live in more than one folder at the same time, so connect it wherever it fits.</span>
+        </div>
+      </Popover>
+    </span>
+  );
+}
+
 function ItemCard({ item, folders, inFolder, onOpen, act }) {
   const [menu, setMenu] = useState(false);
   const [sub, setSub] = useState(false);
@@ -83,6 +99,7 @@ function ItemCard({ item, folders, inFolder, onOpen, act }) {
                 <>
                   <button className="pop-item" onClick={() => { setMenu(false); onOpen(); }}><span className="row" style={{ gap: 8 }}><FolderOpen size={14} />Open</span></button>
                   <button className="pop-item" onClick={() => setSub(true)}><span className="row" style={{ gap: 8 }}><Folder size={14} />Add to folder…</span></button>
+                  <button className="pop-item" onClick={() => { setMenu(false); act('reveal', item); }}><span className="row" style={{ gap: 8 }}><Search size={14} />Show in Finder</span></button>
                   {inFolder && <button className="pop-item" onClick={() => { setMenu(false); act('remove', item, inFolder); }}><span className="row" style={{ gap: 8 }}><X size={14} />Remove from this folder</span></button>}
                   {(item.type === 'design' || item.type === 'writing') && <button className="pop-item danger-item" onClick={() => { setMenu(false); act('trash', item); }}><span className="row" style={{ gap: 8 }}><Trash2 size={14} />Move to trash</span></button>}
                 </>
@@ -115,6 +132,7 @@ export default function AllProjects() {
   };
   const act = async (what, item, folderId) => {
     try {
+      if (what === 'reveal') { await api.post('/api/finder/reveal', { key: item.key }); return; }
       if (what === 'star') await api.post('/api/finder/star', { key: item.key, on: !item.starred });
       if (what === 'add') { await api.post(`/api/finder/folders/${folderId}/items`, { key: item.key }); toast({ text: `Added to ${data.folders.find((f) => f.id === folderId)?.name}.` }); }
       if (what === 'remove') await api.post(`/api/finder/folders/${folderId}/remove`, { key: item.key });
@@ -160,7 +178,7 @@ export default function AllProjects() {
         <NavItem v="all" icon={LayoutGrid} label="All projects" />
         <NavItem v="recents" icon={Clock} label="Recents" />
         <NavItem v="starred" icon={Star} label="Starred" />
-        <div className="row between" style={{ padding: '14px 10px 4px' }}><span className="eyebrow">Folders</span>
+        <div className="row between" style={{ padding: '14px 10px 4px' }}><span className="row" style={{ gap: 4 }}><span className="eyebrow">Folders</span><FolderTip /></span>
           <button className="rt-btn" aria-label="New folder" title="New folder" onClick={() => setNaming({ name: '' })}><FolderPlus size={15} /></button></div>
         {(data?.folders || []).map((f) => (
           <button key={f.id} className={view.name === 'folder' && view.id === f.id ? 'on' : ''} onClick={() => setView({ name: 'folder', id: f.id })}
@@ -168,7 +186,6 @@ export default function AllProjects() {
             <Folder size={16} /><span className="grow truncate">{f.name}</span>{f.starred && <Star size={12} className="star-on" />}
           </button>
         ))}
-        {data && !data.folders.length && <span className="muted small" style={{ padding: '2px 10px' }}>Group a series, an event or a season. Drag items onto a folder.</span>}
         <div className="grow" />
         <NavItem v="trash" icon={Trash2} label="Trash" count={data?.trash.length} />
       </aside>

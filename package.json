@@ -79,7 +79,8 @@
         "from": "assets",
         "to": "assets",
         "filter": [
-          "fonts/**"
+          "fonts/**",
+          "build/icon.png"
         ]
       }
     ],

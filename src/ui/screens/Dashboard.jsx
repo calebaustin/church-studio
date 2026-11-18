@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus, Wand2, Download, CalendarClock, Palette, ArrowRight, Zap, Link2, CheckCircle2, Clock, Hand, Clapperboard, Target, MonitorPlay, Check, Radio } from 'lucide-react';
+import { Plus, Wand2, Download, CalendarClock, CalendarDays, Palette, ArrowRight, Zap, Link2, CheckCircle2, Clock, Hand, Clapperboard, Target, MonitorPlay, Check, Radio, PenLine, Shapes, LayoutGrid } from 'lucide-react';
+import { isOn } from '../tools.js';
+import { EventCard, useChurchEvents } from '../components/ChurchEvents.jsx';
 import { useApp } from '../App.jsx';
 import { api, fmt, media } from '../api.js';
 import AddVideo from '../components/AddVideo.jsx';
@@ -49,6 +51,9 @@ export default function Dashboard() {
   const [period, setPeriod] = useState('weekly');
   const [link, setLink] = useState('');
   const [adding, setAdding] = useState(null);
+  const cal = useChurchEvents();
+  const [ev, setEv] = useState(null);
+  const on = (id) => isOn(config, id);
 
   const load = useCallback(() => api.get('/api/stats').then(setStats).catch(() => {}), []);
   useEffect(() => { load(); const id = setInterval(load, 20000); return () => clearInterval(id); }, [load]);
@@ -87,13 +92,16 @@ export default function Dashboard() {
     for (const p of soon) {
       items.push({ key: `s${p.id}`, icon: CalendarClock, tone: 'ok', title: p.title || 'Scheduled post', sub: new Date(p.scheduledAt).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }), go: () => go({ name: 'social' }) });
     }
+    for (const e of cal.events.filter((x) => new Date(x.start) >= new Date(new Date().toDateString()) && new Date(x.start) - Date.now() < 7 * DAY).slice(0, 2)) {
+      items.push({ key: e.id, icon: CalendarDays, tone: 'warn', title: e.title, sub: `${new Date(e.start).toLocaleDateString([], { weekday: 'short' })} ${e.allDay ? '' : new Date(e.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · Make a graphic or post`, go: () => setEv(e) });
+    }
     const waiting = stats.projects.find((p) => p.status === 'ready');
     if (waiting) items.push({ key: `t${waiting.id}`, icon: Wand2, tone: 'accent', title: 'Ready to transcribe', sub: waiting.title, go: () => go({ name: 'project', id: waiting.id }) });
     for (const p of stats.projects.filter((x) => x.proposed > 0).slice(0, 2)) {
       items.push({ key: `r${p.id}`, icon: Clapperboard, tone: 'accent', title: `${p.proposed} suggested clip${p.proposed === 1 ? '' : 's'} to review`, sub: p.title, go: () => go({ name: 'project', id: p.id }) });
     }
-    return items.slice(0, 5);
-  }, [stats, jobs]);
+    return items.filter((it) => on('library') || !['t', 'r'].includes(String(it.key)[0]) || it.icon === CalendarDays).slice(0, 5);
+  }, [stats, jobs, cal.events, config.toolsOff]);
 
   const add = async (body) => {
     setAdding(null);
@@ -101,13 +109,17 @@ export default function Dashboard() {
     try { const { job } = await api.post('/api/projects', body); trackJob(job); toast({ text: 'Downloading. It’ll show up in Sermons.' }); } catch (e) { toast({ kind: 'error', text: e.message }); }
   };
 
+  // Quick actions for the tools this church uses.
   const actions = [
-    ['New sermon', Plus, () => go({ name: 'library', pick: true })],
-    ['Find clips', Wand2, latest ? () => go({ name: 'project', id: latest.id }) : null],
-    ['Export', Download, latest ? () => go({ name: 'project', id: latest.id, step: 'edit' }) : null],
-    ['Schedule', CalendarClock, () => go({ name: 'social' })],
-    ['Themes', Palette, () => go({ name: 'settings', section: 'video-themes' })],
-  ];
+    ['New sermon', Plus, () => go({ name: 'library', pick: true }), 'library'],
+    ['Find clips', Wand2, latest ? () => go({ name: 'project', id: latest.id }) : null, 'library'],
+    ['Write', PenLine, () => go({ name: 'writing' }), 'writing'],
+    ['Design', Shapes, () => go({ name: 'graphics' }), 'graphics'],
+    ['Schedule', CalendarClock, () => go({ name: 'social' }), 'social'],
+    ['Export', Download, latest ? () => go({ name: 'project', id: latest.id, step: 'edit' }) : null, 'library'],
+    ['Themes', Palette, () => go({ name: 'settings', section: 'video-themes' }), 'library'],
+    ['Find a file', LayoutGrid, () => go({ name: 'projects' }), 'projects'],
+  ].filter((a) => on(a[3])).slice(0, 5);
 
   const maxBar = Math.max(1, ...(summary?.counts || [1]));
   const maxMin = Math.max(1, ...(summary?.mins || [1]));
@@ -117,6 +129,7 @@ export default function Dashboard() {
       <section className="glass strong dash-top">
         <div className="stack" style={{ gap: 18 }}>
           <h1 className="dash-hello">{greeting()}<br />Let's make Sunday count.</h1>
+          {on('library') && (
           <div className="goal-card">
             <div className="row between">
               <div className="stack" style={{ gap: 2 }}>
@@ -130,6 +143,7 @@ export default function Dashboard() {
             </div>
             <div className="meter" style={{ height: 10, marginTop: 10 }}><i style={{ width: `${Math.min(100, (madeThisWeek / goal) * 100)}%`, background: 'var(--accent-2)' }} /></div>
           </div>
+          )}
           <div className="quick">
             {actions.map(([label, Icon, fn]) => (
               <button key={label} className="quick-btn" disabled={!fn} onClick={fn || undefined}>
@@ -147,7 +161,7 @@ export default function Dashboard() {
           <div className="stack" style={{ gap: 8, flex: 1, alignContent: 'start' }}>
             {!stats && [0, 1, 2].map((i) => <div key={i} className="skeleton" style={{ height: 54 }} />)}
             {stats && !upNext.length && (
-              <div className="feed-item"><CheckCircle2 size={18} style={{ color: 'var(--ok)' }} /><div className="stack" style={{ gap: 0 }}><strong>All caught up</strong><span className="muted small">Paste a link below to start the next one.</span></div></div>
+              <div className="feed-item"><CheckCircle2 size={18} style={{ color: 'var(--ok)' }} /><div className="stack" style={{ gap: 0 }}><strong>All caught up</strong><span className="muted small">{on('library') ? 'Paste a link below to start the next one.' : 'Nothing waiting on you right now.'}</span></div></div>
             )}
             {upNext.map((it) => (
               <button key={it.key} className="feed-item" onClick={it.go || undefined} disabled={!it.go}>
@@ -161,17 +175,19 @@ export default function Dashboard() {
               </button>
             ))}
           </div>
+          {on('library') && (
           <form className="dash-input" onSubmit={(e) => { e.preventDefault(); if (link.trim()) setAdding({ url: link.trim() }); }}>
             <Link2 size={16} className="muted" />
             <input placeholder="Paste a YouTube link" value={link} onChange={(e) => setLink(e.target.value)} aria-label="YouTube link" />
             <button className="btn primary sm" disabled={!link.trim()}>Add</button>
           </form>
+          )}
         </div>
       </section>
 
-      <ChannelFeed onAdd={(v) => setAdding({ url: v.url, title: v.title })} projects={stats?.projects || []} />
+      {on('library') && <ChannelFeed onAdd={(v) => setAdding({ url: v.url, title: v.title })} projects={stats?.projects || []} />}
 
-      <div className="row between">
+      {(on('library') || on('social')) && <><div className="row between">
         <h2>Summary</h2>
         <div className="seg">
           {[['daily', 'Today'], ['weekly', 'This week'], ['monthly', '30 days']].map(([k, l]) => <button key={k} className={period === k ? 'on' : ''} onClick={() => setPeriod(k)}>{l}</button>)}
@@ -179,15 +195,15 @@ export default function Dashboard() {
       </div>
 
       <div className="dash-cards">
-        <div className="glass dash-card">
+        {on('library') && <div className="glass dash-card">
           <span className="muted small">Clips made</span>
           <div style={{ display: 'grid', placeItems: 'center' }}>
             <Ring value={summary?.exports.length || 0} max={summary?.periodGoal || 1} />
             <strong className="num" style={{ fontSize: 26, marginTop: -26, color: 'var(--ink)' }}>{summary?.exports.length ?? '–'}</strong>
             <span className="muted small num">Goal {summary?.periodGoal ?? '–'}</span>
           </div>
-        </div>
-        <div className="glass dash-card">
+        </div>}
+        {on('social') && <div className="glass dash-card">
           <span className="muted small">Sharing</span>
           <div className="stack" style={{ gap: 12, marginTop: 6 }}>
             {[['Posted', summary?.posted.length, 'var(--accent-2)'], ['Scheduled', summary?.scheduled.length, 'var(--accent)'], ['Clips kept', stats?.kept, 'var(--muted)']].map(([l, v, c]) => (
@@ -198,8 +214,8 @@ export default function Dashboard() {
             ))}
             {stats && stats.accounts === 0 && <button className="btn sm" onClick={() => go({ name: 'social' })}>Connect an account</button>}
           </div>
-        </div>
-        <div className="glass dash-card wide">
+        </div>}
+        {on('library') && <><div className="glass dash-card wide">
           <div className="row between"><span className="muted small">Exports</span><strong className="num" style={{ color: 'var(--ink)' }}>{summary?.exports.length ?? '–'}</strong></div>
           <div className="bars" aria-hidden="true">
             {summary?.counts.map((n, i) => (
@@ -217,10 +233,10 @@ export default function Dashboard() {
               points={(summary?.mins || [0, 0]).map((m, i, a) => `${(i / Math.max(1, a.length - 1)) * 116 + 2},${46 - (m / maxMin) * 40}`).join(' ')} />
           </svg>
           <strong className="num" style={{ fontSize: 26 }}>{summary ? (summary.minutes < 10 ? summary.minutes.toFixed(1) : Math.round(summary.minutes)) : '–'} min</strong>
-        </div>
-      </div>
+        </div></>}
+      </div></>}
 
-      {stats?.projects.length > 0 && (
+      {on('library') && stats?.projects.length > 0 && (
         <>
           <div className="row between"><h2>Recent sermons</h2><button className="btn ghost sm" onClick={() => go({ name: 'library' })}>See all<ArrowRight size={14} /></button></div>
           <div className="projects">
@@ -241,6 +257,7 @@ export default function Dashboard() {
         </>
       )}
       {adding && <AddVideo url={adding.url} onClose={() => setAdding(null)} onAdd={add} />}
+      {ev && <EventCard event={ev} onClose={() => setEv(null)} onPlanPost={on('social') ? () => go({ name: 'social' }) : null} />}
     </div>
   );
 }

@@ -93,3 +93,35 @@ test('AI usage problems fall back to working locally', async () => {
   ai.resetAiStatus();
   await assert.rejects(() => ai.withFallback(cfg, async () => { throw new Error('bad JSON'); }, async () => 'x'));
 });
+
+test('audio cleanup presets build filter chains', async () => {
+  const { AUDIO_PRESETS, audioFilter } = await import('../src/daemon/audio.js');
+  assert.equal(audioFilter(null), null);
+  assert.equal(audioFilter({ preset: 'none' }), null);
+  for (const p of AUDIO_PRESETS) {
+    const light = audioFilter({ preset: p.id, amount: 0 });
+    const strong = audioFilter({ preset: p.id, amount: 1 });
+    assert.match(light, /loudnorm/);
+    assert.notEqual(light, strong);
+  }
+});
+
+test('calendar links parse and refresh on Monday mornings', async () => {
+  const { parseIcs, lastMondayMorning } = await import('../src/daemon/calendar.js');
+  const evs = parseIcs('BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:a1\r\nDTSTART;VALUE=DATE:20261122\r\nSUMMARY:Family Night\\, all ages\r\nLOCATION:Fellowship\r\n Hall\r\nEND:VEVENT\r\nEND:VCALENDAR');
+  assert.equal(evs.length, 1);
+  assert.equal(evs[0].title, 'Family Night, all ages');
+  assert.equal(evs[0].location, 'FellowshipHall');
+  assert.equal(evs[0].allDay, true);
+  const m = lastMondayMorning(new Date(2026, 10, 18, 9));
+  assert.equal(m.getDay(), 1);
+  assert.equal(m.getHours(), 6);
+  assert.equal(lastMondayMorning(new Date(2026, 10, 16, 5)).getDate(), 9);
+});
+
+test('transcript paragraphs break at pauses', async () => {
+  const { paragraphs } = await import('../src/daemon/transcripts.js');
+  const out = paragraphs([{ start: 0, end: 2, text: 'One.' }, { start: 2.1, end: 4, text: 'Two.' }, { start: 7, end: 9, text: 'Three.' }]);
+  assert.equal(out.length, 2);
+  assert.equal(out[0].text, 'One. Two.');
+});

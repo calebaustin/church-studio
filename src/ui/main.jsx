@@ -1,5 +1,6 @@
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
+import { PresentOut } from './design/Presenter.jsx';
 import './styles.css';
 
 // Sliders show a filled track up to the thumb. Kept in sync for every range input in the app.
@@ -11,4 +12,5 @@ const syncAll = () => document.querySelectorAll('input[type="range"]').forEach(s
 document.addEventListener('input', (e) => { if (e.target?.type === 'range') syncRange(e.target); }, true);
 new MutationObserver(syncAll).observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ['value', 'min', 'max'] });
 
-createRoot(document.getElementById('root')).render(<App />);
+// The audience screen for a slide show is its own small page.
+createRoot(document.getElementById('root')).render(location.hash === '#present-out' ? <PresentOut /> : <App />);

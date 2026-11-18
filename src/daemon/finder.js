@@ -6,7 +6,7 @@ import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promise
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { DATA_DIR } from './tools.js';
-import { getProject, listProjects } from './projects.js';
+import { getProject, listProjects, projectDir } from './projects.js';
 import { deleteDesign, getDesign, listDesigns, saveDesign } from './designs.js';
 
 const STORE = path.join(DATA_DIR, 'finder.json');
@@ -141,6 +141,20 @@ export async function deleteForever(key) {
 }
 export async function emptyTrash() {
   for (const t of (await load()).trash) await deleteForever(t.key);
+}
+/** Where an item lives on this Mac: the exported file when there is one, else its project or data file. */
+export async function locate(key) {
+  const [type, ...rest] = key.split(':'); const id = rest.join(':');
+  if (type === 'sermon') { const p = await getProject(id); if (!p) throw new Error('Not found'); return projectDir(id); }
+  if (type === 'clip') {
+    const [pid, cid] = id.split('/');
+    const c = (await getProject(pid))?.clips.find((x) => x.id === cid);
+    if (c?.export?.file && existsSync(c.export.file)) return c.export.file;
+    return projectDir(pid);
+  }
+  if (type === 'writing') return path.join(WRITING, `${id}.json`);
+  if (type === 'design') return path.join(DATA_DIR, 'designs', `${id}.json`);
+  throw new Error('Not found');
 }
 export async function isTrashed(key) { return (await load()).trash.some((t) => t.key === key); }
 export { saveDesign };

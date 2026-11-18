@@ -1,4 +1,15 @@
 import { useEffect, useRef } from 'react';
+import { X } from 'lucide-react';
+
+/** Title row with a close button, and an optional line under it. */
+export function ModalHead({ title, sub, onClose }) {
+  return (
+    <div className="stack" style={{ gap: 2 }}>
+      <div className="row between"><h2>{title}</h2><button className="setup-close" style={{ position: 'static' }} aria-label="Close" onClick={onClose}><X size={16} /></button></div>
+      {sub && <p className="muted small" style={{ margin: 0 }}>{sub}</p>}
+    </div>
+  );
+}
 
 /** Modal with scrim: closes on Escape and scrim click, keeps focus inside, restores it after. */
 export default function Modal({ onClose, children, width, label }) {

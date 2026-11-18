@@ -5,11 +5,13 @@ import { api, desktop, openLink, fmt } from '../api.js';
 import VideoThemeEditor from '../components/VideoThemeEditor.jsx';
 import ColorField from '../components/ColorField.jsx';
 import ChurchInfoFields from '../components/ChurchInfoFields.jsx';
+import { AppLogo, Connections, Credits, Feedback, YourTools } from './SettingsMore.jsx';
 import { mdToHtml } from '../markdown.js';
 import { Download, RefreshCw, ShieldCheck, Sparkles } from 'lucide-react';
 
 const SECTIONS = [
-  ['tools', 'Tools'],
+  ['menu', 'Your tools'],
+  ['connections', 'Connections'],
   ['youtube', 'YouTube channel'],
   ['ai', 'AI helper'],
   ['clips', 'Transcription & clips'],
@@ -17,11 +19,14 @@ const SECTIONS = [
   ['app-theme', 'App theme'],
   ['video-themes', 'Caption themes'],
   ['church', 'Church info'],
+  ['tools', 'Helper programs'],
   ['updates', 'Updates'],
+  ['feedback', 'Send feedback'],
+  ['credits', 'Thank you'],
 ];
 
 export default function Settings({ section: initial }) {
-  const [section, setSection] = useState(initial === 'start' ? 'tools' : initial || 'tools');
+  const [section, setSection] = useState(initial === 'start' ? 'menu' : initial || 'menu');
   return (
     <div className="page settings">
       <nav className="glass">
@@ -30,6 +35,10 @@ export default function Settings({ section: initial }) {
         ))}
       </nav>
       <div className="stack" style={{ gap: 18 }}>
+        {section === 'menu' && <YourTools />}
+        {section === 'connections' && <Connections />}
+        {section === 'feedback' && <Feedback />}
+        {section === 'credits' && <Credits />}
         {section === 'tools' && <Tools />}
         {section === 'youtube' && <YouTube />}
         {section === 'ai' && <AIKeys />}
@@ -38,6 +47,7 @@ export default function Settings({ section: initial }) {
         {section === 'app-theme' && <AppTheme />}
         {section === 'video-themes' && <VideoThemes />}
         {section === 'church' && <section className="glass strong panel stack"><h2>Church info</h2><p className="muted">Printed guides and notes show this in the footer, next to your logo.</p><ChurchInfoFields /></section>}
+        {section === 'church' && <AppLogo />}
         {section === 'updates' && <Updates />}
       </div>
     </div>

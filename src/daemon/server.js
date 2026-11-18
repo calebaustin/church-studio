@@ -24,6 +24,9 @@ import { WORKSPACE } from './tools.js';
 import { toSentences, backgroundOf, keywords as topKeywords } from './text.js';
 import { listThemes, saveTheme, deleteTheme, refreshSystemFonts, bundledFontDir } from './themes.js';
 import { makeThumbs } from './thumbs.js';
+import * as audio from './audio.js';
+import * as transcripts from './transcripts.js';
+import * as churchCal from './calendar.js';
 import { aiStatus, resetAiStatus, testProvider } from './ai.js';
 import { binTranscript } from './sermon.js';
 import * as social from './social/hub.js';
@@ -171,6 +174,23 @@ route('POST', '/api/projects/:id/download', projectJob('download', 'Download', (
   return downloadToProject(p.sourceUrl, ctx, p);
 }));
 route('POST', '/api/projects/:id/thumbs', projectJob('thumbs', 'Scene strip', (id, _b, ctx) => makeThumbs(id, ctx)));
+// Audio cleanup: presets, a before/after sample, and a cleaned copy of any file.
+// Church calendar (Planning Center or a calendar link), refreshed weekly.
+route('GET', '/api/calendar/events', () => churchCal.cachedEvents());
+route('POST', '/api/calendar/refresh', async () => { try { return await churchCal.refreshEvents(); } catch (e) { throw new HttpError(400, e.message); } });
+route('GET', '/api/audio/presets', () => ({ presets: audio.AUDIO_PRESETS }));
+route('POST', '/api/audio/preview', async (_p, b) => {
+  const source = b.projectId ? fileOf(b.projectId, (await requireProject(b.projectId)).sourceFile) : String(b.file || '');
+  try { return await audio.previewCleanup({ source, at: b.at, preset: b.preset, amount: b.amount }); } catch (e) { throw new HttpError(400, e.message); }
+});
+route('POST', '/api/audio/clean', (_p, b) => ({ job: jobs.view(jobs.enqueue({ kind: 'clean-audio', label: `Clean up ${path.basename(String(b.file || ''))}` }, (ctx) => audio.cleanFile(String(b.file || ''), { preset: b.preset, amount: b.amount }, ctx))) }));
+route('PUT', '/api/projects/:id/audio', async ({ id }, b) => {
+  await requireProject(id);
+  const v = b?.preset && b.preset !== 'none' ? { preset: String(b.preset), amount: Math.max(0, Math.min(1, Number(b.amount ?? 0.5))) } : null;
+  return { project: await updateProject(id, (p) => { if (b.clipId) { const c = p.clips.find((x) => x.id === b.clipId); if (c) c.audioCleanup = v; } else p.audioCleanup = v; }) };
+});
+route('GET', '/api/projects/:id/transcript/text', async ({ id }, _b, url) => { await requireProject(id); try { return { text: await transcripts.transcriptText(id, url.searchParams.get('format') || 'txt') }; } catch (e) { throw new HttpError(400, e.message); } });
+route('POST', '/api/projects/:id/transcript/save', async ({ id }, b) => { await requireProject(id); try { return await transcripts.saveTranscript(id, b.format); } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/projects/:id/transcribe', projectJob('transcribe', 'Transcribe', (id, b, ctx) => transcribeProject(id, b, ctx)));
 route('POST', '/api/projects/:id/propose', projectJob('propose', 'Find clips', (id, b, ctx) => proposeClips(id, b, ctx)));
 
@@ -358,6 +378,7 @@ route('PATCH', '/api/finder/folders/:fid', async ({ fid }, b) => ({ folder: awai
 route('DELETE', '/api/finder/folders/:fid', async ({ fid }) => { await finder.deleteFolder(fid); return { ok: true }; });
 route('POST', '/api/finder/folders/:fid/items', async ({ fid }, b) => { await finder.addToFolder(fid, String(b.key)); return { ok: true }; });
 route('POST', '/api/finder/folders/:fid/remove', async ({ fid }, b) => { await finder.removeFromFolder(fid, String(b.key)); return { ok: true }; });
+route('POST', '/api/finder/reveal', async (_p, b) => { try { await revealInFinder(await finder.locate(String(b.key))); return { ok: true }; } catch (e) { throw new HttpError(404, e.message); } });
 route('POST', '/api/finder/star', async (_p, b) => { await finder.star(String(b.key), Boolean(b.on)); return { ok: true }; });
 route('POST', '/api/finder/trash', async (_p, b) => { try { await finder.trashItem(String(b.key)); return { ok: true }; } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/finder/restore', async (_p, b) => { await finder.restoreItem(String(b.key)); return { ok: true }; });
@@ -368,6 +389,7 @@ route('POST', '/api/finder/empty-trash', async () => { await finder.emptyTrash()
 route('GET', '/api/version', async () => ({ version: updates.VERSION, repo: updates.UPDATE_REPO, last: updates.lastUpdateCheck(), upgrade }));
 route('POST', '/api/updates/check', async () => { try { return await updates.checkForUpdate(); } catch (e) { throw new HttpError(502, `Couldn't reach the update server. ${e.message}`); } });
 route('POST', '/api/updates/download', () => ({ job: jobs.view(jobs.enqueue({ kind: 'update', label: 'Download update', key: 'update' }, (ctx) => updates.downloadUpdate(ctx))) }));
+route('POST', '/api/feedback', async (_p, b) => { try { return await updates.sendFeedback(b || {}); } catch (e) { throw new HttpError(400, e.message); } });
 route('GET', '/api/changelog', async () => ({ text: await updates.changelog(), version: updates.VERSION }));
 
 // ---------------------------------------------------------------- sermon stills (header images)
@@ -511,6 +533,11 @@ const server = http.createServer(async (req, res) => {
       if (!f) throw new HttpError(404, 'Not in the library');
       return streamFile(req, res, f);
     }
+    if (url.pathname.startsWith('/audio-preview/')) { // before/after samples for audio cleanup
+      const f = safeJoin(audio.previewDir(), decodeURIComponent(url.pathname.slice(15)));
+      if (!f || !existsSync(f)) throw new HttpError(404, 'Preview expired');
+      return streamFile(req, res, f);
+    }
     if (url.pathname.startsWith('/fonts/')) { // bundled caption fonts for the preview's @font-face
       const f = safeJoin(bundledFontDir, decodeURIComponent(url.pathname.slice(7)));
       if (!f || !existsSync(f)) throw new HttpError(404, 'No such font');
@@ -559,6 +586,7 @@ try { upgrade = await updates.prepareUpgrade(); if (upgrade.upgraded) console.lo
 
 server.listen(PORT, HOST, () => {
   social.startScheduler().catch((e) => console.error('[social] scheduler failed to start', e));
+  churchCal.refreshIfDue(); setInterval(() => churchCal.refreshIfDue(), 3600_000).unref();
   console.log(`Church Studio engine on http://${HOST}:${PORT}`);
   process.send?.({ ready: true, port: PORT });
 });

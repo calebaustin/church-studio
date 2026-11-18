@@ -7,6 +7,6 @@ export default defineConfig({
   root: 'src/ui',
   base: './',
   plugins: [react()],
-  server: { host: '127.0.0.1', port: 5173, strictPort: true, proxy: { '/api': daemon, '/media': daemon, '/exports': daemon, '/fonts': daemon, '/oauth': daemon } },
+  server: { host: '127.0.0.1', port: 5173, strictPort: true, proxy: { '/api': daemon, '/media': daemon, '/exports': daemon, '/fonts': daemon, '/oauth': daemon, '/audio-preview': daemon, '/library': daemon } },
   build: { outDir: '../../dist/ui', emptyOutDir: true },
 });

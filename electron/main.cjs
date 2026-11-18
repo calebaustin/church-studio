@@ -1,5 +1,5 @@
 // Electron shell: own window, starts the local daemon, loads the UI from it.
-const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, nativeImage, Notification, screen, shell } = require('electron');
 const { fork } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -8,6 +8,7 @@ const ROOT = path.resolve(__dirname, '..');
 const PORT = Number(process.env.SC_PORT || 4317);
 let daemon = null;
 let mainWindow = null;
+let presentWindow = null;
 
 function startDaemon() {
   if (process.env.SC_EXTERNAL_DAEMON) return Promise.resolve();
@@ -49,11 +50,16 @@ async function createWindow() {
     return { action: 'deny' };
   });
   mainWindow = win;
+  win.on('closed', () => { if (presentWindow && !presentWindow.isDestroyed()) presentWindow.destroy(); });
   await win.loadURL(process.env.SC_UI_URL || `http://127.0.0.1:${PORT}/`);
 }
 
 ipcMain.handle('pick-video', async () => {
   const r = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'Video', extensions: ['mp4', 'mov', 'm4v', 'mkv', 'webm'] }] });
+  return r.canceled ? null : r.filePaths[0];
+});
+ipcMain.handle('pick-media', async () => {
+  const r = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'Audio or video', extensions: ['mp3', 'm4a', 'wav', 'aac', 'flac', 'ogg', 'aiff', 'aif', 'caf', 'opus', 'mp4', 'mov', 'm4v', 'mkv', 'webm'] }] });
   return r.canceled ? null : r.filePaths[0];
 });
 ipcMain.handle('pick-files', async () => {
@@ -79,6 +85,45 @@ ipcMain.handle('print-doc', async (_e, { html, landscape = false, action = 'pdf'
   } finally {
     setTimeout(() => { if (!win.isDestroyed()) win.destroy(); }, action === 'print' ? 60_000 : 0);
   }
+});
+// Presenting: the audience screen goes full screen on another display, or opens as a window
+// that can be dragged to a projector when only one display is connected.
+const uiBase = () => process.env.SC_UI_URL || `http://127.0.0.1:${PORT}/`;
+ipcMain.handle('displays', () => {
+  const primary = screen.getPrimaryDisplay().id;
+  return screen.getAllDisplays().map((d, i) => ({ id: d.id, primary: d.id === primary, label: d.label || (d.id === primary ? 'This screen' : `Screen ${i + 1}`), width: d.size.width, height: d.size.height }));
+});
+ipcMain.handle('present-open', async (_e, { displayId } = {}) => {
+  try {
+    if (presentWindow && !presentWindow.isDestroyed()) presentWindow.destroy();
+    const d = displayId != null ? screen.getAllDisplays().find((x) => x.id === displayId) : null;
+    const b = d ? d.bounds : { width: 960, height: 540 };
+    presentWindow = new BrowserWindow({
+      ...b, show: false, backgroundColor: '#000000', title: 'Audience screen', frame: !d, autoHideMenuBar: true,
+      webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true },
+    });
+    presentWindow.on('closed', () => { presentWindow = null; });
+    await presentWindow.loadURL(`${uiBase()}#present-out`);
+    presentWindow.show();
+    if (d) presentWindow.setSimpleFullScreen(true);
+    mainWindow?.focus();
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('present-close', () => { if (presentWindow && !presentWindow.isDestroyed()) presentWindow.destroy(); presentWindow = null; });
+// The Dock shows the church's logo while the app runs (drawn by the UI). null puts the app icon back.
+ipcMain.handle('set-dock-icon', (_e, dataUrl) => {
+  if (process.platform !== 'darwin') return;
+  if (dataUrl) app.dock.setIcon(nativeImage.createFromDataURL(dataUrl));
+  else app.dock.setIcon(nativeImage.createFromPath(app.isPackaged ? path.join(process.resourcesPath, 'assets', 'build', 'icon.png') : path.join(ROOT, 'assets', 'build', 'icon.png')));
+});
+// Mac notifications for finished work and posts that are due. Clicking one brings the app forward.
+ipcMain.handle('notify', (_e, { title, body } = {}) => {
+  if (!Notification.isSupported()) return false;
+  const n = new Notification({ title: String(title || 'Church Studio').slice(0, 80), body: String(body || '').slice(0, 200), silent: false });
+  n.on('click', () => { if (mainWindow) { if (mainWindow.isMinimized()) mainWindow.restore(); mainWindow.show(); mainWindow.focus(); } });
+  n.show();
+  return true;
 });
 ipcMain.handle('open-external', (_e, url) => { if (/^https:\/\//.test(url)) shell.openExternal(url); });
 
@@ -114,4 +159,5 @@ app.whenReady().then(async () => {
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 app.on('window-all-closed', () => app.quit());
+app.on('before-quit', () => { if (presentWindow && !presentWindow.isDestroyed()) presentWindow.destroy(); });
 app.on('quit', () => daemon?.kill());
