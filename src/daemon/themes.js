@@ -72,6 +72,9 @@ export async function refreshSystemFonts() {
 const CAPTION_DEFAULTS = {
   colorOpacity: 1, activeOpacity: 1, future: null, futureOpacity: 1, outlineOpacity: 1, boxOpacity: 0.92,
   align: 'center', maxWidth: 0.86, lineHeight: 1.12,
+  // On-screen hook (title banner at the start of a clip)
+  hookShape: 'pill', hookBg: '#FFFFFF', hookBgOpacity: 0.94, hookColor: '#11141C', hookSize: 58, hookY: 0.13,
+  hookDuration: 3.5, hookUppercase: false,
 };
 
 const VIDEO_BUILTINS = [

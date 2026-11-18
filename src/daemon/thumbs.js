@@ -5,11 +5,9 @@ import path from 'node:path';
 import { run, tool } from './tools.js';
 import { file, getProject, projectDir, updateProject } from './projects.js';
 
+/** One frame a second for sermon-length videos, every 3 s for long services. */
 export function thumbInterval(duration) {
-  if (duration > 2 * 3600) return 15;
-  if (duration > 3600) return 10;
-  if (duration > 1200) return 5;
-  return 2;
+  return duration > 3000 ? 3 : 1;
 }
 
 export async function makeThumbs(id, ctx) {

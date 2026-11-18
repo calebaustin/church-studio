@@ -205,5 +205,16 @@ const instagram = {
   },
 };
 
+/** Recent comments across a channel (read-only scope is enough). */
+export async function youtubeComments(creds, channelId) {
+  const { token, creds: next, refreshed } = await googleToken(creds);
+  const r = await json(await req(`https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&maxResults=40&order=time&allThreadsRelatedToChannelId=${encodeURIComponent(channelId)}`, { headers: { authorization: `Bearer ${token}` } }), 'YouTube');
+  const items = (r.items || []).map((it) => {
+    const c = it.snippet.topLevelComment.snippet;
+    return { id: it.id, author: c.authorDisplayName, avatar: c.authorProfileImageUrl, text: c.textOriginal, at: c.publishedAt, videoId: it.snippet.videoId, replies: it.snippet.totalReplyCount, url: `https://www.youtube.com/watch?v=${it.snippet.videoId}&lc=${it.id}` };
+  });
+  return { items, credentials: refreshed ? next : undefined };
+}
+
 export const PROVIDERS = { telegram, discord, mastodon, youtube, facebook, instagram };
 export { ProviderError };

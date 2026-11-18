@@ -26,16 +26,30 @@ transcription. The build is unsigned, so the first launch needs right-click > Op
 ## How it works
 
 1. **Add a sermon.** Pick from your channel or paste a link. Before downloading, the app reads YouTube's
-   captions, finds the sermon, and can download only that part.
+   captions and finds the sermon. "Just the sermon" downloads at full speed, then keeps only that part.
 2. **Transcribe** with faster-whisper on this Mac (word timings).
 3. **Confirm the sermon** on a timeline and scene strip.
 4. **Clips** are suggested by offline scoring tuned for preaching. An optional AI helper can rerank them.
-5. **Edit:** live 9:16 preview, word cuts, trims, pause tightening, hook text, caption themes, undo/redo.
-   Framing: smooth glide (start to finish), follow closely, timestamp cues (cut or glide), fixed, or whole frame.
+5. **Edit:** live preview, word cuts, trims, pause trimming (you pick the length), a movable themed hook, the
+   caption theme editor built in, logo and end card, edit templates, undo/redo, and a save prompt when leaving.
+   Framing: a Follow closely to Smooth glide slider, "click the speaker" hints that improve tracking over time,
+   timestamp cues (cut or glide), fixed, whole frame or three stack (blurred or solid background).
 6. **Export:** 9:16, 4:5, 1:1 or 16:9; 720p to 4K; H.264 or HEVC. Saves to Downloads, then asks where you want it.
 7. **Social:** post now, schedule, or draft. See `docs/SOCIAL.md`.
 
-The home screen is a dashboard: weekly goal, quick actions, what's up next, and a summary of clips and posts.
+The home screen is a dashboard: weekly goal, quick actions, what's up next, your channel's latest services,
+and a summary of clips and posts.
+
+More tools:
+- **Writing:** blog post, email summary, small group guide and social captions written from the sermon's own
+  words, with an SEO and readability check. Optional AI polish keeps every fact from the sermon.
+- **Graphics:** quote cards, series art, announcements (with QR codes) and thumbnails in your colors.
+  Saved graphics can go into a clip as a corner logo or an end card.
+- **Brand library:** a normal folder in Documents (Photos, Logos, Graphics, Brand, Writing) that every tool uses.
+- **Workspaces:** separate brands or ministries, each with its own settings, sermons, accounts and library.
+- **My App:** your setup at a glance, plus ideas based on your sermon topics.
+
+Name ideas and icon mockups: `docs/NAMING.md`.
 
 ## Layout
 

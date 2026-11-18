@@ -1,6 +1,6 @@
 import { Square } from 'lucide-react';
 import { useApp } from '../App.jsx';
-import { api } from '../api.js';
+import { api, fmtEta } from '../api.js';
 
 /** Running work, bottom right and always inside the window. Every job can be stopped. */
 export default function JobsTray() {
@@ -21,7 +21,10 @@ export default function JobsTray() {
           {j.status === 'cancelled' ? <span className="muted small">Stopped.</span> : (
             <>
               <div className="progress" role="progressbar" aria-valuenow={j.progress} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${j.status === 'queued' ? 0 : j.progress}%` }} /></div>
-              <span className="muted small truncate">{j.status === 'queued' ? 'Waiting for the current task to finish…' : j.message}</span>
+              <div className="row between small muted" style={{ gap: 8 }}>
+                <span className="truncate">{j.status === 'queued' ? 'Waiting for the current task' : j.message}</span>
+                {j.status === 'running' && <span className="num" style={{ flex: 'none', opacity: 0.8 }}>{fmtEta(j.eta) || `${j.progress}%`}</span>}
+              </div>
             </>
           )}
         </div>

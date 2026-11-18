@@ -7,12 +7,14 @@ import { run, tool, pyCommand } from './tools.js';
 import { file, getProject, getTranscript, updateProject, projectDir } from './projects.js';
 import { loadConfig } from './config.js';
 import { getVideoTheme, fontFile } from './themes.js';
+import { speakerPrior, saveLast, pickEditSettings } from './prefs.js';
+import { libraryFile } from './library.js';
 
 /**
  * Parts of the clip to keep, in seconds from its start. Removes cut words and, when asked,
  * shortens pauses between words to `maxPause` (VGP CL3 "tighten pauses").
  */
-export function keepSegments(words, clip, { maxPause = 0.45, pad = 0.08 } = {}) {
+export function keepSegments(words, clip, { maxPause = clip?.pauseMax ?? 0.45, pad = 0.08 } = {}) {
   const len = clip.end - clip.start;
   const cuts = [];
   const cut = new Set(clip.cutWords || []);
@@ -47,13 +49,14 @@ export function keepSegments(words, clip, { maxPause = 0.45, pad = 0.08 } = {}) 
   return keep;
 }
 
-function fileName(pattern, project, clip, index) {
+function fileName(pattern, project, clip, index, preset) {
   const date = new Date().toISOString().slice(0, 10);
   const name = pattern
     .replaceAll('{date}', date)
     .replaceAll('{title}', clip.title || `Clip ${index + 1}`)
     .replaceAll('{sermon}', project.title)
-    .replaceAll('{n}', String(index + 1).padStart(2, '0'));
+    .replaceAll('{n}', String(index + 1).padStart(2, '0'))
+    .replaceAll('{preset}', preset || 'vertical');
   return name.replace(/[\\/:*?"<>|\n\r]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120) || `clip-${clip.id}`;
 }
 
@@ -95,7 +98,11 @@ export async function buildJob(project, clip, { preview = false, trackOnly = fal
   return {
     source: file(project.id, project.sourceFile),
     start: clip.start, end: clip.end, preview, ...out,
-    crop: clip.crop || { mode: 'auto', motion: 'glide' },
+    crop: clip.crop || { mode: 'auto', smooth: 0 },
+    speakerPrior: (await speakerPrior()).x != null ? { x: (await speakerPrior()).x } : null,
+    hookY: clip.hookY ?? null,
+    overlay: clip.overlay?.rel ? { ...clip.overlay, file: await libraryFile(clip.overlay.rel) } : null,
+    endCard: clip.endCard?.rel ? { ...clip.endCard, file: await libraryFile(clip.endCard.rel) } : null,
     keep: trackOnly ? null : keepSegments(words, clip),
     words: clipWords,
     hook: options.hook === false ? null : clip.hook || null,
@@ -146,7 +153,7 @@ export async function exportClip(projectId, clipId, { preview = false, options =
   await mkdir(target, { recursive: true });
   const pattern = options.fileName?.trim() || config.exportPattern || '{date} - {title}';
   const presetTag = options.preset && options.preset !== 'vertical' ? ` (${options.preset})` : '';
-  const base = preview ? clip.id : `${fileName(pattern, project, clip, index)}${presetTag}`;
+  const base = preview ? clip.id : `${fileName(pattern, project, clip, index, options.preset)}${pattern.includes('{preset}') ? '' : presetTag}`;
   const out = path.join(target, `${base}.mp4`);
   const thumb = path.join(exportsDir, `${clip.id}.jpg`);
   const job = await buildJob(project, clip, { preview, options });
@@ -177,8 +184,29 @@ export async function exportClip(projectId, clipId, { preview = false, options =
       c.status = 'exported';
     }
   });
+  if (!preview) await saveLast(pickEditSettings(clip, options)).catch(() => {});
   ctx.progress(100, preview ? 'Preview ready' : `Exported ${path.basename(out)}`);
   return { file: out, ...result };
+}
+
+/** A few evenly spread frames from a clip, for the "click the speaker" helper. */
+export async function sampleFrames(projectId, clipId, count = 6) {
+  const project = await getProject(projectId);
+  const clip = project?.clips.find((c) => c.id === clipId);
+  if (!clip) throw new Error('Clip not found');
+  const dir = path.join(projectDir(projectId), 'tracks', 'frames');
+  await rm(dir, { recursive: true, force: true });
+  await mkdir(dir, { recursive: true });
+  const len = clip.end - clip.start;
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const t = +((len * (i + 0.5)) / count + (Math.random() - 0.5) * (len / count) * 0.6).toFixed(2);
+    const name = `f${i}-${Date.now().toString(36)}.jpg`;
+    await run(tool('ffmpeg'), ['-y', '-loglevel', 'error', '-ss', String(clip.start + t), '-i', file(projectId, project.sourceFile),
+      '-frames:v', '1', '-vf', 'scale=960:-2', '-q:v', '4', path.join(dir, name)]);
+    out.push({ t, url: `/media/${encodeURIComponent(projectId)}/tracks/frames/${name}` });
+  }
+  return out;
 }
 
 /** Exports go to ~/Downloads unless the user picks a folder. */

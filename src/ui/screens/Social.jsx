@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useApp } from '../App.jsx';
 import { api, fmt, openLink } from '../api.js';
+import { MessageSquare } from 'lucide-react';
+import { checkCaption } from '../captionCheck.js';
 import Modal from '../components/Modal.jsx';
 
 const STATUS = {
@@ -48,6 +50,7 @@ export default function Social({ compose: initialCompose }) {
         <div className="seg">
           <button className={tab === 'posts' ? 'on' : ''} onClick={() => setTab('posts')}>Posts{needsYou ? ` · ${needsYou} need you` : ''}</button>
           <button className={tab === 'calendar' ? 'on' : ''} onClick={() => setTab('calendar')}>Calendar</button>
+          <button className={tab === 'messages' ? 'on' : ''} onClick={() => setTab('messages')}>Messages</button>
           <button className={tab === 'accounts' ? 'on' : ''} onClick={() => setTab('accounts')}>Accounts ({s.accounts.length})</button>
         </div>
         <span className="muted small">Scheduled posts go out while the app is open.</span>
@@ -55,6 +58,7 @@ export default function Social({ compose: initialCompose }) {
       {tab === 'posts' && <Posts s={s} plat={plat} onEdit={(p) => setComposer({ post: p })} onConnect={() => setTab('accounts')} />}
       {tab === 'calendar' && <Calendar s={s} plat={plat} onEdit={(p) => setComposer({ post: p })} onNew={(d) => setComposer({ when: d })} />}
       {tab === 'accounts' && <Accounts s={s} />}
+      {tab === 'messages' && <Messages s={s} />}
       {composer && <Composer s={s} plat={plat} init={composer} onClose={() => { setComposer(null); s.load(); }} onConnect={() => { setComposer(null); setTab('accounts'); }} />}
     </div>
   );
@@ -144,51 +148,79 @@ function PostRow({ post, s, plat, onEdit }) {
   );
 }
 
-// ------------------------------------------------------------------ calendar
+// ------------------------------------------------------------------ calendar (full month)
 function Calendar({ s, plat, onEdit, onNew }) {
   const [offset, setOffset] = useState(0);
-  const start = useMemo(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() - d.getDay() + offset * 7);
-    return d;
-  }, [offset]);
-  const days = Array.from({ length: 7 }, (_, i) => new Date(start.getTime() + i * 86400000));
+  const month = useMemo(() => { const d = new Date(); d.setDate(1); d.setHours(0, 0, 0, 0); d.setMonth(d.getMonth() + offset); return d; }, [offset]);
+  const start = new Date(month); start.setDate(1 - month.getDay());
+  const days = Array.from({ length: 42 }, (_, i) => new Date(start.getTime() + i * 86400000));
   const when = (p) => new Date(p.scheduledAt || p.publishedAt || p.created);
   const today = new Date().toDateString();
+  const todayStart = new Date(new Date().toDateString());
   return (
     <section className="glass strong panel stack">
       <div className="row between">
-        <h3>{start.toLocaleDateString([], { month: 'long', day: 'numeric' })} – {days[6].toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' })}</h3>
+        <h3>{month.toLocaleDateString([], { month: 'long', year: 'numeric' })}</h3>
         <div className="row">
-          <button className="btn sm" onClick={() => setOffset(offset - 1)}>‹</button>
-          <button className="btn sm" onClick={() => setOffset(0)}>This week</button>
-          <button className="btn sm" onClick={() => setOffset(offset + 1)}>›</button>
+          <button className="btn icon sm" aria-label="Previous month" onClick={() => setOffset(offset - 1)}>‹</button>
+          <button className="btn sm" onClick={() => setOffset(0)}>This month</button>
+          <button className="btn icon sm" aria-label="Next month" onClick={() => setOffset(offset + 1)}>›</button>
         </div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8 }}>
+      <div className="month-grid">
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => <div key={d} className="month-head">{d}</div>)}
         {days.map((d) => {
           const list = s.posts.filter((p) => p.status !== 'draft' && when(p).toDateString() === d.toDateString()).sort((a, b) => when(a) - when(b));
-          const isPast = d < new Date(new Date().toDateString());
+          const out = d.getMonth() !== month.getMonth();
+          const past = d < todayStart;
           return (
-            <div key={d.toISOString()} style={{ minHeight: 260, borderRadius: 14, padding: 8, background: d.toDateString() === today ? 'var(--surface-strong)' : 'var(--field)', border: '1px solid var(--line)', display: 'grid', alignContent: 'start', gap: 6 }}>
-              <div className="row between small">
-                <b>{d.toLocaleDateString([], { weekday: 'short' })} {d.getDate()}</b>
-                {!isPast && <button className="btn ghost sm" style={{ height: 22, padding: '0 6px' }} title="Schedule a post this day" onClick={() => { const t = new Date(d); t.setHours(d.getDay() === 0 ? 14 : 12, 0, 0, 0); onNew(t); }}>+</button>}
+            <div key={d.toISOString()} className={`month-cell ${out ? 'out' : ''} ${d.toDateString() === today ? 'today' : ''}`}>
+              <div className="row between">
+                <span className="small num" style={{ fontWeight: 600 }}>{d.getDate()}</span>
+                {!past && <button className="btn ghost sm" style={{ minHeight: 20, padding: '0 6px' }} aria-label={`Schedule a post on ${d.toDateString()}`} onClick={() => { const t = new Date(d); t.setHours(12, 0, 0, 0); onNew(t); }}>+</button>}
               </div>
-              {list.map((p) => (
-                <button key={p.id} onClick={() => ['draft', 'scheduled'].includes(p.status) && onEdit(p)}
-                  style={{ textAlign: 'left', border: 0, borderRadius: 10, padding: '6px 8px', background: 'var(--surface-solid)', color: 'var(--text)', cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,.08)', display: 'grid', gap: 4 }}>
-                  <span className="small muted">{when(p).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
-                  <span className="small" style={{ fontWeight: 600, lineHeight: 1.25 }}>{(p.title || p.caption || 'Post').slice(0, 48)}</span>
-                  <span className="row" style={{ gap: 3 }}>{p.destinations.map((x) => <span key={x.accountId} className="dot" style={{ color: plat(x.platform)?.color }} />)}<span className={STATUS[p.status]?.[0]} style={{ height: 18, fontSize: 10.5, marginLeft: 4 }}>{STATUS[p.status]?.[1]}</span></span>
+              {list.slice(0, 3).map((p) => (
+                <button key={p.id} className="month-post" onClick={() => ['draft', 'scheduled'].includes(p.status) && onEdit(p)} title={p.title || p.caption}>
+                  <span className="row" style={{ gap: 2 }}>{p.destinations.slice(0, 4).map((x) => <span key={x.accountId} className="dot" style={{ color: plat(x.platform)?.color, width: 6, height: 6 }} />)}</span>
+                  <span className="truncate">{when(p).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} {p.title || p.caption}</span>
                 </button>
               ))}
+              {list.length > 3 && <span className="muted small">+{list.length - 3} more</span>}
             </div>
           );
         })}
       </div>
-      {s.posts.some((p) => p.status === 'draft') && <p className="muted small">Drafts aren't on the calendar until you schedule them.</p>}
+      {s.posts.some((p) => p.status === 'draft') && <p className="muted small">Drafts show on the calendar once you schedule them.</p>}
+    </section>
+  );
+}
+
+// ------------------------------------------------------------------ messages (YouTube comments)
+function Messages({ s }) {
+  const [state, setState] = useState({ loading: true });
+  const hasYT = s.accounts.some((a) => a.platform === 'youtube');
+  useEffect(() => {
+    if (!hasYT) { setState({}); return; }
+    api.get('/api/social/messages').then((r) => setState(r)).catch((e) => setState({ error: e.message }));
+  }, [hasYT]);
+  if (!hasYT) return <div className="glass empty"><MessageSquare size={40} /><h3>No message sources yet</h3><p>Connect your YouTube channel to see new comments here.</p></div>;
+  return (
+    <section className="glass strong panel stack">
+      <div className="row between"><h3>Recent comments</h3><span className="muted small">From YouTube</span></div>
+      {state.loading && [0, 1, 2].map((i) => <div key={i} className="skeleton" style={{ height: 60 }} />)}
+      {state.error && <div className="banner bad">{state.error}</div>}
+      {state.messages && !state.messages.length && <p className="muted">No comments yet.</p>}
+      {state.messages?.map((m) => (
+        <div key={m.id} className="feed-item" style={{ alignItems: 'flex-start' }}>
+          {m.avatar ? <img src={m.avatar} alt="" width={32} height={32} style={{ borderRadius: '50%' }} /> : <span className="feed-icon"><MessageSquare size={15} /></span>}
+          <div className="stack grow" style={{ gap: 2 }}>
+            <div className="row between"><strong className="truncate">{m.author}</strong><span className="muted small">{new Date(m.at).toLocaleDateString()}</span></div>
+            <span style={{ whiteSpace: 'pre-wrap' }}>{m.text}</span>
+            <span className="muted small truncate">On “{m.videoTitle || m.videoId}”{m.replies ? ` · ${m.replies} replies` : ''}</span>
+          </div>
+          <button className="btn sm" onClick={() => openLink(m.url)}>Reply ↗</button>
+        </div>
+      ))}
     </section>
   );
 }
@@ -282,7 +314,10 @@ function ConnectForm({ platform: p, onDone }) {
   return (
     <div className="keycard">
       <div className="row between"><h3>Connect {p.name}</h3><button className="btn ghost sm" onClick={() => openLink(p.link)}>Platform docs ↗</button></div>
-      <ol className="small">{p.steps.map((x) => <li key={x}>{x}</li>)}</ol>
+      <ol className="small">{p.steps.map((x) => {
+        const st = typeof x === 'string' ? { text: x } : x;
+        return <li key={st.text}>{st.text}{st.link && <> <a href="#" onClick={(e) => { e.preventDefault(); openLink(st.link); }}>Open ↗</a></>}</li>;
+      })}</ol>
       <div className="grid2">
         {p.fields.map((f) => (
           <label key={f.key} className="field">{f.label}
@@ -305,6 +340,16 @@ function ConnectForm({ platform: p, onDone }) {
 }
 
 // ------------------------------------------------------------------ composer
+function CaptionNotes({ text, platforms }) {
+  const notes = checkCaption(text, platforms);
+  if (!notes.length) return text.trim() ? <span className="chip ok" style={{ justifySelf: 'start' }}><span className="dot" />Caption looks good</span> : null;
+  return (
+    <div className="stack" style={{ gap: 4 }}>
+      {notes.map((n) => <span key={n.msg} className={`small ${n.level === 'bad' ? '' : 'muted'}`} style={n.level === 'bad' ? { color: 'var(--bad)' } : undefined}>{n.level === 'bad' ? '✕' : n.level === 'warn' ? '!' : '·'} {n.msg}</span>)}
+    </div>
+  );
+}
+
 const pad = (n) => String(n).padStart(2, '0');
 const localInput = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
@@ -379,7 +424,8 @@ function Composer({ s, plat, init, onClose, onConnect }) {
               </div>
             )}
             <label className="field">Title <span className="hint">Used for YouTube and for your own list</span><input className="input" value={title} maxLength={100} onChange={(e) => setTitle(e.target.value)} /></label>
-            <label className="field">Caption<textarea className="input" rows={4} value={caption} onChange={(e) => setCaption(e.target.value)} /></label>
+            <label className="field">Caption<textarea className="input" rows={4} spellCheck value={caption} onChange={(e) => setCaption(e.target.value)} /></label>
+            <CaptionNotes text={fullText} platforms={[...picked].map((id) => plat(s.accounts.find((x) => x.id === id)?.platform)).filter(Boolean)} />
             <label className="field">Hashtags <span className="hint">Comma separated</span><input className="input" value={tags} onChange={(e) => setTags(e.target.value)} /></label>
 
             <div className="stack" style={{ gap: 6 }}>

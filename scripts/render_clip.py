@@ -95,20 +95,40 @@ def detect_faces(video: str, start: float, dur: float, src_w: int, src_h: int, f
     return samples
 
 
-def pick_speaker(samples):
-    """One x per sample (or None). Prefer the biggest face, but stay with the face near the
-    previous pick so a second person (worship leader, interpreter) doesn't steal the frame."""
+def pick_speaker(samples, anchors=None, prior=None):
+    """One x per sample (or None). Prefer the biggest face, stay with the face near the previous
+    pick (so a worship leader or interpreter doesn't steal the frame), and lean toward:
+      - anchors: faces the user clicked in this clip, {t, x} (seconds into the clip, 0..1)
+      - prior: where the speaker usually stands in this church's videos, {x, w}
+    When the user clicked a spot and no face is found near it, that spot is used directly."""
+    anchors = sorted(anchors or [], key=lambda a: a["t"])
     out = []
     prev = None
     for t, faces in samples:
+        near = min(anchors, key=lambda a: abs(a["t"] - t)) if anchors else None
+        target = near["x"] if near and abs(near["t"] - t) <= 8 else (prior or {}).get("x")
         faces = [f for f in faces if f[2] >= 0.025]  # tiny detections are usually noise
+        if prior and prior.get("w"):
+            faces = [f for f in faces if f[2] >= prior["w"] * 0.4] or faces  # far too small to be the speaker
         if not faces:
-            out.append((t, None, None))
+            if near and abs(near["t"] - t) <= 2:
+                out.append((t, near["x"], 0.05))
+                prev = near["x"]
+            else:
+                out.append((t, None, None))
             continue
-        if prev is None:
-            best = max(faces, key=lambda f: f[2] * f[3])
-        else:
-            best = max(faces, key=lambda f: f[2] * f[3] * (1.0 / (1.0 + 12 * abs(f[0] - prev))))
+
+        def score(f):
+            sc = f[2] * f[3]
+            if prev is not None:
+                sc /= 1.0 + 12 * abs(f[0] - prev)
+            if target is not None:
+                sc /= 1.0 + 10 * abs(f[0] - target)
+            return sc
+
+        best = max(faces, key=score)
+        if near and abs(near["t"] - t) <= 2 and abs(best[0] - near["x"]) > 0.2:
+            best = (near["x"], 0.0, 0.05, 0.0)  # the user knows better than the detector here
         prev = best[0]
         out.append((t, best[0], best[2]))
     return out
@@ -291,7 +311,8 @@ def group_words(words, max_words: int, max_chars: int = 22):
 class Captions:
     """Pre-computes caption events and renders each (group, active word) state once."""
 
-    def __init__(self, words, theme: dict, W: int, H: int, hook: str | None, clip_len: float):
+    def __init__(self, words, theme: dict, W: int, H: int, hook: str | None, clip_len: float, hook_y=None):
+        self.hook_y = hook_y
         self.W, self.H = W, H
         self.k = min(W, H) / 1080
         self.theme = theme
@@ -396,8 +417,9 @@ class Captions:
         return self.cache[key]
 
     def _render_hook(self):
-        font = load_font(self.theme["fontFile"], self.theme.get("fontStyle"), int(58 * self.k), self.theme.get("fontIndex"))
-        text = self.hook
+        th = self.theme
+        font = load_font(th["fontFile"], th.get("fontStyle"), int(float(th.get("hookSize", 58)) * self.k), th.get("fontIndex"))
+        text = self.hook.upper() if th.get("hookUppercase") else self.hook
         maxw = self.W * 0.8
         words, lines, cur = text.split(), [], ""
         for w in words:
@@ -415,17 +437,25 @@ class Captions:
         h = lh * len(lines) + 2 * pad
         img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
         d = ImageDraw.Draw(img)
-        d.rounded_rectangle([0, 0, w - 1, h - 1], radius=int(26 * self.k), fill=(255, 255, 255, 240))
+        shape = th.get("hookShape", "pill")
+        bg = hex_rgba(th.get("hookBg", "#FFFFFF"), int(255 * float(th.get("hookBgOpacity", 0.94))))
+        fg = hex_rgba(th.get("hookColor", "#11141C"))
+        if shape != "none":
+            radius = int((h / 2) if shape == "pill" and len(lines) == 1 else 26 * self.k) if shape != "box" else int(8 * self.k)
+            d.rounded_rectangle([0, 0, w - 1, h - 1], radius=radius, fill=bg)
         for i, l in enumerate(lines):
-            d.text(((w - font.getlength(l)) / 2, pad + i * lh), l, font=font, fill=(17, 20, 28, 255))
-        return np.array(img), int((self.W - w) / 2), int(self.H * 0.11)
+            d.text(((w - font.getlength(l)) / 2, pad + i * lh), l, font=font, fill=fg,
+                   stroke_width=int(4 * self.k) if shape == "none" else 0, stroke_fill=(0, 0, 0, 200))
+        y = float(self.hook_y if self.hook_y is not None else th.get("hookY", 0.13))
+        return np.array(img), int((self.W - w) / 2), int(self.H * y - h / 2)
 
     def at(self, t: float):
         """Overlays to draw at output time t (events are sorted, so a moving pointer is enough)."""
         out = []
-        if self.hook_img is not None and t < 3.5:
+        hd = float(self.theme.get("hookDuration", 3.5))
+        if self.hook_img is not None and t < hd:
             arr, x, y = self.hook_img
-            fade = min(1.0, t / 0.15, (3.5 - t) / 0.3)
+            fade = min(1.0, t / 0.15, (hd - t) / 0.3)
             out.append((arr, x, y, fade))
         while self.ei < len(self.events) and self.events[self.ei][1] <= t:
             self.ei += 1
@@ -490,13 +520,18 @@ def main() -> None:
     info = {"mode": mode}
     follow = glide = None
     if mode == "auto" and crop_frac < 0.98:
-        picks = pick_speaker(detect_faces(src, start, dur, src_w, src_h))
+        picks = pick_speaker(detect_faces(src, start, dur, src_w, src_h), crop.get("anchors"), job.get("speakerPrior"))
         follow, f_info = camera_path(picks, n_frames, fps, crop_frac)
         glide, g_info = glide_path(picks, n_frames, fps, crop_frac)
-        motion = crop.get("motion", "glide")
-        path = glide if motion == "glide" else follow
-        info.update(g_info if motion == "glide" else f_info)
-        info["motion"] = motion
+        # 0 = follow closely, 1 = one smooth glide; anything between blends the two paths.
+        smooth = crop.get("smooth")
+        if smooth is None:
+            smooth = 1.0 if crop.get("motion") == "glide" else 0.0
+        smooth = max(0.0, min(1.0, float(smooth)))
+        path = follow * (1 - smooth) + glide * smooth
+        info.update(f_info)
+        info["smooth"] = smooth
+        info["picks"] = [[round(p[0], 2), None if p[1] is None else round(p[1], 4)] for p in picks]
         if info.get("fallback"):
             info["note"] = "No steady face found; centred crop used."
     elif mode == "cues":
@@ -528,7 +563,9 @@ def main() -> None:
     out_len = sum(e - s for s, e in keep)
     words = remap_words(job.get("words", []), start, keep)
     theme = job["theme"]
-    caps = Captions(words, theme, W, H, job.get("hook"), out_len) if job.get("captions", True) else None
+    caps = Captions(words, theme, W, H, job.get("hook"), out_len, job.get("hookY")) if (job.get("captions", True) or job.get("hook")) else None
+    if caps and not job.get("captions", True):
+        caps.events = []  # hook only
 
     tmp = Path(tempfile.mkdtemp(prefix="sc-render-"))
     audio_in: list[str] = []
@@ -542,6 +579,31 @@ def main() -> None:
             check=True,
         )
         audio_in = ["-i", str(audio)]
+
+    # Graphics from the brand library: a logo/bug in a corner, and an end card for the last seconds.
+    overlay = None
+    ov = job.get("overlay") or {}
+    if ov.get("file") and os.path.exists(ov["file"]):
+        img = Image.open(ov["file"]).convert("RGBA")
+        ow = max(16, int(W * float(ov.get("size", 0.18))))
+        img = img.resize((ow, max(1, int(img.height * ow / img.width))), Image.LANCZOS)
+        arr = np.array(img)
+        m = int(W * 0.045)
+        corner = ov.get("corner", "tr")
+        ox = m if corner in ("tl", "bl") else W - arr.shape[1] - m
+        oy = m + int(H * 0.02) if corner in ("tl", "tr") else H - arr.shape[0] - m - int(H * 0.06)
+        overlay = (arr, ox, oy, float(ov.get("opacity", 1.0)))
+    end_card = None
+    ec = job.get("endCard") or {}
+    if ec.get("file") and os.path.exists(ec["file"]):
+        from PIL import ImageOps
+        src_card = Image.open(ec["file"]).convert("RGBA")
+        if abs(src_card.width / src_card.height - W / H) < 0.08:
+            card = ImageOps.fit(src_card, (W, H), Image.LANCZOS)
+        else:  # different shape: show all of it, filling the rest with the graphic's own edge color
+            edge = src_card.getpixel((2, 2))
+            card = ImageOps.pad(src_card, (W, H), Image.LANCZOS, color=(edge[0], edge[1], edge[2], 255))
+        end_card = (np.array(card), max(0.5, float(ec.get("seconds", 3))))
 
     out = job["out"]
     enc = subprocess.Popen(
@@ -559,7 +621,11 @@ def main() -> None:
     n = 0
     written = 0
     thumb = None
-    fit = mode == "fit"
+    fit = mode in ("fit", "stack3")
+    bg_cfg = crop.get("bg") or {"type": "blur"}
+    bg_color = np.array([int(str(bg_cfg.get("color", "#000000")).lstrip("#")[i:i + 2], 16) for i in (4, 2, 0)], dtype=np.uint8)  # BGR
+    blur_amt = float(bg_cfg.get("blur", 0.6))
+    gap = int(float(crop.get("gap", 18)) * W / 1080)
     interp = cv2.INTER_LINEAR if preview else cv2.INTER_CUBIC
     try:
         while True:
@@ -572,26 +638,47 @@ def main() -> None:
                 continue
             frame = np.frombuffer(buf, dtype=np.uint8).reshape(src_h, src_w, 3)
             if fit:
-                # Blurred "cover" copy behind the full-width frame (letterbox fallback).
-                cover_w = max(W // 4, int(src_w * (H // 4) / src_h))
-                small = cv2.resize(frame, (cover_w, H // 4), interpolation=cv2.INTER_AREA)
-                xo = (cover_w - W // 4) // 2
-                bg = cv2.GaussianBlur(small[:, xo:xo + W // 4], (0, 0), 8)
-                bg = (cv2.resize(bg, (W, H)) * 0.75).astype(np.uint8)
-                fg_h = int(W * src_h / src_w)
-                fg = cv2.resize(frame, (W, fg_h), interpolation=interp)
-                y0 = (H - fg_h) // 2
-                bg[y0:y0 + fg_h] = fg
+                if bg_cfg.get("type") == "color":
+                    bg = np.empty((H, W, 3), dtype=np.uint8)
+                    bg[:] = bg_color
+                else:  # blurred "cover" copy of the video itself
+                    cover_w = max(W // 4, int(src_w * (H // 4) / src_h))
+                    small = cv2.resize(frame, (cover_w, H // 4), interpolation=cv2.INTER_AREA)
+                    xo = (cover_w - W // 4) // 2
+                    bg = cv2.GaussianBlur(small[:, xo:xo + W // 4], (0, 0), max(0.5, 14 * blur_amt))
+                    bg = (cv2.resize(bg, (W, H)) * (0.9 - 0.25 * blur_amt)).astype(np.uint8)
+                if mode == "stack3":  # the whole frame, three times, stacked
+                    ph = int(W * src_h / src_w) // 2 * 2
+                    pw = W
+                    if 3 * ph + 2 * gap > H:  # square/landscape outputs: shrink panels to fit
+                        ph = (H - 2 * gap) // 3 // 2 * 2
+                        pw = int(ph * src_w / src_h) // 2 * 2
+                    fg = cv2.resize(frame, (pw, ph), interpolation=interp)
+                    y0 = (H - (3 * ph + 2 * gap)) // 2
+                    x0 = (W - pw) // 2
+                    for k in range(3):
+                        y = y0 + k * (ph + gap)
+                        bg[y:y + ph, x0:x0 + pw] = fg
+                else:
+                    fg_h = int(W * src_h / src_w)
+                    fg = cv2.resize(frame, (W, fg_h), interpolation=interp)
+                    y0 = (H - fg_h) // 2
+                    bg[y0:y0 + fg_h] = fg
                 img = bg
             else:
                 cx = path[min(n - 1, len(path) - 1)] * src_w
                 x0 = int(round(cx - crop_w / 2))
                 x0 = max(0, min(src_w - crop_w, x0))
                 img = cv2.resize(frame[:, x0:x0 + crop_w], (W, H), interpolation=interp)
+            t_out = written / fps
             if caps:
-                t_out = written / fps
                 for arr, x, y, op in caps.at(t_out):
                     blend(img, arr, x, y, op)
+            if overlay:
+                blend(img, overlay[0], overlay[1], overlay[2], overlay[3])
+            if end_card and t_out >= out_len - end_card[1]:
+                fade = min(1.0, (t_out - (out_len - end_card[1])) / 0.3)
+                blend(img, end_card[0], 0, 0, fade)
             enc.stdin.write(img.tobytes())
             written += 1
             if thumb is None and written >= int(min(1.5, out_len / 2) * fps):

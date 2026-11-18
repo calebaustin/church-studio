@@ -52,6 +52,8 @@ Then `vgp-clips-main.zip` (editor/export/looks). Then `Autocrop-vertical-main.zi
 ## UI
 Read `docs/ui-ux-guide.md` before building any screen, and follow it. Use only the tokens in
 `src/ui/styles.css`; never hard-code colors. Plain, short copy: no em dashes, no over-explaining.
+**Buttons never stretch to fill a panel or grid cell.** They size to their label (`.btn` has `justify-self: start`;
+never give a button `width: 100%` or put it where a grid stretches it). Large size (`.btn.lg`) only for one hero action.
 
 ## Conventions
 - Local data in `data/` and `config.local.json` (gitignored). Project files under `projects/`.

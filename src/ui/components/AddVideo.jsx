@@ -82,7 +82,7 @@ export default function AddVideo({ url, title, onClose, onAdd }) {
               <button className="btn ghost" onClick={onClose}>Cancel</button>
               <button className="btn primary lg" disabled={mode === 'sermon' && !(range.end > range.start)}
                 onClick={() => onAdd(mode === 'all' ? { url, title: info.title } : { url, title: info.title, start: range.start, end: range.end })}>
-                {mode === 'sermon' ? <Scissors size={16} /> : <Download size={16} />}{mode === 'sermon' ? 'Download the sermon' : 'Download whole video'}
+                {mode === 'sermon' ? <Scissors size={16} /> : <Download size={16} />}{mode === 'sermon' ? `Download the sermon (${Math.round((range.end - range.start) / 60)} min)` : `Download whole video (${fmt(info.duration)})`}
               </button>
             </div>
           </div>

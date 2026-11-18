@@ -6,6 +6,7 @@ const path = require('node:path');
 const ROOT = path.resolve(__dirname, '..');
 const PORT = Number(process.env.SC_PORT || 4317);
 let daemon = null;
+let mainWindow = null;
 
 function startDaemon() {
   if (process.env.SC_EXTERNAL_DAEMON) return Promise.resolve();
@@ -21,7 +22,15 @@ function startDaemon() {
     });
     const timer = setTimeout(() => reject(new Error('Daemon did not start in 15 s')), 15000);
     daemon.on('message', (m) => { if (m?.ready) { clearTimeout(timer); resolve(); } });
-    daemon.on('exit', (code) => { clearTimeout(timer); if (code) reject(new Error(`Daemon exited ${code}`)); });
+    daemon.on('exit', (code) => {
+      clearTimeout(timer);
+      if (code === 75) {
+        // Switching workspaces: start the engine again and reload the window.
+        startDaemon().then(() => mainWindow?.reload()).catch((e) => dialog.showErrorBox('Sermon Clips', e.message));
+        return;
+      }
+      if (code) reject(new Error(`Daemon exited ${code}`));
+    });
   });
 }
 
@@ -38,12 +47,17 @@ async function createWindow() {
     if (/^https:\/\//.test(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
+  mainWindow = win;
   await win.loadURL(process.env.SC_UI_URL || `http://127.0.0.1:${PORT}/`);
 }
 
 ipcMain.handle('pick-video', async () => {
   const r = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'Video', extensions: ['mp4', 'mov', 'm4v', 'mkv', 'webm'] }] });
   return r.canceled ? null : r.filePaths[0];
+});
+ipcMain.handle('pick-files', async () => {
+  const r = await dialog.showOpenDialog({ properties: ['openFile', 'multiSelections'], filters: [{ name: 'Images and media', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'heic', 'mp4', 'mov', 'pdf'] }] });
+  return r.canceled ? [] : r.filePaths;
 });
 ipcMain.handle('pick-folder', async () => {
   const r = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] });

@@ -64,7 +64,7 @@ export async function listProjects() {
       const p = await getProject(name);
       if (p) out.push({
         id: p.id, title: p.title, status: p.status, created: p.created, updated: p.updated,
-        thumbnail: p.thumbnail, duration: p.media?.duration ?? null, clips: p.clips.length,
+        thumbnail: p.thumbnail, youtubeId: p.youtubeId || null, duration: p.media?.duration ?? null, clips: p.clips.length,
         exported: p.clips.filter((c) => c.export).length,
       });
     } catch { /* skip broken folders */ }

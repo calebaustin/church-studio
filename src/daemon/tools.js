@@ -7,13 +7,26 @@
 //   5. Homebrew / system folders (a Finder-launched app doesn't inherit the shell PATH)
 // Code lives in ROOT; user data lives in HOME (Application Support when packaged).
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-export const HOME = process.env.SC_HOME || ROOT;
+/** Where workspaces are registered: Application Support when packaged, the project folder in dev. */
+export const BASE = process.env.SC_HOME || ROOT;
+export const APP_NAME = 'Sermon Clips';
+function activeWorkspace() {
+  try {
+    const reg = JSON.parse(readFileSync(path.join(BASE, 'workspaces.json'), 'utf8'));
+    const w = reg.list?.find((x) => x.id === reg.active);
+    if (w && existsSync(w.dir)) return w;
+  } catch { /* first run: the main workspace */ }
+  return { id: 'main', name: 'Main', dir: BASE };
+}
+/** Each workspace (brand) keeps its own settings, sermons, themes and social accounts. */
+export const WORKSPACE = activeWorkspace();
+export const HOME = WORKSPACE.dir;
 export const RESOURCES = process.env.SC_RESOURCES || null;
 export const DATA_DIR = process.env.SC_DATA_DIR || path.join(HOME, 'data');
 export const PROJECTS_DIR = path.join(HOME, 'projects');
@@ -91,16 +104,35 @@ export function childEnv() {
  * Run a program and collect its output. Rejects on a non-zero exit with the tail of stderr.
  * `onStderr`/`onStdout` stream chunks (used for progress). `signal` lets a job cancel it.
  */
+const children = new Set();
+function killTree(child, sig) {
+  try {
+    if (process.platform !== 'win32' && child.pid) process.kill(-child.pid, sig);
+    else child.kill(sig);
+  } catch { /* already gone */ }
+}
+// Don't leave helpers running if the daemon goes away.
+for (const ev of ['exit', 'SIGINT', 'SIGTERM']) process.on(ev, () => { for (const c of children) killTree(c, 'SIGKILL'); });
+
 export function run(cmd, args, { cwd = ROOT, input, onStderr, onStdout, signal } = {}) {
   return new Promise((resolve, reject) => {
+    // Own process group, so Stop also ends helpers it starts (yt-dlp runs ffmpeg for partial downloads).
     const child = spawn(cmd, args, {
       cwd,
       windowsHide: true,
       env: childEnv(),
+      detached: process.platform !== 'win32',
     });
+    children.add(child);
     let stdout = '';
     let stderr = '';
-    const abort = () => child.kill('SIGTERM');
+    let settled = false;
+    const abort = () => {
+      killTree(child, 'SIGTERM');
+      setTimeout(() => killTree(child, 'SIGKILL'), 3000).unref();
+      // Normally we finish when the child closes; this is only a backstop for a stubborn one.
+      setTimeout(() => { if (!settled) { settled = true; reject(new Error('Cancelled')); } }, 4000).unref();
+    };
     signal?.addEventListener('abort', abort, { once: true });
     child.stdout.on('data', (d) => {
       stdout += d;
@@ -111,9 +143,12 @@ export function run(cmd, args, { cwd = ROOT, input, onStderr, onStdout, signal }
       if (stderr.length > 200_000) stderr = stderr.slice(-100_000);
       onStderr?.(String(d));
     });
-    child.on('error', (err) => reject(new Error(`Could not start ${path.basename(cmd)}: ${err.message}`)));
+    child.on('error', (err) => { if (!settled) { settled = true; reject(new Error(`Could not start ${path.basename(cmd)}: ${err.message}`)); } });
     child.on('close', (code) => {
+      children.delete(child);
       signal?.removeEventListener('abort', abort);
+      if (settled) return;
+      settled = true;
       if (signal?.aborted) return reject(new Error('Cancelled'));
       if (code === 0) resolve({ stdout, stderr });
       else {
@@ -166,8 +201,40 @@ export async function toolStatus() {
       'import importlib.util as u, json; print(json.dumps({m: bool(u.find_spec(m)) for m in ["faster_whisper","cv2","numpy","PIL"]}))']);
     const mods = JSON.parse(stdout.trim());
     for (const [m, ok] of Object.entries(mods)) {
-      out.push({ name: `python: ${m}`, ok, required: true, path: '.venv', version: ok ? 'installed' : '', error: ok ? undefined : 'Run scripts/setup.sh' });
+      out.push({ name: `python: ${m}`, ok, required: true, path: '.venv', version: ok ? 'installed' : '', error: ok ? undefined : 'Missing' });
     }
   } catch { /* python missing already reported */ }
-  return out;
+  return out.map((t) => ({ ...t, ...(TOOL_INFO[t.name] || { title: t.name, about: '' }) }));
+}
+
+/** Friendly names for the Tools screen: what each helper does, in plain words. */
+export const TOOL_INFO = {
+  ffmpeg: { title: 'Video engine', about: 'Cuts, joins and encodes video.' },
+  ffprobe: { title: 'Video reader', about: 'Reads length, size and frame rate.' },
+  'yt-dlp': { title: 'YouTube downloader', about: 'Lists your channel and downloads videos.' },
+  'media engine': { title: 'Media engine', about: 'Transcription, speaker tracking and captions.' },
+  python: { title: 'Media engine', about: 'Runs transcription, speaker tracking and captions.' },
+  'python: faster_whisper': { title: 'Speech to text', about: 'Writes down every word with its timing.' },
+  'python: cv2': { title: 'Face finder', about: 'Finds the speaker so the frame can follow them.' },
+  'python: PIL': { title: 'Caption drawing', about: 'Draws captions onto each frame.' },
+  'python: numpy': { title: 'Math helper', about: 'Used by the media engine.' },
+};
+
+/** Try to fix one helper. Packaged builds carry everything, so a repair there means reinstalling. */
+export async function repairTool(name, ctx) {
+  if (mediaHelper()) throw new Error('This helper ships inside the app. Reinstall Sermon Clips to repair it.');
+  const pip = venvBin('pip');
+  if (name === 'ffmpeg' || name === 'ffprobe') {
+    ctx?.progress(10, 'Reinstalling the video engine');
+    await run('npm', ['rebuild', 'ffmpeg-static', '@ffprobe-installer/darwin-arm64'], { cwd: ROOT, signal: ctx?.signal });
+  } else if (name === 'yt-dlp') {
+    ctx?.progress(10, 'Updating the YouTube downloader');
+    await run(pip, ['install', '-U', 'yt-dlp'], { signal: ctx?.signal });
+  } else {
+    ctx?.progress(10, 'Reinstalling the media engine');
+    await run(pip, ['install', '-r', path.join(SCRIPTS_DIR, 'requirements.txt')], { signal: ctx?.signal });
+  }
+  found.clear();
+  ctx?.progress(100, 'Repaired');
+  return { ok: true };
 }

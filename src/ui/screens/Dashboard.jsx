@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus, Wand2, Download, CalendarClock, Palette, ArrowRight, Zap, Link2, CheckCircle2, Clock, Hand, Clapperboard, Target } from 'lucide-react';
+import { Plus, Wand2, Download, CalendarClock, Palette, ArrowRight, Zap, Link2, CheckCircle2, Clock, Hand, Clapperboard, Target, MonitorPlay, Check, Radio } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { api, fmt, media } from '../api.js';
 import AddVideo from '../components/AddVideo.jsx';
@@ -169,6 +169,8 @@ export default function Dashboard() {
         </div>
       </section>
 
+      <ChannelFeed onAdd={(v) => setAdding({ url: v.url, title: v.title })} projects={stats?.projects || []} />
+
       <div className="row between">
         <h2>Summary</h2>
         <div className="seg">
@@ -240,5 +242,54 @@ export default function Dashboard() {
       )}
       {adding && <AddVideo url={adding.url} onClose={() => setAdding(null)} onAdd={add} />}
     </div>
+  );
+}
+
+/** Latest long videos from the church's channel: likely services to clip. */
+function ChannelFeed({ onAdd, projects }) {
+  const { config, go } = useApp();
+  const [items, setItems] = useState(null);
+  const [error, setError] = useState(null);
+  useEffect(() => {
+    if (!config.youtubeChannel) return;
+    api.get('/api/youtube/channel').then((r) => setItems(r.items.filter((v) => !v.duration || v.duration >= 15 * 60).slice(0, 4))).catch((e) => setError(e.message));
+  }, [config.youtubeChannel]);
+  if (!config.youtubeChannel) {
+    return (
+      <section className="glass panel row between wrap">
+        <div className="row"><span className="feed-icon"><MonitorPlay size={16} /></span><div className="stack" style={{ gap: 0 }}><strong>See your latest services here</strong><span className="muted small">Add your YouTube channel once.</span></div></div>
+        <button className="btn sm" onClick={() => go({ name: 'settings', section: 'youtube' })}>Add channel</button>
+      </section>
+    );
+  }
+  const have = new Set(projects.map((p) => p.youtubeId).filter(Boolean));
+  return (
+    <>
+      <div className="row between">
+        <h2>From your channel</h2>
+        <button className="btn ghost sm" onClick={() => go({ name: 'library', pick: true })}>See all<ArrowRight size={14} /></button>
+      </div>
+      {error && <div className="banner">{error}</div>}
+      <div className="channel-grid">
+        {!items && !error && [0, 1, 2, 3].map((i) => <div key={i} className="skeleton" style={{ aspectRatio: '16/12' }} />)}
+        {items?.map((v) => (
+          <div key={v.id} className="glass card" onClick={() => !have.has(v.id) && onAdd(v)}>
+            <div style={{ padding: 8 }}>
+              <div className="thumb" style={{ position: 'relative' }}>
+                <img src={v.thumb} alt="" loading="lazy" />
+                {v.duration && <span className="chip num" style={{ position: 'absolute', right: 6, bottom: 6, background: 'rgba(0,0,0,.7)', color: '#fff' }}>{fmt(v.duration)}</span>}
+              </div>
+            </div>
+            <div className="body">
+              <div className="title">{v.title}</div>
+              <div className="row between">
+                {v.live ? <span className="chip accent"><Radio size={12} />Livestream</span> : <span />}
+                {have.has(v.id) ? <span className="chip ok"><Check size={12} />Added</span> : <button className="btn primary sm" onClick={(e) => { e.stopPropagation(); onAdd(v); }}>Clip this</button>}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
   );
 }

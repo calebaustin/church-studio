@@ -37,7 +37,18 @@ async function pump() {
   const ctx = {
     signal: job.controller.signal,
     progress(pct, message) {
-      if (pct != null) job.progress = Math.max(0, Math.min(100, Math.round(pct)));
+      if (pct != null) {
+        const p = Math.max(0, Math.min(100, pct));
+        if (p >= job.progress) job.progress = Math.round(p); // never jump backwards
+        // Time left: from how fast progress has moved since the first real step.
+        const now = Date.now();
+        if (!job._t0 && p > 1) { job._t0 = now; job._p0 = p; }
+        if (job._t0 && p > job._p0 + 2 && now - job._t0 > 4000) {
+          const rate = (p - job._p0) / (now - job._t0);
+          const raw = (100 - p) / rate / 1000;
+          job.eta = Math.round(job.eta ? job.eta * 0.7 + raw * 0.3 : raw);
+        }
+      }
       if (message) job.message = message;
     },
     log(line) {
@@ -49,6 +60,7 @@ async function pump() {
     job.result = await job.fn(ctx);
     job.status = 'done';
     job.progress = 100;
+    job.eta = 0;
     job.message = job.message?.startsWith('Waiting') ? 'Done' : job.message;
   } catch (e) {
     job.status = job.controller.signal.aborted ? 'cancelled' : 'error';
@@ -72,7 +84,7 @@ export function cancel(id) {
 
 export function view(job) {
   if (!job) return null;
-  const { fn, controller, ...rest } = job;
+  const { fn, controller, _t0, _p0, ...rest } = job;
   return rest;
 }
 

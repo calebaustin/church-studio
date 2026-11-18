@@ -1,21 +1,21 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Plus, AlertTriangle } from 'lucide-react';
 import { useApp, applyAppTheme, activeAppTheme } from '../App.jsx';
 import { api, desktop, openLink } from '../api.js';
 import VideoThemeEditor from '../components/VideoThemeEditor.jsx';
 
 const SECTIONS = [
-  ['start', 'Start here'],
+  ['tools', 'Tools'],
   ['youtube', 'YouTube channel'],
-  ['ai', 'AI helper & keys'],
+  ['ai', 'AI helper'],
   ['clips', 'Transcription & clips'],
-  ['export', 'Export'],
+  ['export', 'Exports'],
   ['app-theme', 'App theme'],
-  ['video-themes', 'Video themes'],
+  ['video-themes', 'Caption themes'],
 ];
 
 export default function Settings({ section: initial }) {
-  const [section, setSection] = useState(initial || 'start');
+  const [section, setSection] = useState(initial === 'start' ? 'tools' : initial || 'tools');
   return (
     <div className="page settings">
       <nav className="glass">
@@ -24,7 +24,7 @@ export default function Settings({ section: initial }) {
         ))}
       </nav>
       <div className="stack" style={{ gap: 18 }}>
-        {section === 'start' && <StartHere go={setSection} />}
+        {section === 'tools' && <Tools />}
         {section === 'youtube' && <YouTube />}
         {section === 'ai' && <AIKeys />}
         {section === 'clips' && <ClipDefaults />}
@@ -38,44 +38,41 @@ export default function Settings({ section: initial }) {
 
 function Saved({ at }) {
   if (!at) return null;
-  return <span className="chip ok"><span className="dot" />Saved to config.local.json</span>;
+  return <span className="chip ok"><span className="dot" />Saved</span>;
 }
 
-function StartHere({ go }) {
+function Tools() {
+  const { trackJob, onJobFinished } = useApp();
   const [tools, setTools] = useState(null);
-  const { config } = useApp();
-  useEffect(() => { api.get('/api/tools').then((r) => setTools(r.tools)); }, []);
-  const ready = tools?.every((t) => t.ok);
+  const load = () => api.get('/api/tools').then((r) => setTools(r.tools.filter((t) => t.name !== 'python: numpy')));
+  useEffect(() => { load(); }, []);
+  useEffect(() => onJobFinished((j) => { if (j.kind === 'repair') load(); }), [onJobFinished]);
+  const repair = async (name) => { const { job } = await api.post('/api/tools/repair', { name }); trackJob(job); };
+  const allOk = tools?.every((t) => t.ok);
   return (
-    <>
-      <section className="glass strong panel stack">
-        <h2>Welcome to Sermon Clips</h2>
-        <p className="muted">Everything runs on this Mac. No account or keys needed.</p>
-        <div className="row wrap" style={{ marginTop: 6 }}>
-          <span className={`chip ${config.youtubeChannel ? 'ok' : 'warn'}`}><span className="dot" />{config.youtubeChannel ? 'Channel connected' : 'Add your channel'}</span>
-          <span className={`chip ${ready ? 'ok' : 'warn'}`}><span className="dot" />{tools ? (ready ? 'Tools ready' : 'Setup needed') : 'Checking tools…'}</span>
-          <span className="chip accent">AI helper: {config.llmProvider === 'none' ? 'off (offline scoring)' : config.llmProvider}</span>
-        </div>
-        <div className="row wrap" style={{ marginTop: 6 }}>
-          {!config.youtubeChannel && <button className="btn primary" onClick={() => go('youtube')}>Add your YouTube channel</button>}
-          <button className="btn" onClick={() => go('ai')}>Optional: AI helper</button>
-        </div>
-      </section>
-      <section className="glass panel stack">
-        <h3>Local tools</h3>
-        <p className="muted small">Missing something? Run <span className="mono">scripts/setup.sh</span>.</p>
-        <div>
-          {!tools && <p className="muted">Checking…</p>}
-          {tools?.map((t) => (
-            <div key={t.name} className="tool-row">
-              <span style={{ color: t.ok ? 'var(--ok)' : 'var(--bad)' }}>{t.ok ? '✓' : '✕'}</span>
-              <strong>{t.name}</strong>
-              <span className="muted small" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.ok ? t.version : t.error}</span>
+    <section className="glass strong panel stack" style={{ gap: 14 }}>
+      <div className="row between">
+        <h2>Tools</h2>
+        {tools && <span className={`chip ${allOk ? 'ok' : 'warn'}`}><span className="dot" />{allOk ? 'Everything is ready' : 'Something needs attention'}</span>}
+      </div>
+      <p className="muted">These helpers do the work behind the scenes, all on this Mac.</p>
+      <div className="stack" style={{ gap: 8 }}>
+        {!tools && [0, 1, 2, 3].map((i) => <div key={i} className="skeleton" style={{ height: 52 }} />)}
+        {tools?.map((t) => (
+          <div key={t.name} className="feed-item">
+            <span className={`feed-icon ${t.ok ? 'ok' : 'warn'}`}><span className="dot" /></span>
+            <div className="stack grow" style={{ gap: 0 }}>
+              <strong>{t.title}</strong>
+              <span className="muted small">{t.about}</span>
             </div>
-          ))}
-        </div>
-      </section>
-    </>
+            {t.ok ? <span className="chip ok"><span className="dot" />Online</span>
+              : <button className="btn sm accent" onClick={() => repair(t.name.replace('python: ', ''))}>Repair</button>}
+          </div>
+        ))}
+      </div>
+      <button className="btn sm ghost" onClick={() => repair('yt-dlp')}>Update the YouTube downloader</button>
+      <span className="hint">YouTube changes often. If downloads stop working, update the downloader.</span>
+    </section>
   );
 }
 
@@ -107,7 +104,7 @@ function YouTube() {
       {test && !test.busy && (test.ok
         ? <div className="banner info">Found {test.n} videos{test.first ? `. Latest: “${test.first}”` : ''}.</div>
         : <div className="banner">{test.error}</div>)}
-      <p className="muted small">Optional: a YouTube Data API key (under “AI helper & keys”) is stored for richer listings later. It isn't required.</p>
+
     </section>
   );
 }
@@ -138,7 +135,7 @@ function SecretField({ guide, value, onSave }) {
       </div>
       <div className="row between small">
         <button className="btn ghost sm" onClick={() => openLink(guide.link)}>Get a key ↗</button>
-        <span className="muted">Stored only in <span className="mono">config.local.json</span> on this Mac{state ? ` · ${state}` : ''}</span>
+        <span className="muted">Saved on this Mac only{state ? ` · ${state}` : ''}</span>
       </div>
     </div>
   );
@@ -176,8 +173,8 @@ function AIKeys() {
             <h3>Ollama (local, free)</h3>
             <ol className="small">
               <li>Install Ollama from ollama.com and open it.</li>
-              <li>In Terminal run <span className="mono">ollama pull {models.ollamaModel || 'qwen3:4b'}</span>.</li>
-              <li>Press Test below.</li>
+              <li>Open Terminal and paste: <span className="mono">ollama pull {models.ollamaModel || 'qwen3:4b'}</span></li>
+              <li>Press Save and test.</li>
             </ol>
             <div className="grid2">
               <label className="field">Server<input className="input mono" value={models.ollamaUrl} onChange={(e) => setModels({ ...models, ollamaUrl: e.target.value })} /></label>
@@ -187,24 +184,22 @@ function AIKeys() {
           </div>
         )}
         {p !== 'none' && p !== 'ollama' && (
-          <label className="field">Model
-            <input className="input mono" value={models[modelField] || ''} onChange={(e) => setModels({ ...models, [modelField]: e.target.value })} />
+          <label className="field">Model <span className="hint">Leave as is unless you know you want a different one.</span>
+            <input className="input" value={models[modelField] || ''} onChange={(e) => setModels({ ...models, [modelField]: e.target.value })} />
           </label>
         )}
         {p !== 'none' && (
           <div className="row">
-            <button className="btn" onClick={runTest} disabled={test?.busy}>{test?.busy ? 'Testing…' : 'Save & test'}</button>
+            <button className="btn" onClick={runTest} disabled={test?.busy}>{test?.busy ? 'Testing…' : 'Save and test'}</button>
             {test && !test.busy && <span className={`chip ${test.ok ? 'ok' : 'bad'}`} style={{ height: 'auto', padding: '4px 10px' }}>{test.msg}</span>}
           </div>
         )}
       </section>
-      <section className="glass panel stack">
-        <h3>API keys</h3>
-        <p className="muted small">Only needed for the helper you picked.</p>
-        {keyGuide.map((g) => (
-          <SecretField key={g.field} guide={g} value={config[g.field]} onSave={(v) => saveConfig({ [g.field]: v })} />
-        ))}
-      </section>
+      {keyGuide.filter((g) => g.provider && g.provider === p).map((g) => (
+        <section key={g.field} className="glass panel stack">
+          <SecretField guide={g} value={config[g.field]} onSave={(v) => saveConfig({ [g.field]: v })} />
+        </section>
+      ))}
     </>
   );
 }
@@ -239,24 +234,72 @@ function ClipDefaults() {
   );
 }
 
+const NAME_TOKENS = [
+  ['{date}', 'Today, like 2026-11-18'],
+  ['{title}', 'The clip title'],
+  ['{sermon}', 'The sermon name'],
+  ['{n}', 'Clip number, like 03'],
+  ['{preset}', 'Where it goes, like vertical'],
+];
+function sampleName(pattern) {
+  return (pattern || '{date} - {title}')
+    .replaceAll('{date}', new Date().toISOString().slice(0, 10)).replaceAll('{title}', 'Grace you can’t earn')
+    .replaceAll('{sermon}', 'Sunday Worship').replaceAll('{n}', '03').replaceAll('{preset}', 'vertical');
+}
+
+/** File-name field with clickable tokens, suggestions after typing "{", and a live example. */
+export function NamePattern({ value, onChange }) {
+  const ref = useRef(null);
+  const [suggest, setSuggest] = useState(false);
+  const insert = (tok) => {
+    const el = ref.current;
+    const start = el?.selectionStart ?? value.length;
+    const end = el?.selectionEnd ?? value.length;
+    const before = value.slice(0, start).replace(/\{[a-z]*$/, '');
+    const next = before + tok + value.slice(end);
+    onChange(next);
+    setSuggest(false);
+    requestAnimationFrame(() => { el?.focus(); const p = (before + tok).length; el?.setSelectionRange(p, p); });
+  };
+  return (
+    <div className="stack" style={{ gap: 6, position: 'relative' }}>
+      <input ref={ref} className="input" value={value} onChange={(e) => { onChange(e.target.value); setSuggest(/\{[a-z]*$/.test(e.target.value.slice(0, e.target.selectionStart))); }}
+        onBlur={() => setTimeout(() => setSuggest(false), 150)} aria-label="File name pattern" />
+      {suggest && (
+        <div className="glass strong" style={{ position: 'absolute', top: 44, left: 0, zIndex: 10, padding: 6, display: 'grid', gap: 2, minWidth: 280 }}>
+          {NAME_TOKENS.map(([t, d]) => (
+            <button key={t} className="btn ghost sm" style={{ justifySelf: 'stretch', justifyContent: 'space-between' }} onMouseDown={(e) => { e.preventDefault(); insert(t); }}>
+              <span className="mono">{t}</span><span className="muted small">{d}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="row wrap" style={{ gap: 6 }}>
+        {NAME_TOKENS.map(([t, d]) => <button key={t} className="chip accent" style={{ border: 0, cursor: 'pointer' }} title={d} onClick={() => insert(t)}>{t}</button>)}
+      </div>
+      <span className="hint">Example: <strong style={{ color: 'var(--ink)' }}>{sampleName(value)}.mp4</strong></span>
+    </div>
+  );
+}
+
 function ExportSettings() {
   const { config, saveConfig } = useApp();
   const [v, setV] = useState({ exportFolder: config.exportFolder, exportPattern: config.exportPattern });
   const [saved, setSaved] = useState(null);
   return (
-    <section className="glass strong panel stack">
-      <h2>Export</h2>
-
-      <label className="field">Export folder <span className="hint">Empty means Downloads.</span>
+    <section className="glass strong panel stack" style={{ gap: 14 }}>
+      <h2>Exports</h2>
+      <label className="field">Save exports to
         <div className="row">
-          <input className="input mono" value={v.exportFolder} placeholder="Downloads" onChange={(e) => setV({ ...v, exportFolder: e.target.value })} />
+          <input className="input" value={v.exportFolder} placeholder="Downloads" onChange={(e) => setV({ ...v, exportFolder: e.target.value })} />
           {desktop?.pickFolder && <button className="btn" onClick={async () => { const f = await desktop.pickFolder(); if (f) setV({ ...v, exportFolder: f }); }}>Choose…</button>}
         </div>
       </label>
-      <label className="field">File name <span className="hint">Use {'{date}'}, {'{title}'}, {'{sermon}'}, {'{n}'}</span>
-        <input className="input mono" value={v.exportPattern} onChange={(e) => setV({ ...v, exportPattern: e.target.value })} />
-      </label>
-      <div className="row"><button className="btn primary" onClick={async () => { await saveConfig(v); setSaved(Date.now()); }}>Save</button><Saved at={saved} /></div>
+      <div className="stack" style={{ gap: 6 }}>
+        <span className="small" style={{ fontWeight: 600, color: 'var(--ink)' }}>File name</span>
+        <NamePattern value={v.exportPattern} onChange={(x) => setV({ ...v, exportPattern: x })} />
+      </div>
+      <div className="row"><button className="btn primary" onClick={async () => { await saveConfig(v); setSaved(Date.now()); }}>Save changes</button><Saved at={saved} /></div>
     </section>
   );
 }

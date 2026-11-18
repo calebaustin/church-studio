@@ -3,6 +3,7 @@ import { Download, FolderOpen, Smartphone, Square, RectangleHorizontal, Rectangl
 import { useApp } from '../App.jsx';
 import { api, desktop, fmt } from '../api.js';
 import Modal from './Modal.jsx';
+import { NamePattern } from '../screens/Settings.jsx';
 
 const PRESETS = [
   ['vertical', 'Reels · Shorts · TikTok', '9:16 vertical', Smartphone, [1080, 1920]],
@@ -114,13 +115,14 @@ export default function ExportDialog({ project, clips, onClose, beforeExport }) 
       <div className="grid2">
         <label className="field">Save to
           <div className="row">
-            <input className="input mono" value={folder} placeholder="Downloads" onChange={(e) => setFolder(e.target.value)} />
+            <input className="input" value={folder} placeholder="Downloads" onChange={(e) => setFolder(e.target.value)} />
             {desktop?.pickFolder && <button className="btn" onClick={async () => { const f = await desktop.pickFolder(); if (f) setFolder(f); }}><FolderOpen size={14} />Choose</button>}
           </div>
         </label>
-        <label className="field">File name <span className="hint">Use {'{date}'}, {'{title}'}, {'{sermon}'}, {'{n}'}</span>
-          <input className="input mono" value={fileName} onChange={(e) => setFileName(e.target.value)} />
-        </label>
+        <div className="stack" style={{ gap: 6 }}>
+          <span className="small" style={{ fontWeight: 600, color: 'var(--ink)' }}>File name</span>
+          <NamePattern value={fileName} onChange={setFileName} />
+        </div>
       </div>
 
       {error && <div className="banner bad">{error}</div>}

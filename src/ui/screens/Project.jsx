@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../App.jsx';
-import { api, fmt, media } from '../api.js';
+import { api, fmt, fmtEta, media } from '../api.js';
 import { ArrowLeft, Square, Wand2, Download, Trash2, Plus, Send, FolderOpen, Copy, ScissorsLineDashed } from 'lucide-react';
 import ClipEditor from './ClipEditor.jsx';
 import { StatusChip } from './Library.jsx';
@@ -17,7 +17,10 @@ export function InlineJob({ job, label }) {
         <button className="btn sm danger" onClick={() => api.del(`/api/jobs/${job.id}`)}><Square size={11} fill="currentColor" />Stop</button>
       </div>
       <div className="progress"><i style={{ width: `${job.status === 'queued' ? 0 : job.progress}%` }} /></div>
-      <span className="muted small truncate">{job.status === 'queued' ? 'Waiting for the current task to finish…' : job.message}</span>
+      <div className="row between small muted" style={{ gap: 8 }}>
+        <span className="truncate">{job.status === 'queued' ? 'Waiting for the current task' : job.message}</span>
+        {job.status === 'running' && <span className="num" style={{ flex: 'none', opacity: 0.8 }}>{fmtEta(job.eta) || `${job.progress}%`}</span>}
+      </div>
     </div>
   );
 }
@@ -39,7 +42,7 @@ function TimeInput({ value, onChange }) {
 }
 
 export default function Project({ id, initialStep }) {
-  const { go, trackJob, onJobFinished, jobs } = useApp();
+  const { go, trackJob, onJobFinished, jobs, confirmLeave } = useApp();
   const [project, setProject] = useState(null);
   const [transcript, setTranscript] = useState(null);
   const [step, setStep] = useState(null);
@@ -118,7 +121,7 @@ export default function Project({ id, initialStep }) {
           {steps.map(([key, label, done], i) => (
             <button key={key} className={`${step === key ? 'on' : ''} ${done ? 'done' : ''}`}
               disabled={key !== 'transcribe' && !transcribed || (key === 'edit' && !project.clips.length)}
-              onClick={() => { if (key === 'edit' && !selected) setSelected(project.clips[0]?.id); setStep(key); }}>
+              onClick={async () => { if (step === 'edit' && key !== 'edit' && !(await confirmLeave())) return; if (key === 'edit' && !selected) setSelected(project.clips[0]?.id); setStep(key); }}>
               <span className="n">{done ? '✓' : i + 1}</span>{label}
             </button>
           ))}
@@ -144,7 +147,7 @@ export default function Project({ id, initialStep }) {
       )}
       {step === 'edit' && transcript && (
         <ClipEditor project={project} transcript={transcript} clipId={selected || project.clips[0]?.id}
-          onSelect={setSelected} patch={patch} start={start} jobs={busy} />
+          onSelect={setSelected} patch={patch} jobs={busy} />
       )}
       {step === 'exports' && <ExportsStep project={project} />}
     </div>

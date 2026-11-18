@@ -11,7 +11,8 @@ export default function Filmstrip({ project, player, range, onSetStart, onSetEnd
   const { trackJob, jobs } = useApp();
   const strip = useRef(null);
   const [now, setNow] = useState(0);
-  const [zoom, setZoom] = useState(1); // show every Nth frame
+  const STEPS = [1, 3, 15, 45, 60];
+  const [stepIdx, setStepIdx] = useState(2); // every 15s to start
   const [hover, setHover] = useState(false);
   const t = project.thumbs;
   const busy = jobs.some((j) => j.kind === 'thumbs' && j.projectId === project.id && (j.status === 'running' || j.status === 'queued'));
@@ -24,13 +25,18 @@ export default function Filmstrip({ project, player, range, onSetStart, onSetEnd
     return () => v.removeEventListener('timeupdate', on);
   }, [player, project.id]);
 
+  const usable = STEPS.filter((v) => v >= (t?.every || 1));
+  const step = usable[Math.min(stepIdx, usable.length - 1)] || 15;
   const frames = useMemo(() => {
     if (!t?.count) return [];
     const out = [];
-    for (let i = 0; i < t.count; i += zoom) out.push({ i, time: i * t.every });
+    const total = t.count * t.every;
+    for (let time = 0; time < total; time += step) {
+      const i = Math.min(t.count - 1, Math.round(time / t.every));
+      if (!out.length || out.at(-1).i !== i) out.push({ i, time });
+    }
     return out;
-  }, [t?.count, t?.every, zoom]);
-  const step = (t?.every || 5) * zoom;
+  }, [t?.count, t?.every, step]);
   const currentIdx = frames.findIndex((f) => now >= f.time && now < f.time + step);
 
   // Keep the current frame in view while playing (unless the mouse is in the strip).
@@ -52,11 +58,10 @@ export default function Filmstrip({ project, player, range, onSetStart, onSetEnd
     <div className="stack" style={{ gap: 6 }}>
       <div className="row between">
         <span className="small muted">Scene strip · click a frame to jump there{onSetStart ? ' · hover for Start / End' : ''}</span>
-        <div className="seg" aria-label="Frames shown">
-          {[1, 3, 12].map((z) => [z, t.every * z < 60 ? `${t.every * z}s` : `${Math.round((t.every * z) / 60)} min`]).map(([z, l]) => (
-            <button key={z} className={zoom === z ? 'on' : ''} onClick={() => setZoom(z)}>Every {l}</button>
-          ))}
-        </div>
+        <label className="row small muted" style={{ gap: 8 }}>
+          Every <strong className="num" style={{ width: 30, color: 'var(--ink)' }}>{step < 60 ? `${step}s` : '1m'}</strong>
+          <input type="range" min="0" max={usable.length - 1} step="1" value={Math.min(stepIdx, usable.length - 1)} onChange={(e) => setStepIdx(Number(e.target.value))} style={{ width: 110 }} aria-label="Time between frames" />
+        </label>
       </div>
       <div className="filmstrip" ref={strip} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
         onWheel={(e) => { if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { e.currentTarget.scrollLeft += e.deltaY; } }}>

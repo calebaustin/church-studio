@@ -5,14 +5,20 @@ import { createReadStream, existsSync, statSync } from 'node:fs';
 
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { ROOT, PROJECTS_DIR, toolStatus } from './tools.js';
+import { ROOT, PROJECTS_DIR, toolStatus, repairTool } from './tools.js';
 import { loadConfig, saveConfig, mask, KEY_GUIDE } from './config.js';
 import * as jobs from './jobs.js';
 import { listProjects, getProject, updateProject, deleteProject, getTranscript, projectDir } from './projects.js';
 import { listChannel, downloadToProject, importLocalFile, scoutVideo } from './youtube.js';
 import { transcribeProject } from './transcribe.js';
 import { proposeClips } from './pipeline.js';
-import { exportClip, trackClip, revealInFinder, EXPORT_PRESETS, moveExport, downloadsDir } from './render.js';
+import { exportClip, trackClip, revealInFinder, EXPORT_PRESETS, moveExport, downloadsDir, sampleFrames } from './render.js';
+import * as prefs from './prefs.js';
+import * as workspaces from './workspaces.js';
+import * as library from './library.js';
+import * as writing from './writing.js';
+import { WORKSPACE } from './tools.js';
+import { toSentences, backgroundOf, keywords as topKeywords } from './text.js';
 import { listThemes, saveTheme, deleteTheme, refreshSystemFonts, bundledFontDir } from './themes.js';
 import { makeThumbs } from './thumbs.js';
 import { testProvider } from './ai.js';
@@ -26,7 +32,7 @@ const UI_DIR = path.join(ROOT, 'dist', 'ui');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json',
-  '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.mp4': 'video/mp4', '.webm': 'video/webm',
+  '.svg': 'image/svg+xml', '.webp': 'image/webp', '.gif': 'image/gif', '.png': 'image/png', '.jpg': 'image/jpeg', '.mp4': 'video/mp4', '.webm': 'video/webm',
   '.mov': 'video/quicktime', '.m4a': 'audio/mp4', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.otf': 'font/otf', '.ico': 'image/x-icon',
 };
 
@@ -69,6 +75,7 @@ route('GET', '/api/health', () => ({ ok: true, version: '0.1.0' }));
 route('GET', '/api/config', async () => ({ config: mask(await loadConfig()), keyGuide: KEY_GUIDE }));
 route('PUT', '/api/config', async (_p, b) => ({ config: mask(await saveConfig(b)) }));
 route('GET', '/api/tools', async () => ({ tools: await toolStatus() }));
+route('POST', '/api/tools/repair', (_p, b) => ({ job: jobs.view(jobs.enqueue({ kind: 'repair', label: 'Repairing a helper', key: `repair:${b.name}` }, (ctx) => repairTool(String(b.name || ''), ctx))) }));
 route('POST', '/api/ai/test', async (_p, b) => {
   const cfg = { ...(await loadConfig()) };
   if (b.provider) cfg.llmProvider = b.provider;
@@ -165,7 +172,7 @@ route('POST', '/api/projects/:id/clips', async ({ id }, b) => {
   const clip = {
     id: randomUUID().slice(0, 8), start, end, title: b.title || 'New clip', summary: '', hook: '', score: null,
     category: 'Manual', reasons: ['Added by you'], startPhrase: '', endPhrase: '', hashtags: ['sermon'],
-    cutWords: [], tightenPauses: false, crop: { mode: 'auto' }, videoTheme: null, status: 'kept', source: 'manual',
+    cutWords: [], tightenPauses: false, crop: { mode: 'auto', smooth: 0 }, videoTheme: null, status: 'kept', source: 'manual',
   };
   const project = await updateProject(id, (p) => { p.clips.push(clip); });
   return { clip, project };
@@ -193,6 +200,13 @@ route('POST', '/api/projects/:id/clips/:cid/move', async ({ id, cid }, b) => {
   try { return await moveExport(id, cid, String(b.folder || '')); } catch (e) { throw new HttpError(400, e.message); }
 });
 route('GET', '/api/export/defaults', () => ({ folder: downloadsDir() }));
+route('POST', '/api/projects/:id/clips/:cid/frames', async ({ id, cid }, b) => ({ frames: await sampleFrames(id, cid, Math.min(9, Number(b.count) || 6)) }));
+route('GET', '/api/speaker', () => prefs.speakerPrior());
+route('POST', '/api/speaker/hints', async (_p, b) => prefs.addSpeakerHints(Array.isArray(b.points) ? b.points : []));
+route('DELETE', '/api/speaker/hints', () => prefs.resetSpeakerHints());
+route('GET', '/api/edit-templates', () => prefs.listTemplates());
+route('POST', '/api/edit-templates', async (_p, b) => ({ template: await prefs.saveTemplate(b.name, b.settings) }));
+route('DELETE', '/api/edit-templates/:tid', async ({ tid }) => { await prefs.deleteTemplate(tid); return { ok: true }; });
 
 route('POST', '/api/projects/:id/export-all', async ({ id }, b) => {
   const project = await requireProject(id);
@@ -234,6 +248,21 @@ route('POST', '/api/social/youtube/auth', (_p, b) => {
   try { return social.startGoogleAuth(b, `http://127.0.0.1:${PORT}`); } catch (e) { throw new HttpError(400, e.message); }
 });
 route('GET', '/api/social/posts', async () => ({ posts: await socialStore.listPosts() }));
+route('GET', '/api/social/messages', async () => {
+  const { youtubeComments } = await import('./social/providers.js');
+  const out = [];
+  for (const a of (await socialStore.listAccounts()).filter((x) => x.platform === 'youtube')) {
+    const full = await socialStore.getAccount(a.id, { withCredentials: true });
+    const channelId = (a.url || '').match(/channel\/([\w-]+)/)?.[1];
+    if (!channelId) continue;
+    try {
+      const r = await youtubeComments(full.credentials, channelId);
+      if (r.credentials) await socialStore.saveAccount({ id: a.id, credentials: r.credentials });
+      out.push(...r.items.map((m) => ({ ...m, account: a.label })));
+    } catch (e) { throw new HttpError(502, e.message); }
+  }
+  return { messages: out.sort((x, y) => String(y.at).localeCompare(String(x.at))) };
+});
 route('POST', '/api/social/posts', async (_p, b) => {
   try { return { post: await social.createPost(b) }; } catch (e) { throw new HttpError(400, e.message); }
 });
@@ -266,6 +295,60 @@ route('GET', '/api/social/media', async () => {
     }
   }
   return { media: out.sort((a, b) => String(b.at).localeCompare(String(a.at))) };
+});
+
+// ---------------------------------------------------------------- workspaces
+route('GET', '/api/workspaces', () => workspaces.listWorkspaces());
+route('POST', '/api/workspaces', async (_p, b) => { try { return { workspace: await workspaces.createWorkspace(b) }; } catch (e) { throw new HttpError(400, e.message); } });
+route('PATCH', '/api/workspaces/:wid', async ({ wid }, b) => ({ workspace: await workspaces.renameWorkspace(wid, b.name) }));
+route('POST', '/api/workspaces/:wid/switch', async ({ wid }) => {
+  await workspaces.switchWorkspace(wid);
+  // Restart so every path points at the new workspace. Electron restarts the engine on exit code 75.
+  setTimeout(() => process.exit(75), 300);
+  return { ok: true, restarting: true };
+});
+
+// ---------------------------------------------------------------- brand library
+route('GET', '/api/library', () => library.listLibrary());
+route('POST', '/api/library/open', async (_p, b) => {
+  const root = await library.ensureLibrary();
+  const target = b.folder && library.FOLDERS.includes(b.folder) ? path.join(root, b.folder) : root;
+  if (process.platform === 'darwin') await import('./tools.js').then((t) => t.run('/usr/bin/open', [target]));
+  return { ok: true, root };
+});
+route('POST', '/api/library/reveal', async (_p, b) => {
+  const f = await library.libraryFile(String(b.rel || ''));
+  if (!f) throw new HttpError(404, 'Not in the library');
+  await revealInFinder(f);
+  return { ok: true };
+});
+route('POST', '/api/library/save', async (_p, b) => { try { return await library.saveDataUrl(b.folder || 'Graphics', b.name, b.dataUrl); } catch (e) { throw new HttpError(400, e.message); } });
+route('POST', '/api/library/import', async (_p, b) => ({ files: await library.importFiles(Array.isArray(b.paths) ? b.paths : [], b.folder) }));
+
+// ---------------------------------------------------------------- writing
+route('GET', '/api/writing/:id', async ({ id }) => ({ draft: await writing.loadDraft(id) }));
+route('POST', '/api/writing/:id/generate', async ({ id }) => { try { return { draft: await writing.saveDraft(id, await writing.generate(id)) }; } catch (e) { throw new HttpError(400, e.message); } });
+route('PUT', '/api/writing/:id', async ({ id }, b) => ({ draft: await writing.saveDraft(id, b) }));
+route('POST', '/api/writing/:id/polish', async ({ id }, b) => { try { return { text: await writing.polish(id, b.kind, b.text) }; } catch (e) { throw new HttpError(400, e.message); } });
+route('POST', '/api/writing/:id/save-file', async ({ id }, b) => {
+  const p = await getProject(id);
+  const r = await library.saveText('Writing', `${b.name || p?.title || 'Draft'}`, String(b.text || ''));
+  await revealInFinder(r.file);
+  return r;
+});
+
+// ---------------------------------------------------------------- ideas (My App)
+route('GET', '/api/ideas', async () => {
+  const tally = new Map();
+  const sermons = [];
+  for (const summary of (await listProjects()).slice(0, 12)) {
+    const t = await getTranscript(summary.id).catch(() => null);
+    if (!t) continue;
+    const sentences = toSentences(t.words);
+    for (const k of topKeywords(sentences.map((x) => x.text).join(' '), backgroundOf(sentences), 6)) tally.set(k, (tally.get(k) || 0) + 1);
+    sermons.push({ id: summary.id, title: summary.title });
+  }
+  return { topics: [...tally.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k).slice(0, 12), sermons, workspace: { id: WORKSPACE.id, name: WORKSPACE.name } };
 });
 
 // ---------------------------------------------------------------- dashboard
@@ -346,6 +429,11 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, await r.handler(params, b, url));
       }
       throw new HttpError(404, 'Not found');
+    }
+    if (url.pathname.startsWith('/library/')) { // brand library files (images for previews and graphics)
+      const f = await library.libraryFile(decodeURIComponent(url.pathname.slice(9)));
+      if (!f) throw new HttpError(404, 'Not in the library');
+      return streamFile(req, res, f);
     }
     if (url.pathname.startsWith('/fonts/')) { // bundled caption fonts for the preview's @font-face
       const f = safeJoin(bundledFontDir, decodeURIComponent(url.pathname.slice(7)));

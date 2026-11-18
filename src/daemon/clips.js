@@ -18,14 +18,14 @@ const APPLY = [/\byou (need|have|get|can|don't have|are|were) to\b/i, /\bwhat if
   /\bhere's (the thing|what)\b/i, /\bif you('re| are)\b/i, /\byou are\b/i, /\bgod (is|will|wants|loves|sees|knows)\b/i,
   /\bthe (truth|point|good news) is\b/i, /\bi want you to\b/i];
 const QUOTABLE = [/\bisn't\b.*\bit's\b/i, /\bnot\b.*\bbut\b/i, /\bthe (opposite|enemy) of\b/i, /\byou can't\b.*\band\b/i];
-const SCRIPTURE = /\b(genesis|exodus|leviticus|numbers|deuteronomy|joshua|judges|ruth|samuel|kings|chronicles|ezra|nehemiah|esther|job|psalms?|proverbs|ecclesiastes|isaiah|jeremiah|lamentations|ezekiel|daniel|hosea|joel|amos|jonah|micah|habakkuk|zechariah|malachi|matthew|mark|luke|john|acts|romans|corinthians|galatians|ephesians|philippians|colossians|thessalonians|timothy|titus|hebrews|james|peter|jude|revelation)\b[^.]{0,12}\d/i;
+export const SCRIPTURE = /\b(genesis|exodus|leviticus|numbers|deuteronomy|joshua|judges|ruth|samuel|kings|chronicles|ezra|nehemiah|esther|job|psalms?|proverbs|ecclesiastes|isaiah|jeremiah|lamentations|ezekiel|daniel|hosea|joel|amos|jonah|micah|habakkuk|zechariah|malachi|matthew|mark|luke|john|acts|romans|corinthians|galatians|ephesians|philippians|colossians|thessalonians|timothy|titus|hebrews|james|peter|jude|revelation)\b[^.]{0,12}\d/i;
 // Lines that won't stand alone.
 const DANGLING_OPENER = new Set(['and', 'but', 'because', 'which', 'or', 'then', 'so', 'that', 'it', 'this', 'they', 'he', 'she', 'also']);
 const CONTEXT_DEPENDENT = [/\bas i (said|mentioned)\b/i, /\blike i (said|mentioned)\b/i, /\bearlier\b/i, /\blast week\b/i, /\bverse \d+ says\b/i, /\bwe('ll| will) (get|come) (to|back)\b/i];
 const LOGISTICS = /\b(turn with me|open (up )?your bibles?|if you have (a|your) bibles?|you can be seated|on the screen)\b/i;
 const HOUSEKEEPING = [/\boffering\b/i, /\bgiving\b/i, /\bannouncement/i, /\bparking\b/i, /\bwebsite\b/i, /\bapp\b/i, /\bsign up\b/i, /\bnext (week|sunday)\b/i, /\bwelcome to\b/i, /\bkids?('s)? (ministry|church)\b/i, /\bconnect card\b/i, /\bturn (in your bibles )?to (page|chapter)\b/i];
 
-function lineFeatures(text) {
+export function lineFeatures(text) {
   const toks = tokens(text);
   const f = {
     hook: toks.slice(0, 16).filter((t) => HOOK.has(t)).length,
@@ -157,7 +157,7 @@ function buildClip(sentences, feats, scores, { a, b, score }, top, bg, words) {
     category: categoryOf(f), reasons,
     startPhrase: firstWords(span[0].text), endPhrase: lastWords(span.at(-1).text),
     hashtags: [...tags, 'sermon', 'faith'],
-    cutWords: [], tightenPauses: false, crop: { mode: 'auto' }, videoTheme: null,
+    cutWords: [], tightenPauses: false, crop: { mode: 'auto', smooth: 0 }, videoTheme: null,
     status: 'proposed', source: 'heuristic',
   };
 }

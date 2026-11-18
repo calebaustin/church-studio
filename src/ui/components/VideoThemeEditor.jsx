@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, RefreshCw, Trash2, Check } from 'lucide-react';
+import { Plus, RefreshCw, Trash2, Check, Heart, MessageCircle, Send, Bookmark, Music2, ThumbsUp, Repeat2 } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { api } from '../api.js';
 import CaptionOverlay, { findFont } from './CaptionOverlay.jsx';
@@ -17,12 +17,33 @@ function useSampleWords() {
   return { words, t };
 }
 
-export function ThemePreview({ theme, font, width = 230, hook }) {
+/** Rough stand-ins for where each app draws its own buttons and text, to check captions stay clear. */
+function AppOverlay({ app }) {
+  if (!app) return null;
+  const icons = {
+    tiktok: [[Heart, '12K'], [MessageCircle, '231'], [Bookmark, '1K'], [Send, 'Share']],
+    reels: [[Heart, '12K'], [MessageCircle, '231'], [Send, ''], [Bookmark, '']],
+    shorts: [[ThumbsUp, '12K'], [MessageCircle, '231'], [Repeat2, 'Remix'], [Send, 'Share']],
+  }[app];
+  return (
+    <div className="app-overlay" aria-hidden="true">
+      <div className="ao-side">{icons.map(([I, n], i) => <span key={i}><I size={18} />{n && <small>{n}</small>}</span>)}</div>
+      <div className="ao-bottom">
+        <strong>@yourchurch</strong>
+        <span>Sunday's message in 60 seconds…</span>
+        {app !== 'shorts' && <span className="row" style={{ gap: 4 }}><Music2 size={11} />Original audio</span>}
+      </div>
+    </div>
+  );
+}
+
+export function ThemePreview({ theme, font, width = 230, hook = null, app = null }) {
   const { words, t } = useSampleWords();
   return (
     <div className="vframe" style={{ width, background: 'linear-gradient(160deg,#8a93a6,#3a4152 55%,#1a1f2b)' }} aria-label="Caption preview">
       <div style={{ position: 'absolute', left: '30%', top: '30%', width: '40%', height: '58%', borderRadius: '42% 42% 18% 18%', background: 'linear-gradient(#d8c8b8,#6d7a8f 40%,#3b4558)', opacity: 0.8 }} />
       <CaptionOverlay theme={theme} font={font} words={words} t={t} frameWidth={width} hook={hook} showHook={Boolean(hook)} />
+      <AppOverlay app={app} />
     </div>
   );
 }
@@ -57,7 +78,7 @@ function FontPicker({ value, onChange }) {
       <span className="small" style={{ fontWeight: 600, color: 'var(--ink)' }}>Font</span>
       <div className="row">
         <input className="input" placeholder={`Search ${themes.fonts.length + (themes.systemFonts?.length || 0)} fonts`} value={q} onChange={(e) => setQ(e.target.value)} />
-        <button className="btn icon" title="Look for newly installed fonts" aria-label="Refresh system fonts" disabled={busy}
+        <button className="btn icon" title="Look for newly installed fonts" aria-label="Refresh fonts" disabled={busy}
           onClick={async () => { setBusy(true); await api.post('/api/fonts/refresh'); await reloadThemes(); setBusy(false); }}>
           <RefreshCw size={15} />
         </button>
@@ -71,7 +92,76 @@ function FontPicker({ value, onChange }) {
           {sys.slice(0, 600).map((f) => <option key={f.id} value={f.id} style={{ fontFamily: f.css }}>{f.name}</option>)}
         </optgroup>
       </select>
-      <span className="hint" style={{ fontFamily: current?.css, fontWeight: current?.weight, fontSize: 16, color: 'var(--ink)' }}>{current?.name}: God wants what is in our hands</span>
+    </div>
+  );
+}
+
+/** All caption style controls. Used in Settings and live in the clip editor. */
+export function CaptionStyleFields({ draft, set }) {
+  return (
+    <div className="stack" style={{ gap: 14 }}>
+      <FontPicker value={draft.font} onChange={(id) => set({ font: id })} />
+      <div className="stack" style={{ gap: 6 }}>
+        <span className="small" style={{ fontWeight: 600, color: 'var(--ink)' }}>How the spoken word stands out</span>
+        <div className="seg">
+          {[['color', 'Color'], ['pill', 'Pill'], ['box', 'Box behind line']].map(([k, l]) => (
+            <button key={k} className={draft.highlight === k ? 'on' : ''} onClick={() => set({ highlight: k })}>{l}</button>
+          ))}
+        </div>
+      </div>
+      <div className="token-grid">
+        <ColorField label="Spoken words" color={draft.color} opacity={draft.colorOpacity} onColor={(v) => set({ color: v })} onOpacity={(v) => set({ colorOpacity: v })} />
+        <ColorField label="Word being said" color={draft.active} opacity={draft.activeOpacity} onColor={(v) => set({ active: v })} onOpacity={(v) => set({ activeOpacity: v })} />
+        <div className="stack" style={{ gap: 4 }}>
+          <label className="row small" style={{ fontWeight: 600, color: 'var(--ink)' }}>
+            <input type="checkbox" checked={draft.future != null} onChange={(e) => set({ future: e.target.checked ? draft.color : null, futureOpacity: e.target.checked ? 0.45 : 1 })} />
+            Different look for upcoming words
+          </label>
+          {draft.future != null && <ColorField label="Upcoming words" color={draft.future} opacity={draft.futureOpacity} onColor={(v) => set({ future: v })} onOpacity={(v) => set({ futureOpacity: v })} />}
+        </div>
+        {draft.highlight !== 'color'
+          ? <ColorField label={draft.highlight === 'pill' ? 'Pill' : 'Box'} color={draft.boxColor} opacity={draft.boxOpacity} onColor={(v) => set({ boxColor: v })} onOpacity={(v) => set({ boxOpacity: v })} />
+          : <ColorField label="Outline" color={draft.outlineColor} opacity={draft.outlineOpacity} onColor={(v) => set({ outlineColor: v })} onOpacity={(v) => set({ outlineOpacity: v })} />}
+      </div>
+      <div className="token-grid">
+        <label className="field">Size · {draft.size}<input type="range" min="36" max="130" value={draft.size} onChange={(e) => set({ size: Number(e.target.value) })} /></label>
+        <label className="field">Words on screen · up to {draft.words}<input type="range" min="1" max="8" value={draft.words} onChange={(e) => set({ words: Number(e.target.value) })} /></label>
+        <label className="field">Position · {Math.round(draft.position * 100)}% down<input type="range" min="0.08" max="0.9" step="0.01" value={draft.position} onChange={(e) => set({ position: Number(e.target.value) })} /></label>
+        <label className="field">Text width · {Math.round((draft.maxWidth ?? 0.86) * 100)}%<input type="range" min="0.4" max="0.95" step="0.01" value={draft.maxWidth ?? 0.86} onChange={(e) => set({ maxWidth: Number(e.target.value) })} /></label>
+        <label className="field">Line spacing · {(draft.lineHeight ?? 1.12).toFixed(2)}<input type="range" min="0.9" max="1.6" step="0.02" value={draft.lineHeight ?? 1.12} onChange={(e) => set({ lineHeight: Number(e.target.value) })} /></label>
+        {draft.highlight === 'color' && <label className="field">Outline thickness · {draft.outline}<input type="range" min="0" max="14" value={draft.outline} onChange={(e) => set({ outline: Number(e.target.value) })} /></label>}
+        <label className="field">Shadow · {Math.round(draft.shadow * 100)}%<input type="range" min="0" max="0.9" step="0.05" value={draft.shadow} onChange={(e) => set({ shadow: Number(e.target.value) })} /></label>
+        <div className="stack" style={{ gap: 6 }}>
+          <span className="small" style={{ fontWeight: 600, color: 'var(--ink)' }}>Alignment</span>
+          <div className="seg">
+            <button className={draft.align !== 'left' ? 'on' : ''} onClick={() => set({ align: 'center' })}>Centered</button>
+            <button className={draft.align === 'left' ? 'on' : ''} onClick={() => set({ align: 'left' })}>Left</button>
+          </div>
+        </div>
+        <label className="row small" style={{ alignSelf: 'end' }}><input type="checkbox" checked={draft.uppercase} onChange={(e) => set({ uppercase: e.target.checked })} />ALL CAPS</label>
+      </div>
+    </div>
+  );
+}
+
+/** On-screen hook style. Part of the caption theme so every clip using it matches. */
+export function HookStyleFields({ draft, set }) {
+  return (
+    <div className="stack" style={{ gap: 12 }}>
+      <div className="stack" style={{ gap: 6 }}>
+        <span className="small" style={{ fontWeight: 600, color: 'var(--ink)' }}>Hook shape</span>
+        <div className="seg">
+          {[['pill', 'Pill'], ['box', 'Box'], ['none', 'Text only']].map(([k, l]) => <button key={k} className={(draft.hookShape || 'pill') === k ? 'on' : ''} onClick={() => set({ hookShape: k })}>{l}</button>)}
+        </div>
+      </div>
+      <div className="token-grid">
+        <ColorField label="Hook text" color={draft.hookColor || '#11141C'} onColor={(v) => set({ hookColor: v })} />
+        {(draft.hookShape || 'pill') !== 'none' && <ColorField label="Hook background" color={draft.hookBg || '#FFFFFF'} opacity={draft.hookBgOpacity ?? 0.94} onColor={(v) => set({ hookBg: v })} onOpacity={(v) => set({ hookBgOpacity: v })} />}
+        <label className="field">Hook size · {draft.hookSize ?? 58}<input type="range" min="30" max="110" value={draft.hookSize ?? 58} onChange={(e) => set({ hookSize: Number(e.target.value) })} /></label>
+        <label className="field">Shows for · {(draft.hookDuration ?? 3.5).toFixed(1)}s<input type="range" min="1" max="10" step="0.5" value={draft.hookDuration ?? 3.5} onChange={(e) => set({ hookDuration: Number(e.target.value) })} /></label>
+        <label className="field">Default position · {Math.round((draft.hookY ?? 0.13) * 100)}% down<input type="range" min="0.05" max="0.9" step="0.01" value={draft.hookY ?? 0.13} onChange={(e) => set({ hookY: Number(e.target.value) })} /></label>
+        <label className="row small" style={{ alignSelf: 'end' }}><input type="checkbox" checked={Boolean(draft.hookUppercase)} onChange={(e) => set({ hookUppercase: e.target.checked })} />ALL CAPS</label>
+      </div>
     </div>
   );
 }
@@ -88,18 +178,19 @@ export default function VideoThemeEditor({ selectedId, onPick, pickLabel = 'Use 
   const base = themes.video.find((t) => t.id === editingId) || themes.video[0];
   const [draft, setDraft] = useState(base);
   const [dirty, setDirty] = useState(false);
+  const [app, setApp] = useState(null);
+  const [tab, setTab] = useState('captions');
   useEffect(() => { if (editingId !== 'new') { setDraft(base); setDirty(false); } }, [base?.id]);
   if (!draft) return null;
   const font = findFont(themes, draft.font);
   const set = (patch) => { setDirty(true); setDraft({ ...draft, ...patch }); };
   const startCustom = () => {
     setEditingId('new');
-    setDraft({ ...BLANK, ...base, ...{ id: undefined, builtin: false, name: 'My custom theme' } });
+    setDraft({ ...BLANK, ...base, id: undefined, builtin: false, name: 'My custom theme' });
     setDirty(true);
   };
   const save = async (asNew) => {
-    const body = { ...draft, id: asNew || draft.builtin ? undefined : draft.id };
-    const { theme } = await api.post('/api/themes/video', body);
+    const { theme } = await api.post('/api/themes/video', { ...draft, id: asNew || draft.builtin ? undefined : draft.id });
     await reloadThemes();
     setEditingId(theme.id);
     setDirty(false);
@@ -122,62 +213,24 @@ export default function VideoThemeEditor({ selectedId, onPick, pickLabel = 'Use 
             {t.id === selectedId && <Check size={13} aria-label="In use" />}{t.name}
           </button>
         ))}
-        <button className={`btn sm accent`} onClick={startCustom}><Plus size={14} />Create custom theme</button>
+        <button className="btn sm accent" onClick={startCustom}><Plus size={14} />Create custom theme</button>
       </div>
-      {isNew && <div className="banner info">You're building a new theme, starting from “{base?.name}”. Change anything, then save it.</div>}
-      <div style={{ display: 'grid', gridTemplateColumns: '240px minmax(0, 1fr)', gap: 22, alignItems: 'start' }}>
-        <div className="stack" style={{ position: 'sticky', top: 0 }}>
-          <ThemePreview theme={draft} font={font} />
-          {onPick && !isNew && <button className="btn" disabled={draft.id === selectedId} onClick={() => onPick(draft.id)}>{draft.id === selectedId ? 'In use' : pickLabel}</button>}
+      {isNew && <div className="banner info">New theme, starting from “{base?.name}”. Change anything, then save it.</div>}
+      <div style={{ display: 'grid', gridTemplateColumns: '250px minmax(0, 1fr)', gap: 22, alignItems: 'start' }}>
+        <div className="stack sticky-col">
+          <ThemePreview theme={draft} font={font} width={250} app={app} hook={tab === 'hook' ? 'Your hook goes here' : null} />
+          <div className="seg" aria-label="Preview with app buttons">
+            {[[null, 'Plain'], ['tiktok', 'TikTok'], ['reels', 'Reels'], ['shorts', 'Shorts']].map(([k, l]) => <button key={l} className={app === k ? 'on' : ''} onClick={() => setApp(k)}>{l}</button>)}
+          </div>
+          {onPick && !isNew && <button className="btn" disabled={draft.id === selectedId} onClick={() => onPick(draft.id)}>{draft.id === selectedId ? 'Default for new clips' : pickLabel}</button>}
         </div>
         <div className="stack" style={{ gap: 14 }}>
           <label className="field">Theme name<input className="input" value={draft.name} onChange={(e) => set({ name: e.target.value })} /></label>
-          <FontPicker value={draft.font} onChange={(id) => set({ font: id })} />
-
-          <div className="stack" style={{ gap: 6 }}>
-            <span className="small" style={{ fontWeight: 600, color: 'var(--ink)' }}>How the spoken word stands out</span>
-            <div className="seg">
-              {[['color', 'Color the word'], ['pill', 'Pill behind the word'], ['box', 'Box behind the line']].map(([k, l]) => (
-                <button key={k} className={draft.highlight === k ? 'on' : ''} onClick={() => set({ highlight: k })}>{l}</button>
-              ))}
-            </div>
+          <div className="seg">
+            <button className={tab === 'captions' ? 'on' : ''} onClick={() => setTab('captions')}>Captions</button>
+            <button className={tab === 'hook' ? 'on' : ''} onClick={() => setTab('hook')}>On-screen hook</button>
           </div>
-
-          <div className="token-grid">
-            <ColorField label="Spoken words" color={draft.color} opacity={draft.colorOpacity} onColor={(v) => set({ color: v })} onOpacity={(v) => set({ colorOpacity: v })} />
-            <ColorField label="Word being said" color={draft.active} opacity={draft.activeOpacity} onColor={(v) => set({ active: v })} onOpacity={(v) => set({ activeOpacity: v })} />
-            <div className="stack" style={{ gap: 4 }}>
-              <label className="row small" style={{ fontWeight: 600, color: 'var(--ink)' }}>
-                <input type="checkbox" checked={draft.future != null} onChange={(e) => set({ future: e.target.checked ? draft.color : null, futureOpacity: e.target.checked ? 0.45 : 1 })} />
-                Different look for upcoming words
-              </label>
-              {draft.future != null && (
-                <ColorField label="Upcoming words" color={draft.future} opacity={draft.futureOpacity} onColor={(v) => set({ future: v })} onOpacity={(v) => set({ futureOpacity: v })} hint="Lower the opacity to fade words that haven't been said yet." />
-              )}
-            </div>
-            {draft.highlight !== 'color'
-              ? <ColorField label={draft.highlight === 'pill' ? 'Pill' : 'Box'} color={draft.boxColor} opacity={draft.boxOpacity} onColor={(v) => set({ boxColor: v })} onOpacity={(v) => set({ boxOpacity: v })} />
-              : <ColorField label="Outline" color={draft.outlineColor} opacity={draft.outlineOpacity} onColor={(v) => set({ outlineColor: v })} onOpacity={(v) => set({ outlineOpacity: v })} />}
-          </div>
-
-          <div className="token-grid">
-            <label className="field">Size · {draft.size}<input type="range" min="36" max="130" value={draft.size} onChange={(e) => set({ size: Number(e.target.value) })} /></label>
-            <label className="field">Words on screen · up to {draft.words}<input type="range" min="1" max="8" value={draft.words} onChange={(e) => set({ words: Number(e.target.value) })} /></label>
-            <label className="field">Position · {Math.round(draft.position * 100)}% down<input type="range" min="0.08" max="0.9" step="0.01" value={draft.position} onChange={(e) => set({ position: Number(e.target.value) })} /></label>
-            <label className="field">Text width · {Math.round((draft.maxWidth ?? 0.86) * 100)}%<input type="range" min="0.4" max="0.95" step="0.01" value={draft.maxWidth ?? 0.86} onChange={(e) => set({ maxWidth: Number(e.target.value) })} /></label>
-            <label className="field">Line spacing · {(draft.lineHeight ?? 1.12).toFixed(2)}<input type="range" min="0.9" max="1.6" step="0.02" value={draft.lineHeight ?? 1.12} onChange={(e) => set({ lineHeight: Number(e.target.value) })} /></label>
-            {draft.highlight === 'color' && <label className="field">Outline thickness · {draft.outline}<input type="range" min="0" max="14" value={draft.outline} onChange={(e) => set({ outline: Number(e.target.value) })} /></label>}
-            <label className="field">Shadow · {Math.round(draft.shadow * 100)}%<input type="range" min="0" max="0.9" step="0.05" value={draft.shadow} onChange={(e) => set({ shadow: Number(e.target.value) })} /></label>
-            <div className="stack" style={{ gap: 6 }}>
-              <span className="small" style={{ fontWeight: 600, color: 'var(--ink)' }}>Alignment</span>
-              <div className="seg">
-                <button className={draft.align !== 'left' ? 'on' : ''} onClick={() => set({ align: 'center' })}>Centered</button>
-                <button className={draft.align === 'left' ? 'on' : ''} onClick={() => set({ align: 'left' })}>Left</button>
-              </div>
-            </div>
-            <label className="row small" style={{ alignSelf: 'end' }}><input type="checkbox" checked={draft.uppercase} onChange={(e) => set({ uppercase: e.target.checked })} />ALL CAPS</label>
-          </div>
-
+          {tab === 'captions' ? <CaptionStyleFields draft={draft} set={set} /> : <HookStyleFields draft={draft} set={set} />}
           <div className="row wrap">
             {isNew || draft.builtin
               ? <button className="btn primary" onClick={() => save(true)}>{isNew ? 'Save new theme' : 'Save as my theme'}</button>

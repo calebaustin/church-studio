@@ -35,3 +35,12 @@ export function openLink(url) {
   if (desktop?.openExternal) desktop.openExternal(url);
   else window.open(url, '_blank', 'noopener');
 }
+
+/** Subtle time-left text from a job's estimate (seconds). */
+export function fmtEta(sec) {
+  if (sec == null || !Number.isFinite(sec) || sec <= 0) return '';
+  if (sec < 45) return 'Less than a minute left';
+  if (sec < 90) return 'About a minute left';
+  if (sec < 3600) return `About ${Math.round(sec / 60)} min left`;
+  return `About ${Math.floor(sec / 3600)} h ${Math.round((sec % 3600) / 60)} min left`;
+}

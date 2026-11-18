@@ -12,7 +12,32 @@ export function findFont(themes, id) {
 }
 
 /** HTML version of the burned-in captions (mirrors scripts/render_clip.py Captions). */
-export default function CaptionOverlay({ theme, font, words, t, frameWidth, frameHeight, hook, showHook }) {
+/** The on-screen hook, styled by the caption theme. Drag it up or down when onDrag is given. */
+function Hook({ theme, font, scale, text, y, onDrag, frameHeight }) {
+  const shape = theme.hookShape || 'pill';
+  const pos = y ?? theme.hookY ?? 0.13;
+  const style = {
+    top: `${pos * 100}%`, transform: 'translate(-50%, -50%)', fontFamily: font?.css, fontWeight: 700,
+    fontSize: `${(theme.hookSize ?? 58) * scale}px`, color: theme.hookColor || '#11141C',
+    background: shape === 'none' ? 'transparent' : rgba(theme.hookBg || '#FFFFFF', theme.hookBgOpacity ?? 0.94),
+    borderRadius: shape === 'pill' ? '999px' : shape === 'box' ? '0.15em' : 0,
+    textTransform: theme.hookUppercase ? 'uppercase' : 'none',
+    textShadow: shape === 'none' ? '0 2px 6px rgba(0,0,0,.6)' : 'none',
+  };
+  const down = (e) => {
+    if (!onDrag) return;
+    e.stopPropagation();
+    const frame = e.currentTarget.parentElement.getBoundingClientRect();
+    const move = (ev) => onDrag(Math.min(0.92, Math.max(0.05, (ev.clientY - frame.top) / frame.height)));
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+  void frameHeight;
+  return <div className={`hookbar ${onDrag ? 'hook-drag' : ''}`} style={style} onPointerDown={down} title={onDrag ? 'Drag to move the hook' : undefined}>{text}</div>;
+}
+
+export default function CaptionOverlay({ theme, font, words, t, frameWidth, frameHeight, hook, showHook, hookY, onHookDrag }) {
   const events = useMemo(() => captionEvents(words, Number(theme.words || 3)), [words, theme.words]);
   const ev = activeCaption(events, t);
   const scale = (frameHeight ? Math.min(frameWidth, frameHeight) : frameWidth) / 1080;
@@ -38,7 +63,7 @@ export default function CaptionOverlay({ theme, font, words, t, frameWidth, fram
   };
   return (
     <>
-      {hook && showHook && <div className="hookbar" style={{ fontFamily: font?.css, fontSize: `${58 * scale}px` }}>{hook}</div>}
+      {hook && showHook && <Hook theme={theme} font={font} scale={scale} text={hook} y={hookY} onDrag={onHookDrag} frameHeight={frameHeight || frameWidth * 16 / 9} />}
       {ev && (
         <div className={`cap ${box ? 'box' : ''} ${left ? 'left' : ''}`} style={style}>
           <span className="inner" style={box ? { background: rgba(theme.boxColor, theme.boxOpacity ?? 0.92) } : undefined}>

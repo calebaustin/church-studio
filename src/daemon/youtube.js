@@ -7,7 +7,7 @@ import path from 'node:path';
 import { run, tool, probe, pyCommand } from './tools.js';
 
 const ytdlp = (args, opts) => run(...pyCommand('yt-dlp', args), opts);
-import { createProject, file, updateProject } from './projects.js';
+import { createProject, deleteProject, file, updateProject } from './projects.js';
 import { makeThumbs } from './thumbs.js';
 import { detectSermon } from './sermon.js';
 
@@ -135,22 +135,41 @@ export async function downloadToProject(url, ctx, existingProject = null, range 
   const part = range && range.end > range.start ? range : (project.range || null);
   if (part) await updateProject(project.id, (p) => { p.range = { start: part.start, end: part.end }; });
   await updateProject(project.id, (p) => { p.status = 'downloading'; });
-  ctx.progress(3, part ? 'Downloading the sermon…' : 'Downloading…');
+  ctx.progress(2, part ? 'Starting the sermon download' : 'Starting the download');
   const out = file(project.id, 'source.mp4');
-  await ytdlp([
+  const full = file(project.id, 'full.mp4');
+  // One steady bar across the stages: video stream, audio stream, then joining them.
+  let phase = 0; // 0 = video, 1 = audio
+  const report = (pct, what) => ctx.progress(Math.min(97, pct), what);
+  const parse = (chunk) => {
+    if (/Destination: .*\.(m4a|webm|mp3|opus)\s*$/m.test(chunk) || /\[download\] Destination: .*\.f\d+\.(m4a|webm)/.test(chunk)) phase = 1;
+    const m = [...chunk.matchAll(/PROGRESS\s+([\d.]+)%/g)].pop();
+    if (m) {
+      const p = Number(m[1]);
+      if (phase === 0) report(3 + p * (part ? 0.78 : 0.82), 'Downloading video');
+      else report((part ? 81 : 85) + p * 0.1, 'Downloading audio');
+    }
+    if (/\[Merger\]|Merging formats/.test(chunk)) report(part ? 91 : 96, 'Putting video and audio together');
+  };
+  try { await ytdlp([
     '--no-playlist', '--no-warnings', '--newline', '--ffmpeg-location', tool('ffmpeg'),
     '-f', 'bv*[height<=1080][vcodec^=avc1]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]/b',
     '--merge-output-format', 'mp4',
-    ...(part ? ['--download-sections', `*${Math.max(0, part.start).toFixed(2)}-${part.end.toFixed(2)}`] : []),
     '--progress-template', 'download:PROGRESS %(progress._percent_str)s',
-    '-o', out, url,
-  ], {
-    signal: ctx.signal,
-    onStdout: (chunk) => {
-      const m = [...chunk.matchAll(/PROGRESS\s+([\d.]+)%/g)].pop();
-      if (m) ctx.progress(3 + Number(m[1]) * 0.9, `Downloading… ${Math.round(Number(m[1]))}%`);
-    },
-  });
+    '-o', part ? full : out, url,
+  ], { signal: ctx.signal, onStdout: parse, onStderr: parse });
+    if (part) {
+      // YouTube serves whole files far faster than ranges, so cut the sermon out locally (no re-encode).
+      ctx.progress(93, 'Cutting out the sermon');
+      await run(tool('ffmpeg'), ['-y', '-loglevel', 'error', '-ss', String(Math.max(0, part.start)), '-to', String(part.end),
+        '-i', full, '-map', '0', '-c', 'copy', '-avoid_negative_ts', 'make_zero', '-movflags', '+faststart', out], { signal: ctx.signal });
+      await rm(full, { force: true });
+    }
+  } catch (e) {
+    // Stopped a brand-new download: remove the half-made project instead of leaving it behind.
+    if (ctx.signal.aborted && !existingProject) await deleteProject(project.id).catch(() => {});
+    throw e;
+  }
   return finishIngest(project.id, out, ctx);
 }
 
@@ -167,6 +186,8 @@ export async function importLocalFile(filePath, ctx) {
   return finishIngest(project.id, dest, ctx);
 }
 
+const fmtDur = (t) => { t = Math.round(t); const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), x = t % 60; return h ? `${h}:${String(m).padStart(2, '0')}:${String(x).padStart(2, '0')}` : `${m}:${String(x).padStart(2, '0')}`; };
+
 async function finishIngest(id, source, ctx) {
   ctx.progress(96, 'Checking the video…');
   const media = await probe(source);
@@ -179,6 +200,8 @@ async function finishIngest(id, source, ctx) {
     p.status = 'ready';
   });
   await makeThumbs(id, null).catch((e) => console.error('[thumbs]', e.message));
-  ctx.progress(100, 'Video ready');
-  return { projectId: project.id };
+  const size = (await stat(source)).size;
+  const summary = `${project.title}: ${fmtDur(media.duration)}, ${media.height}p, ${(size / 1073741824 >= 1 ? `${(size / 1073741824).toFixed(1)} GB` : `${Math.round(size / 1048576)} MB`)}`;
+  ctx.progress(100, project.range ? 'Sermon downloaded' : 'Video ready');
+  return { projectId: project.id, title: project.title, duration: media.duration, height: media.height, bytes: size, range: project.range || null, summary };
 }
