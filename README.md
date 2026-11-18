@@ -36,7 +36,8 @@ scripts/build-app.sh    # -> dist/release/Church Studio-<version>-arm64.dmg
 The `.app` contains everything: a frozen Python media engine (`sc-media`: Whisper, OpenCV, Pillow,
 yt-dlp), static ffmpeg/ffprobe, fonts, the UI and the local daemon. Nothing else needs installing.
 Data lives in `~/Library/Application Support/Church Studio`. The Whisper model downloads once on first
-transcription. The build is unsigned, so the first launch needs right-click > Open.
+transcription. The build is signed ad hoc (no Apple developer account), so the first launch shows a warning: click Done,
+then open System Settings › Privacy & Security and choose Open Anyway next to Church Studio.
 
 ## How it works
 

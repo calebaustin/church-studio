@@ -27,6 +27,16 @@ chmod +x build/bin/*
 
 echo "==> Building the app"
 npx vite build
-npx electron-builder --mac dmg --arm64 "$@"
+npx electron-builder --mac dir --arm64 "$@"
+# Sign the whole app (ad hoc, no Apple developer account). Without a valid signature, macOS calls a
+# downloaded copy "damaged". With it, people get the usual first-launch prompt instead.
+# Signed in a temp folder: iCloud-synced folders (like Documents) add file tags that codesign rejects.
+SIGN="$(mktemp -d)"
+ditto --noextattr --norsrc "dist/release/mac-arm64/Church Studio.app" "$SIGN/Church Studio.app"
+xattr -cr "$SIGN/Church Studio.app"
+codesign --force --deep --sign - "$SIGN/Church Studio.app"
+codesign --verify --deep --strict "$SIGN/Church Studio.app"
+npx electron-builder --mac dmg --arm64 --prepackaged "$SIGN/Church Studio.app"
+rm -rf "$SIGN"
 echo
 echo "Done: see dist/release/"
