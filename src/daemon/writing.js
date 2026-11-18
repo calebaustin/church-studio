@@ -12,6 +12,9 @@ import { lineScore, lineFeatures } from './clips.js';
 import { normalizeWords, normalizeText, extractRefs } from './scripture.js';
 import { loadConfig } from './config.js';
 import { complete, providerReady, withFallback } from './ai.js';
+import { loadVoice, themeBonus, voiceGuide } from './voice.js';
+import { readdir } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 
 const DRAFTS = path.join(DATA_DIR, 'writing');
 
@@ -122,6 +125,11 @@ async function load(projectId) {
   if (!transcript) throw new Error('Transcribe the sermon first.');
   const a = analyze(transcript.words, project.sermon);
   if (!a.sentences.length) throw new Error('Not enough words in the sermon to write from.');
+  // Lines that echo the church's own themes rank a little higher.
+  const voice = await loadVoice();
+  const bonus = themeBonus(voice);
+  a.best = [...a.best].sort((x, y) => (y.score + bonus(y.text)) - (x.score + bonus(x.text)));
+  a.mission = voice.mission;
   return { project, a };
 }
 
@@ -145,7 +153,7 @@ function blogFor(a, project, { title, keyphrase = '', angle = 'teaching' } = {})
   const takeaways = topIn([...a.best.filter((s) => has(s.text, kp)).slice(0, 2), ...a.best.slice(0, 10)].filter((s, i, arr) => arr.indexOf(s) === i), 4)
     .map((s) => `- ${sentenceEnd(clean(s.text))}`);
   const scripture = a.refs.length ? `## Scripture in this message\n\n${a.refs.map((r) => `- ${r}`).join('\n')}` : '';
-  const join = `## Join us\n\n${watch}. [ADD: service times and address, or a link to plan a visit.]`;
+  const join = `## Join us\n\n${a.mission ? `${sentenceEnd(a.mission.trim())}\n\n` : ''}${watch}. [ADD: service times and address, or a link to plan a visit.]`;
   const kpHeading = (h) => (kp ? `What this message teaches about ${kp}` : h);
   const sections = (n = 6) => a.parts.map((part, k) => {
     const heading = k === 1 && kp && !a.parts.some((p) => has(headingFor(p, title), kp)) ? kpHeading('') : headingFor(part, title);
@@ -312,7 +320,8 @@ export async function rewriteBlog(projectId, { title, keyphrase, slug, metaDescr
   if (!ai) return { text: draft };
   const cfg = await loadConfig();
   if (!providerReady(cfg)) throw new Error('Turn on an AI helper in Settings to rewrite with AI.');
-  const system = `${POLISH_SYSTEM}\nThis is a church blog post. ${ANGLE_NOTES[angle] || ''} Use the title "${title}" as the H1.
+  const guide = voiceGuide(await loadVoice());
+  const system = `${POLISH_SYSTEM}\n${guide}\nThis is a church blog post. ${ANGLE_NOTES[angle] || ''} Use the title "${title}" as the H1.
 Use the focus keyphrase "${keyphrase}" naturally in the first paragraph and in one subheading. Keep it between 600 and 1000 words.`;
   const r = await withFallback(cfg, () => complete(cfg, system, `Meta description (for context): ${metaDescription}\nWeb address: ${slug}\n\nSermon excerpt:\n${a.all.slice(0, 14000)}\n\nStarting draft:\n${draft}`), () => draft);
   return { text: r.value, notice: r.notice?.text || null };
@@ -369,6 +378,65 @@ export async function polish(projectId, kind, text) {
   if (!providerReady(cfg)) throw new Error('Turn on an AI helper in Settings to polish drafts.');
   const transcript = await getTranscript(projectId);
   const excerpt = (transcript?.words || []).map((w) => w.w).join(' ').slice(0, 12000);
-  const r = await withFallback(cfg, () => complete(cfg, POLISH_SYSTEM, `Kind: ${kind}\n\nSermon excerpt:\n${excerpt}\n\nDraft:\n${text}`), () => text);
+  const guide = voiceGuide(await loadVoice());
+  const r = await withFallback(cfg, () => complete(cfg, guide ? `${POLISH_SYSTEM}\n${guide}` : POLISH_SYSTEM, `Kind: ${kind}\n\nSermon excerpt:\n${excerpt}\n\nDraft:\n${text}`), () => text);
   return { text: r.value, notice: r.notice?.text || null };
+}
+
+// ---------------------------------------------------------------- writing projects
+// A draft is a writing project. Ones made from a sermon use the sermon's id; ones started from
+// scratch or from a calendar event get their own "w-" id and have no transcript behind them.
+export const isStandalone = (id) => String(id).startsWith('w-');
+
+export async function listDrafts() {
+  const out = [];
+  for (const f of existsSync(DRAFTS) ? await readdir(DRAFTS) : []) {
+    if (!f.endsWith('.json')) continue;
+    try {
+      const d = JSON.parse(await readFile(path.join(DRAFTS, f), 'utf8'));
+      const id = f.replace(/\.json$/, '');
+      const project = isStandalone(id) ? null : await getProject(id).catch(() => null);
+      out.push({ id, title: d.title || project?.title || 'Untitled', source: d.source?.type || 'sermon', sermon: project?.title || null,
+        updated: d.saved || d.generated, header: Object.values(d.headers || {}).find((h) => h?.rel)?.rel || null, words: String(d.blog || '').split(/\s+/).length });
+    } catch { /* skip */ }
+  }
+  return out.sort((a, b) => String(b.updated || '').localeCompare(String(a.updated || '')));
+}
+
+const when = (e) => {
+  const d = new Date(e.start);
+  const day = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  return e.allDay ? day : `${day} at ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+};
+
+/** Start a blank draft, or one about a calendar event. Brackets mark what the writer fills in. */
+export async function newDraft({ type = 'blank', event = null, title = '' } = {}) {
+  const id = `w-${randomUUID().slice(0, 8)}`;
+  const voice = await loadVoice();
+  const mission = voice.mission ? `${sentenceEnd(voice.mission.trim())}\n\n` : '';
+  let d;
+  if (type === 'event' && event) {
+    const t = event.title || 'Our next event';
+    const place = event.location ? ` at ${event.location}` : '';
+    const link = event.link ? `[Sign up or learn more](${event.link})` : '[ADD: link to sign up or learn more]';
+    const about = event.summary ? `${sentenceEnd(event.summary)}` : '[ADD: what it is and who it is for, in two sentences.]';
+    d = {
+      title: t, keyphrase: t.toLowerCase(), metaDescription: `${t}: ${when(event)}${place}. ${event.summary || 'Everyone is welcome.'}`.slice(0, 155), slug: slugify(t),
+      blog: [`# ${t}`, `Join us ${when(event)}${place}. ${about}`, '## What to expect', '[ADD: what will happen, how long it lasts, and anything to bring.]', '## Who it is for', '[ADD: families, students, newcomers, everyone?]', '## How to join', `${link}. [ADD: who to contact with questions.]`, mission.trim()].filter(Boolean).join('\n\n'),
+      email: [`**Subject:** ${t}`, `**Preview:** ${when(event)}${place}`, '', 'Hi [FIRST NAME],', '', `${about} It's ${when(event)}${place}.`, '', `${link}.`, '', '[YOUR NAME]'].join('\n'),
+      group: '', social: [`**Caption 1**`, `${t} is ${when(event)}${place}. ${event.summary ? sentenceEnd(event.summary) : '[ADD: one line about why to come.]'}`, '', 'Save the date and bring a friend.'].join('\n'),
+      source: { type: 'event', event: { title: event.title, start: event.start, location: event.location || '', link: event.link || null } },
+    };
+  } else {
+    const t = title.trim() || 'Untitled post';
+    d = {
+      title: t, keyphrase: '', metaDescription: '', slug: slugify(t),
+      blog: `# ${t}\n\n[ADD: your opening paragraph.]\n\n## [ADD: a heading]\n\n[ADD: the main part of your post.]\n\n${mission}`.trim(),
+      email: `**Subject:** ${t}\n**Preview:** [ADD: one line]\n\nHi [FIRST NAME],\n\n[ADD: your message.]\n\n[YOUR NAME]`,
+      group: '', social: '**Caption 1**\n[ADD: your caption.]',
+      source: { type: 'blank' },
+    };
+  }
+  await saveDraft(id, { ...d, generated: new Date().toISOString(), angle: 'teaching', keywords: [], refs: [] });
+  return { id, draft: await loadDraft(id) };
 }

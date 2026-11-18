@@ -4,7 +4,7 @@ import { Clapperboard, FolderHeart, LayoutGrid, PenLine, Send, Shapes } from 'lu
 
 export const TOOLS = [
   { id: 'projects', label: 'All projects', icon: LayoutGrid, work: 'Find anything', about: 'Every sermon, clip, draft and design in one place, with folders.' },
-  { id: 'library', label: 'Sermons', icon: Clapperboard, work: 'Sermons, clips and transcripts', about: 'Download or open a recording, transcribe it and make captioned clips.' },
+  { id: 'library', label: 'Videos', icon: Clapperboard, work: 'Videos, clips and transcripts', about: 'Download or open a recording, transcribe it and make captioned clips.' },
   { id: 'social', label: 'Social', icon: Send, work: 'Social media', about: 'Plan, schedule and post to your accounts, with a calendar.' },
   { id: 'writing', label: 'Writing', icon: PenLine, work: 'Writing', about: 'Blog posts, emails and small group guides from a sermon.' },
   { id: 'graphics', label: 'Graphics', icon: Shapes, work: 'Graphics and slides', about: 'Posts, stories, flyers and slide decks you can present.' },

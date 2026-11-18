@@ -42,8 +42,8 @@ export default function Library({ openPicker = false }) {
     <div className="page">
       <section className="glass strong hero">
         <div>
-          <h1>Turn Sunday's sermon into clips worth sharing.</h1>
-          <p>Pick a service. Get captioned vertical clips of the best moments.</p>
+          <h1>Turn Sunday's sermon or a video into a clip worth sharing.</h1>
+          <p>Pick a service or open a recording. Get captioned clips of the best moments.</p>
         </div>
         <div className="dropzone">
           <button className="btn primary lg" onClick={() => setPicker(true)}>
@@ -67,14 +67,14 @@ export default function Library({ openPicker = false }) {
 
       <GettingStarted projects={projects} onPick={() => setPicker(true)} />
       <div className="row between">
-        <h2>Your sermons</h2>
+        <h2>Your projects</h2>
         <span className="muted small">{projects ? `${projects.length} project${projects.length === 1 ? '' : 's'}` : ''}</span>
       </div>
       {projects && !projects.length && (
         <div className="glass empty">
           <Clapperboard size={40} />
-          <h3>No sermons yet</h3>
-          <p>Pick a service to get started.</p>
+          <h3>No projects yet</h3>
+          <p>Pick a service or open a file to get started.</p>
           <button className="btn primary" onClick={() => setPicker(true)}>Pick from your channel</button>
         </div>
       )}

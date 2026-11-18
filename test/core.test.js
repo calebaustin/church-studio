@@ -134,3 +134,13 @@ test('repeating calendar events expand', async () => {
   assert.equal(occurrences(new Date(2026, 10, 22, 10), 'FREQ=DAILY;COUNT=3', now).length, 3);
   assert.equal(occurrences(new Date(2026, 10, 22, 10), null, now).length, 1);
 });
+
+test('brand voice scores drafts against the church voice', async () => {
+  const { scoreVoice, themeBonus } = await import('../src/daemon/voice.js');
+  const v = { mission: 'We are a family of believers helping our neighbors know Jesus and grow in grace together in our town.', website: '', themes: ['grace for everyone', 'serving our neighbors', 'family'], samples: [] };
+  const on = 'We believe grace is for everyone. Our church family loves serving our neighbors in town. You are welcome here, and we hope you will join us this Sunday as we grow together and learn to follow Jesus with our whole lives. Grace changes how we treat people at home, at work and across the street. That is why our family keeps showing up for neighbors who need a meal, a ride or a friend.';
+  const off = 'The quarterly report shows revenue growth across markets and the board approved a dividend increase for shareholders. Analysts expect margins to expand as supply chains normalize and inventory improves through the next fiscal period. Management raised guidance for every region and plans new stores in several states while reducing costs in logistics and marketing.';
+  assert.equal(scoreVoice('hi', { mission: '', website: '', themes: [], samples: [] }).ready, false);
+  assert.ok(scoreVoice(on, v).score > scoreVoice(off, v).score + 25);
+  assert.ok(themeBonus(v)('Grace is for everyone who comes.') > 0);
+});

@@ -17,6 +17,7 @@ import * as prefs from './prefs.js';
 import * as workspaces from './workspaces.js';
 import * as library from './library.js';
 import * as writing from './writing.js';
+import * as voice from './voice.js';
 import * as designs from './designs.js';
 import * as updates from './updates.js';
 import * as finder from './finder.js';
@@ -190,6 +191,7 @@ route('PUT', '/api/projects/:id/audio', async ({ id }, b) => {
   return { project: await updateProject(id, (p) => { if (b.clipId) { const c = p.clips.find((x) => x.id === b.clipId); if (c) c.audioCleanup = v; } else p.audioCleanup = v; }) };
 });
 route('GET', '/api/projects/:id/transcript/text', async ({ id }, _b, url) => { await requireProject(id); try { return { text: await transcripts.transcriptText(id, url.searchParams.get('format') || 'txt') }; } catch (e) { throw new HttpError(400, e.message); } });
+route('GET', '/api/projects/:id/transcript/paragraphs', async ({ id }, _b, url) => { await requireProject(id); try { return await transcripts.transcriptParagraphs(id, url.searchParams.get('whole') === '1'); } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/projects/:id/transcript/save', async ({ id }, b) => { await requireProject(id); try { return await transcripts.saveTranscript(id, b.format); } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/projects/:id/transcribe', projectJob('transcribe', 'Transcribe', (id, b, ctx) => transcribeProject(id, b, ctx)));
 route('POST', '/api/projects/:id/propose', projectJob('propose', 'Find clips', (id, b, ctx) => proposeClips(id, b, ctx)));
@@ -356,6 +358,14 @@ route('POST', '/api/library/save', async (_p, b) => { try { return await library
 route('POST', '/api/library/import', async (_p, b) => ({ files: await library.importFiles(Array.isArray(b.paths) ? b.paths : [], b.folder) }));
 
 // ---------------------------------------------------------------- writing
+route('GET', '/api/writing', async () => ({ drafts: await writing.listDrafts() }));
+route('POST', '/api/writing', async (_p, b) => { try { return await writing.newDraft(b || {}); } catch (e) { throw new HttpError(400, e.message); } });
+// Brand voice
+route('GET', '/api/brand-voice', async () => ({ voice: await voice.loadVoice() }));
+route('PUT', '/api/brand-voice', async (_p, b) => ({ voice: await voice.updateVoice(b || {}) }));
+route('POST', '/api/brand-voice/samples', async (_p, b) => { try { return { sample: await voice.addSample(b || {}) }; } catch (e) { throw new HttpError(400, e.message); } });
+route('DELETE', '/api/brand-voice/samples/:sid', async ({ sid }) => ({ voice: await voice.removeSample(sid) }));
+route('POST', '/api/brand-voice/score', async (_p, b) => voice.scoreVoice(String(b.text || ''), await voice.loadVoice()));
 route('GET', '/api/writing/:id', async ({ id }) => ({ draft: await writing.loadDraft(id), trashed: await finder.isTrashed(`writing:${id}`) }));
 route('POST', '/api/writing/:id/generate', async ({ id }) => { try { return { draft: await writing.saveDraft(id, await writing.generate(id)) }; } catch (e) { throw new HttpError(400, e.message); } });
 route('PUT', '/api/writing/:id', async ({ id }, b) => ({ draft: await writing.saveDraft(id, b) }));

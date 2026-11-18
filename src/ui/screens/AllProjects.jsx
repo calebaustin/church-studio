@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Clapperboard, Clock, Info, Film, Folder, FolderOpen, FolderPlus, LayoutGrid, MoreHorizontal, PenLine, Pencil,
+  ArrowUpDown, ChevronDown, Clapperboard, Clock, Info, Film, Folder, FolderOpen, FolderPlus, LayoutGrid, MoreHorizontal, PenLine, Pencil,
   RotateCcw, Search, Shapes, Star, Trash2, X,
 } from 'lucide-react';
 import { useApp } from '../App.jsx';
@@ -10,7 +10,7 @@ import { api } from '../api.js';
 import Popover from '../components/Popover.jsx';
 
 export const TYPES = {
-  sermon: { label: 'Sermon', plural: 'Sermons', icon: Clapperboard },
+  sermon: { label: 'Video', plural: 'Videos', icon: Clapperboard },
   clip: { label: 'Clip', plural: 'Clips', icon: Film },
   writing: { label: 'Writing', plural: 'Writing', icon: PenLine },
   design: { label: 'Design', plural: 'Designs', icon: Shapes },
@@ -119,6 +119,9 @@ export default function AllProjects() {
   const [data, setData] = useState(null);
   const [view, setView] = useState({ name: 'all' }); // all | recents | starred | trash | folder
   const [type, setType] = useState('all');
+  const [sort, setSortState] = useState(() => { try { return localStorage.getItem('cs-sort') || 'recent'; } catch { return 'recent'; } });
+  const setSort = (v) => { setSortState(v); try { localStorage.setItem('cs-sort', v); } catch { /* fine */ } };
+  const [sortOpen, setSortOpen] = useState(false);
   const [q, setQ] = useState('');
   const [moreFolders, setMoreFolders] = useState(false);
   const [naming, setNaming] = useState(null); // { id?, name, then? }
@@ -163,9 +166,14 @@ export default function AllProjects() {
   let items = !data ? [] : view.name === 'trash' ? data.trash.map((t) => ({ ...t, trashed: true }))
     : data.items.filter((i) => (view.name === 'starred' ? i.starred : view.name === 'recents' ? Date.now() - Date.parse(i.updated || 0) < 30 * 86400_000 : view.name === 'folder' ? folderKeys.has(i.key) : true));
   items = items.filter((i) => (type === 'all' || i.type === type) && (!ql || i.name.toLowerCase().includes(ql)));
+  const KIND_ORDER = ['sermon', 'clip', 'writing', 'design'];
+  const byName = (a, b) => String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base', numeric: true });
+  const byRecent = (a, b) => String(b.updated || b.at || '').localeCompare(String(a.updated || a.at || ''));
+  const sorter = sort === 'name' ? byName : sort === 'kind' ? (a, b) => KIND_ORDER.indexOf(a.type) - KIND_ORDER.indexOf(b.type) || byRecent(a, b) : byRecent;
+  items = [...items].sort(sorter);
   if (view.name === 'recents') items = items.slice(0, 40);
   const folders = (data?.folders || []).filter((f) => (view.name === 'starred' ? f.starred : true) && (!ql || f.name.toLowerCase().includes(ql)))
-    .sort((a, b) => Number(b.starred) - Number(a.starred) || String(b.updated).localeCompare(String(a.updated)));
+    .sort((a, b) => Number(b.starred) - Number(a.starred) || (sort === 'name' ? byName(a, b) : String(b.updated).localeCompare(String(a.updated))));
   const showFolders = (view.name === 'all' || view.name === 'starred') && type === 'all';
   const title = { all: 'All projects', recents: 'Recents', starred: 'Starred', trash: 'Trash' }[view.name] || folder?.name || 'Folder';
   const counts = useMemo(() => Object.fromEntries(Object.keys(TYPES).map((t) => [t, (data?.items || []).filter((i) => i.type === t).length])), [data]);
@@ -211,12 +219,24 @@ export default function AllProjects() {
           </div>
         </div>
 
-        {view.name !== 'trash' && (
-          <div className="seg">
-            <button className={type === 'all' ? 'on' : ''} onClick={() => setType('all')}>Everything</button>
-            {Object.entries(TYPES).map(([k, t]) => <button key={k} className={type === k ? 'on' : ''} onClick={() => setType(k)}><TypeBadge type={k} size={18} />{t.plural}{counts[k] ? <span className="muted num"> {counts[k]}</span> : null}</button>)}
+        <div className="row between wrap" style={{ gap: 10 }}>
+          {view.name !== 'trash' ? (
+            <div className="seg">
+              <button className={type === 'all' ? 'on' : ''} onClick={() => setType('all')}>Everything</button>
+              {Object.entries(TYPES).map(([k, t]) => <button key={k} className={type === k ? 'on' : ''} onClick={() => setType(k)}><TypeBadge type={k} size={18} />{t.plural}{counts[k] ? <span className="muted num"> {counts[k]}</span> : null}</button>)}
+            </div>
+          ) : <span />}
+          <div style={{ position: 'relative' }}>
+            <button className="btn sm ghost" data-pop-trigger onClick={() => setSortOpen(!sortOpen)}><ArrowUpDown size={14} />{{ recent: 'Most recent', name: 'A to Z', kind: 'By kind' }[sort]}<ChevronDown size={13} /></button>
+            <Popover open={sortOpen} onClose={() => setSortOpen(false)} align="right" width={190}>
+              <div className="pop-list">
+                {[['recent', 'Most recent'], ['name', 'A to Z'], ['kind', 'By kind']].map(([k, l]) => (
+                  <button key={k} className={`pop-item ${sort === k ? 'on' : ''}`} onClick={() => { setSort(k); setSortOpen(false); }}>{l}</button>
+                ))}
+              </div>
+            </Popover>
           </div>
-        )}
+        </div>
 
         {showFolders && folders.length > 0 && (
           <section className="stack" style={{ gap: 10 }}>

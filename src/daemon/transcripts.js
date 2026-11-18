@@ -57,3 +57,21 @@ export async function saveTranscript(id, format = 'txt') {
   await writeFile(dest, text);
   return { file: dest };
 }
+
+/** Paragraphs with their words and times, for reading, timestamps and selections. */
+export async function transcriptParagraphs(id, whole = false) {
+  const project = await getProject(id);
+  const t = await getTranscript(id);
+  if (!t) throw new Error('Transcribe this first.');
+  const range = project.sermon?.confirmed && !whole ? project.sermon : null;
+  const inRange = (x) => !range || (x.start >= range.start - 0.5 && x.end <= range.end + 0.5);
+  const paras = paragraphs((t.segments || []).filter(inRange));
+  const words = t.words.filter(inRange);
+  let k = 0;
+  const out = paras.map((p) => {
+    const ws = [];
+    while (k < words.length && words[k].start < p.end + 0.05) { if (words[k].start >= p.start - 0.3) ws.push({ w: words[k].w, start: words[k].start, end: words[k].end }); k++; }
+    return { start: p.start, end: p.end, words: ws.length ? ws : p.text.split(/\s+/).map((w) => ({ w, start: p.start, end: p.end })) };
+  });
+  return { title: project.title, trimmed: Boolean(range), paragraphs: out };
+}

@@ -61,11 +61,14 @@ The home screen is a dashboard: weekly goal, quick actions, what's up next, your
 and a summary of clips and posts.
 
 More tools:
-- **Writing:** blog post, email summary, small group guide and social captions written from the sermon's own
+- **Writing:** writing projects started from a transcript, a blank page or a calendar event. From a transcript
+  you get a blog post, email summary, small group guide and social captions written from the sermon's own
   words. You edit the formatted text with a toolbar (styles, bold, italic, links, lists, indent) or switch to
   Markdown. Blog posts get suggested titles, keyphrases, web addresses and meta descriptions, and "Rewrite post"
   rebuilds them around a new angle (main points, story first, practical steps, questions, devotional, newcomers).
   SEO and readability checks run as you type. Optional AI polish keeps every fact from the sermon.
+- **Brand voice:** the church's mission, website copy, core themes and writing samples. Blogs get a voice score,
+  drafts lean toward the themes, and finished posts can be saved back as samples.
 - **Bible references:** spoken references are written the standard way in transcripts, captions and writing
   ("First Corinthians 10 beginning in verse 16" becomes "1 Corinthians 10:16"). Whisper also gets book-name hints.
 - **Graphics:** a design home ("What will you design today?") for presentations, social posts, carousels,

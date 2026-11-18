@@ -2,6 +2,22 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## 0.4.2 · November 18, 2026
+
+### New
+- **Writing projects.** Writing opens on a home page: start from a transcript, a blank post, or an event from your church calendar, and find everything you've written below.
+- **Brand voice.** In the Brand library, add your mission statement, core copy from your website, a few central themes and writing samples. While you write a blog, a Brand voice score shows how it compares, and new drafts lean toward your themes. "Save to brand voice" adds a finished blog to your samples, so drafts keep getting closer to how your church sounds. The AI helper, when on, follows the same voice.
+- **Transcript reader.** Turn on times down the left side. Click a paragraph or drag across words to see a word count, how long it runs and where it starts, then copy it, make a clip, make a quote graphic or start a social post.
+- **Sorting** in All projects: most recent, A to Z, or by kind.
+
+### Changed
+- Sermons is now **Videos**, and its list is **Your projects**.
+- A project that's already transcribed shows **Read transcript** and **Re-transcribe** instead of Transcribe.
+
+### Fixed
+- The transcript scrolls with your mouse or trackpad instead of moving the whole page.
+- The more button on items with long names stays inside the card.
+
 ## 0.4.1 · November 18, 2026
 
 ### Changed

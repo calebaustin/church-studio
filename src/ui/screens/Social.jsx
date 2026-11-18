@@ -32,10 +32,10 @@ function useSocial() {
   return { ...state, load };
 }
 
-export default function Social({ compose: initialCompose }) {
+export default function Social({ compose: initialCompose, caption: initialCaption }) {
   const s = useSocial();
   const [tab, setTab] = useState('posts');
-  const [composer, setComposer] = useState(initialCompose ? { media: initialCompose } : null);
+  const [composer, setComposer] = useState(initialCompose ? { media: initialCompose } : initialCaption ? { caption: initialCaption } : null);
   const needsYou = s.posts.filter((p) => p.status === 'needs-you').length;
   const plat = (id) => s.platforms.find((p) => p.id === id);
   return (
@@ -374,7 +374,7 @@ function Composer({ s, plat, init, onClose, onConnect }) {
   const initialMedia = editing?.media || (init.media && s.media.find((m) => m.clipId === init.media.clipId)) || init.media || null;
   const [media, setMedia] = useState(initialMedia);
   const [title, setTitle] = useState(editing?.title ?? initialMedia?.title ?? '');
-  const [caption, setCaption] = useState(editing?.caption ?? initialMedia?.summary ?? '');
+  const [caption, setCaption] = useState(editing?.caption ?? init.caption ?? initialMedia?.summary ?? '');
   const [tags, setTags] = useState((editing?.hashtags ?? initialMedia?.hashtags ?? []).join(', '));
   const [picked, setPicked] = useState(new Set(editing?.destinations.map((d) => d.accountId) || []));
   const [overrides, setOverrides] = useState(Object.fromEntries((editing?.destinations || []).filter((d) => d.caption != null).map((d) => [d.accountId, d.caption])));

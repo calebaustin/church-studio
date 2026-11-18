@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { FolderOpen, Plus, Image as ImageIcon, Film, FileText, Shapes, Eye, X, Wand2, Palette } from 'lucide-react';
+import { FolderOpen, Plus, Image as ImageIcon, Film, FileText, Shapes, Eye, X, Wand2, Palette, Heart, Trash2 } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { api, desktop } from '../api.js';
 import ColorField from '../components/ColorField.jsx';
@@ -72,7 +72,13 @@ function BrandKit({ lib }) {
 
 const ICON = { image: ImageIcon, video: Film, doc: FileText };
 
-export default function BrandLibrary() {
+export default function BrandLibrary({ section }) {
+  useEffect(() => {
+    if (!section) return undefined;
+    let n = 0;
+    const t = setInterval(() => { const el = document.getElementById(`brand-${section}`); if (el || ++n > 20) { clearInterval(t); el?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }, 150);
+    return () => clearInterval(t);
+  }, [section]);
   const { go, onJobFinished } = useApp();
   const [lib, setLib] = useState(null);
   const [folder, setFolder] = useState('All');
@@ -113,6 +119,7 @@ export default function BrandLibrary() {
         ]} />
       )}
       {lib && <BrandKit lib={lib} />}
+      <BrandVoice />
       {lib && <span className="muted small truncate" title={lib.root}>{lib.root.replace(/^\/Users\/[^/]+/, '~')}</span>}
       {!lib && <div className="lib-grid big">{[0, 1, 2, 3, 4, 5, 6, 7].map((i) => <div key={i} className="skeleton" style={{ aspectRatio: '1' }} />)}</div>}
       {lib && !items.length && (
@@ -142,5 +149,80 @@ export default function BrandLibrary() {
         })}
       </div>
     </div>
+  );
+}
+
+/** Brand voice: the church's own words, so drafts sound like the church. */
+function BrandVoice() {
+  const { toast } = useApp();
+  const [v, setV] = useState(null);
+  const [theme, setTheme] = useState('');
+  const [adding, setAdding] = useState(null); // { title, text }
+  const [saved, setSaved] = useState(false);
+  useEffect(() => { api.get('/api/brand-voice').then((r) => setV(r.voice)).catch(() => setV({ mission: '', website: '', themes: [], samples: [] })); }, []);
+  const put = async (patch) => { const r = await api.put('/api/brand-voice', patch); setV(r.voice); setSaved(true); setTimeout(() => setSaved(false), 1500); };
+  if (!v) return null;
+  const addTheme = () => { const t = theme.trim(); if (!t || v.themes.includes(t)) return; put({ themes: [...v.themes, t] }); setTheme(''); };
+  const words = (t) => String(t || '').split(/\s+/).filter(Boolean).length;
+  return (
+    <section id="brand-voice" className="glass panel stack" style={{ gap: 16 }}>
+      <div className="row between wrap">
+        <div className="stack" style={{ gap: 2 }}><h2>Brand voice</h2><span className="muted small">Your church's own words. Writing gets a voice score, and new drafts lean toward these themes.</span></div>
+        {saved && <span className="chip ok">Saved</span>}
+      </div>
+      <div className="voice-grid">
+        <label className="field">Mission statement
+          <textarea className="input" rows={3} defaultValue={v.mission} placeholder="We exist to…" onBlur={(e) => e.target.value !== v.mission && put({ mission: e.target.value })} />
+        </label>
+        <label className="field">Core copy from your website <span className="hint">Paste your About page or welcome text.</span>
+          <textarea className="input" rows={3} defaultValue={v.website} placeholder="Welcome to…" onBlur={(e) => e.target.value !== v.website && put({ website: e.target.value })} />
+        </label>
+      </div>
+      <div className="stack" style={{ gap: 8 }}>
+        <span className="field-label">Central ideas and themes</span>
+        <span className="hint">A few phrases that say who you are, like "grace for everyone" or "rooted in our neighborhood". They show up naturally in drafts and in the voice score.</span>
+        <div className="row wrap" style={{ gap: 6 }}>
+          {v.themes.map((t) => (
+            <span key={t} className="chip theme-chip">{t}<button aria-label={`Remove ${t}`} onClick={() => put({ themes: v.themes.filter((x) => x !== t) })}><X size={11} /></button></span>
+          ))}
+          {v.themes.length < 12 && (
+            <form className="row" style={{ gap: 6 }} onSubmit={(e) => { e.preventDefault(); addTheme(); }}>
+              <input className="input" style={{ width: 220 }} value={theme} placeholder="Add a theme" onChange={(e) => setTheme(e.target.value)} />
+              <button className="btn sm" disabled={!theme.trim()}><Plus size={13} />Add</button>
+            </form>
+          )}
+        </div>
+      </div>
+      <div className="stack" style={{ gap: 8 }}>
+        <div className="row between wrap">
+          <span className="field-label">Writing samples · {v.samples.length}</span>
+          {!adding && <button className="btn sm" onClick={() => setAdding({ title: '', text: '' })}><Plus size={13} />Share a writing sample</button>}
+        </div>
+        <span className="hint">Past blog posts, newsletters or welcome emails you love. Finished blogs can be added from Writing with "Save to brand voice".</span>
+        {adding && (
+          <div className="keycard stack" style={{ gap: 8 }}>
+            <input className="input" value={adding.title} placeholder="Title (optional)" onChange={(e) => setAdding({ ...adding, title: e.target.value })} />
+            <textarea className="input" rows={6} value={adding.text} placeholder="Paste the text here" onChange={(e) => setAdding({ ...adding, text: e.target.value })} />
+            <div className="row" style={{ gap: 6 }}>
+              <button className="btn primary sm" disabled={words(adding.text) < 30} onClick={async () => {
+                try { await api.post('/api/brand-voice/samples', adding); const r = await api.get('/api/brand-voice'); setV(r.voice); setAdding(null); toast({ text: 'Sample added to your brand voice.' }); } catch (e) { toast({ kind: 'error', text: e.message }); }
+              }}><Heart size={13} />Add sample</button>
+              <button className="btn ghost sm" onClick={() => setAdding(null)}>Cancel</button>
+              <span className="hint">{words(adding.text)} words{words(adding.text) < 30 ? ' (at least 30)' : ''}</span>
+            </div>
+          </div>
+        )}
+        {v.samples.map((smp) => (
+          <div key={smp.id} className="tool-row">
+            <span className="type-badge" style={{ width: 30, height: 30, '--t': 'var(--tone-4)' }}><FileText size={14} /></span>
+            <div className="stack grow" style={{ gap: 0, minWidth: 0 }}>
+              <strong className="small truncate">{smp.title || 'Untitled'}</strong>
+              <span className="small muted truncate">{words(smp.text)} words · {smp.source === 'writing' ? 'From Writing' : 'Pasted'} · {new Date(smp.added).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
+            </div>
+            <button className="rt-btn" aria-label={`Remove ${smp.title}`} title="Remove" onClick={async () => { const r = await api.del(`/api/brand-voice/samples/${smp.id}`); setV(r.voice); }}><Trash2 size={14} /></button>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }

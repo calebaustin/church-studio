@@ -80,7 +80,7 @@ export function eventForDesign(e) {
     countdown: days > 1 ? `${days} DAYS TO GO` : days === 1 ? 'TOMORROW' : 'TODAY' };
 }
 
-export default function Graphics({ image, design, event }) {
+export default function Graphics({ image, design, event, quote }) {
   const { toast } = useApp();
   const ctx = useBrandCtx();
   const [open, setOpen] = useState(design || null);
@@ -110,6 +110,14 @@ export default function Graphics({ image, design, event }) {
     d.name = event.title;
     create(d);
   }, [event]);
+
+  // From a transcript selection: a quote card.
+  useEffect(() => {
+    if (!quote) return;
+    const d = newDoc('post', TEMPLATES.find((t) => t.id === 'post-quote'), { ...ctx, o: { quotes: [quote.length > 220 ? `${quote.slice(0, 217)}…` : quote] } });
+    d.name = quote.split(' ').slice(0, 5).join(' ');
+    create(d);
+  }, [quote]);
 
   if (open) return <DesignEditor id={open} onClose={() => setOpen(null)} />;
 

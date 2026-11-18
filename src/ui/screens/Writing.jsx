@@ -1,5 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Copy, FileDown, PenLine, Sparkles, Wand2, Check, RefreshCw, Undo2, Link2, Info, Printer } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeft, CalendarDays, Copy, FileDown, FileText, Heart, PenLine, Plus, Sparkles, Wand2, Check, RefreshCw, Undo2, Link2, Info, Printer } from 'lucide-react';
+import Modal, { ModalHead } from '../components/Modal.jsx';
+import { Masonry } from '../components/Masonry.jsx';
+import { useChurchEvents } from '../components/ChurchEvents.jsx';
 import HeaderImage from '../components/HeaderImage.jsx';
 import PrintDialog from '../components/PrintDialog.jsx';
 import LibraryPicker from '../components/LibraryPicker.jsx';
@@ -27,7 +30,7 @@ function SuggestField({ label, hint, value, onChange, items, onOpen, multiline, 
     <label className="field" style={{ position: 'relative' }}>
       <span className="row between" style={{ gap: 8 }}>
         <span>{label} {hint && <span className="hint num">{hint}</span>}</span>
-        <button type="button" className="btn ghost sm" data-pop-trigger onClick={(e) => { e.preventDefault(); onOpen?.(); setOpen(!open); }}><Sparkles size={13} />Suggest</button>
+        {onOpen && <button type="button" className="btn ghost sm" data-pop-trigger onClick={(e) => { e.preventDefault(); onOpen(); setOpen(!open); }}><Sparkles size={13} />Suggest</button>}
       </span>
       {multiline
         ? <textarea className="input" rows={3} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
@@ -78,10 +81,16 @@ function Checks({ title, score, list, info }) {
 }
 
 export default function Writing({ project: startProject }) {
+  const [openId, setOpenId] = useState(startProject || null);
+  if (!openId) return <WritingHome onOpen={setOpenId} />;
+  return <WritingEditor key={openId} pid={openId} onBack={() => setOpenId(null)} />;
+}
+
+function WritingEditor({ pid, onBack }) {
   const { toast, config, go } = useApp();
-  const [projects, setProjects] = useState(null);
-  const [pid, setPid] = useState(null);
+  const [project, setProject] = useState(null);
   const [draft, setDraft] = useState(null);
+  const [loaded, setLoaded] = useState(false);
   const [kind, setKind] = useState('blog');
   const [busy, setBusy] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -92,15 +101,10 @@ export default function Writing({ project: startProject }) {
   const [printing, setPrinting] = useState(false);
   const [trashed, setTrashed] = useState(false);
   const [imgPick, setImgPick] = useState(null); // resolve() for the editor's image button
+  const standalone = pid.startsWith('w-');
 
-  useEffect(() => {
-    api.get('/api/projects').then(({ projects: ps }) => {
-      const ready = ps.filter((p) => p.status === 'transcribed');
-      setProjects(ready);
-      if (ready[0]) setPid((ready.find((p) => p.id === startProject) || ready[0]).id);
-    });
-  }, []);
-  useEffect(() => { if (pid) api.get(`/api/writing/${pid}`).then((r) => { setDraft(r.draft); setTrashed(Boolean(r.trashed)); setDirty(false); setIdeas(null); setUndoBlog(null); setAngle(r.draft?.angle || 'teaching'); }); }, [pid]);
+  useEffect(() => { if (!standalone) api.get(`/api/projects/${pid}`).then((r) => setProject(r.project)).catch(() => setProject(null)); }, [pid]);
+  useEffect(() => { api.get(`/api/writing/${pid}`).then((r) => { setDraft(r.draft); setTrashed(Boolean(r.trashed)); setDirty(false); setIdeas(null); setUndoBlog(null); setAngle(r.draft?.angle || 'teaching'); setLoaded(true); }); }, [pid]);
   const loadIdeas = (kp = draft?.keyphrase) => api.post(`/api/writing/${pid}/suggest`, { keyphrase: kp }).then(setIdeas).catch(() => setIdeas({ titles: [], keyphrases: [], metas: [] }));
   const rewrite = async () => {
     setBusy(true);
@@ -117,6 +121,10 @@ export default function Writing({ project: startProject }) {
     setBusy(true);
     try { const r = await api.post(`/api/writing/${pid}/generate`); setDraft(r.draft); setDirty(false); toast({ text: 'Drafts written from the sermon. Fill in the [bracketed] spots.' }); } catch (e) { toast({ kind: 'error', text: e.message }); }
     setBusy(false);
+  };
+  const saveToVoice = async () => {
+    try { await api.post('/api/brand-voice/samples', { title: draft.title, text: draft.blog, source: 'writing' }); toast({ text: 'Saved to your brand voice. Future drafts learn from it.' }); }
+    catch (e) { toast({ kind: 'error', text: e.message }); }
   };
   const save = async () => { await api.put(`/api/writing/${pid}`, draft); setDirty(false); toast({ text: 'Draft saved.' }); };
   const set = (p) => { setDraft((d) => ({ ...d, ...p })); setDirty(true); };
@@ -149,31 +157,20 @@ export default function Writing({ project: startProject }) {
   const checks = useMemo(() => (draft && kind === 'blog' ? seoChecks(draft.blog, { keyphrase: draft.keyphrase, title: draft.title, meta: draft.metaDescription, slug: draft.slug }) : null), [draft, kind]);
   const placeholders = draft ? (draft[kind].match(/\[[A-Z][^\]]*\]/g) || []).length : 0;
 
-  if (projects && !projects.length) {
-    return (
-      <div className="page">
-        <h1>Writing</h1>
-        <div className="glass empty"><PenLine size={40} /><h3>Transcribe a sermon first</h3><p>Blog posts, emails and small group guides are written from the sermon's own words.</p><button className="btn primary" onClick={() => go({ name: 'library' })}>Go to Sermons</button></div>
-      </div>
-    );
-  }
-
   return (
     <div className="page">
       <div className="row between wrap">
-        <div className="stack" style={{ gap: 2 }}>
-          <h1>Writing</h1>
-          <span className="muted">Turn a sermon into a blog post, email, small group guide and captions.</span>
+        <div className="row" style={{ gap: 10, minWidth: 0 }}>
+          <button className="btn ghost sm" onClick={async () => { if (dirty && !window.confirm('Leave without saving your changes?')) return; onBack(); }}><ArrowLeft size={15} />Writing</button>
+          <div className="stack" style={{ gap: 0, minWidth: 0 }}>
+            <h1 className="truncate" style={{ fontSize: 26 }}>{draft?.title || project?.title || 'Writing'}</h1>
+            <span className="muted small truncate">{standalone ? (draft?.source?.type === 'event' ? `About an event${draft.source.event?.start ? ` on ${new Date(draft.source.event.start).toLocaleDateString([], { month: 'short', day: 'numeric' })}` : ''}` : 'Your own writing') : `From “${project?.title || 'a sermon'}”`}</span>
+          </div>
         </div>
-        <div className="row">
-          <select className="input" style={{ width: 'auto', maxWidth: 320 }} value={pid || ''} onChange={(e) => setPid(e.target.value)} aria-label="Sermon">
-            {projects?.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
-          </select>
-          <button className="btn primary" disabled={!pid || busy} onClick={generate}><Wand2 size={15} />{draft ? 'Write again' : 'Write drafts'}</button>
-        </div>
+        {!standalone && <button className="btn primary" disabled={busy} onClick={generate}><Wand2 size={15} />{draft ? 'Write again' : 'Write drafts'}</button>}
       </div>
 
-      {!draft && pid && (
+      {!draft && loaded && (
         <div className="glass empty"><PenLine size={40} /><h3>No drafts for this sermon yet</h3><p>Press Write drafts. Everything comes from the sermon's words; you fill in the details.</p></div>
       )}
 
@@ -183,7 +180,7 @@ export default function Writing({ project: startProject }) {
       {draft && (
         <>
           <div className="row between wrap">
-            <div className="seg">{KINDS.map(([k, l]) => <button key={k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>{l}</button>)}</div>
+            <div className="seg">{KINDS.filter(([k]) => !(standalone && k === 'group' && !draft.group)).map(([k, l]) => <button key={k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>{l}</button>)}</div>
             <div className="row wrap">
               {placeholders > 0 && <span className="chip warn">{placeholders} spot{placeholders > 1 ? 's' : ''} to fill in</span>}
               <button className="btn sm" onClick={() => copy(false)}><Copy size={13} />Copy</button>
@@ -191,6 +188,7 @@ export default function Writing({ project: startProject }) {
               {kind !== 'social' && <button className="btn sm" onClick={() => setPrinting(true)}><Printer size={13} />Print or PDF</button>}
               <button className="btn sm" onClick={() => api.post(`/api/writing/${pid}/save-file`, { name: `${draft.title} - ${KINDS.find((k) => k[0] === kind)[1]}`, text: draft[kind] })}><FileDown size={13} />Save to library</button>
               {config.llmProvider !== 'none' && <button className="btn sm" disabled={busy} onClick={polish}><Sparkles size={13} />Polish with AI</button>}
+              {kind === 'blog' && <button className="btn sm" onClick={saveToVoice}><Heart size={13} />Save to brand voice</button>}
               <button className={`btn sm ${dirty ? 'accent' : ''}`} disabled={!dirty} onClick={save}><Check size={13} />{dirty ? 'Save' : 'Saved'}</button>
             </div>
           </div>
@@ -200,11 +198,11 @@ export default function Writing({ project: startProject }) {
                 <section className="glass panel stack" style={{ gap: 14 }}>
                   <div className="row between wrap">
                     <h3 style={{ margin: 0 }}>Post settings</h3>
-                    <span className="muted small">Pick from the sermon or type your own. Then rewrite the post around them.</span>
+                    <span className="muted small">{standalone ? 'Title, keyphrase and description for search.' : 'Pick from the sermon or type your own. Then rewrite the post around them.'}</span>
                   </div>
                   <div className="token-grid">
-                    <SuggestField label="Title" hint={`${draft.title.length}/65`} value={draft.title} onChange={(v) => set({ title: v })} onOpen={() => loadIdeas()} items={ideas?.titles} />
-                    <SuggestField label="Focus keyphrase" value={draft.keyphrase} onChange={(v) => { set({ keyphrase: v }); }} onOpen={() => loadIdeas()} items={ideas?.keyphrases} />
+                    <SuggestField label="Title" hint={`${draft.title.length}/65`} value={draft.title} onChange={(v) => set({ title: v })} onOpen={standalone ? undefined : () => loadIdeas()} items={ideas?.titles} />
+                    <SuggestField label="Focus keyphrase" value={draft.keyphrase} onChange={(v) => { set({ keyphrase: v }); }} onOpen={standalone ? undefined : () => loadIdeas()} items={ideas?.keyphrases} />
                     <label className="field">
                       <span className="row between" style={{ gap: 8 }}>
                         <span>Web address</span>
@@ -212,9 +210,9 @@ export default function Writing({ project: startProject }) {
                       </span>
                       <div className="input-affix"><span className="muted">/</span><input className="input" value={draft.slug} onChange={(e) => set({ slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]+/g, '-') })} /></div>
                     </label>
-                    <SuggestField label="Meta description" hint={`${draft.metaDescription.length}/156`} multiline value={draft.metaDescription} onChange={(v) => set({ metaDescription: v })} onOpen={() => loadIdeas()} items={ideas?.metas} />
+                    <SuggestField label="Meta description" hint={`${draft.metaDescription.length}/156`} multiline value={draft.metaDescription} onChange={(v) => set({ metaDescription: v })} onOpen={standalone ? undefined : () => loadIdeas()} items={ideas?.metas} />
                   </div>
-                  <hr className="hairline" />
+                  {!standalone && <><hr className="hairline" />
                   <div className="stack" style={{ gap: 10 }}>
                     <span className="field-label">Angle</span>
                     <div className="angle-row">
@@ -227,11 +225,11 @@ export default function Writing({ project: startProject }) {
                       )}
                       {undoBlog && <button className="btn ghost sm" onClick={() => { set({ blog: undoBlog }); setUndoBlog(null); }}><Undo2 size={13} />Undo rewrite</button>}
                     </div>
-                  </div>
+                  </div></>}
                 </section>
               )}
               {kind !== 'social' && (
-                <HeaderImage pid={pid} value={header} onChange={setHeader} brandColors={config.brandColors || []}
+                <HeaderImage pid={standalone || !project?.media?.width ? null : pid} value={header} onChange={setHeader} brandColors={config.brandColors || []}
                   title={kind === 'blog' ? draft.title : (draft[kind].match(/^#\s+(.*)/m)?.[1] || draft.title).replace(/^Small group guide:\s*/i, '')}
                   styles={kind === 'group' ? ['full', 'blur', 'color'] : ['full']} />
               )}
@@ -245,6 +243,8 @@ export default function Writing({ project: startProject }) {
                 <Checks title="Search" score={checks.seoScore} list={checks.seo} info={<SeoInfo />} />
                 <hr className="hairline" />
                 <Checks title="Readability" score={checks.readScore} list={checks.read} />
+                <hr className="hairline" />
+                <VoiceChecks text={draft.blog} />
                 <span className="muted small num">{checks.words} words</span>
               </aside>
             )}
@@ -255,6 +255,116 @@ export default function Writing({ project: startProject }) {
               onPick={(i) => { imgPick({ url: `/library/${i.rel.split('/').map(encodeURIComponent).join('/')}`, alt: i.name.replace(/\.[a-z]+$/i, '') }); setImgPick(null); }} />
           )}
         </>
+      )}
+    </div>
+  );
+}
+
+/** "Sounds like you": how close this draft is to the church's brand voice. */
+function VoiceChecks({ text }) {
+  const { go } = useApp();
+  const [r, setR] = useState(null);
+  const t = useRef(null);
+  useEffect(() => {
+    clearTimeout(t.current);
+    t.current = setTimeout(() => api.post('/api/brand-voice/score', { text }).then(setR).catch(() => {}), 700);
+    return () => clearTimeout(t.current);
+  }, [text]);
+  if (!r) return null;
+  if (!r.ready) {
+    return (
+      <div className="stack" style={{ gap: 6 }}>
+        <strong>Brand voice</strong>
+        <span className="small muted">Add your mission, a few themes or some past writing, and you'll see how each draft sounds next to your church's voice.</span>
+        <button className="btn sm" onClick={() => go({ name: 'assets', section: 'voice' })}><Heart size={13} />Set up brand voice</button>
+      </div>
+    );
+  }
+  if (r.short) return <div className="stack" style={{ gap: 4 }}><strong>Brand voice</strong><span className="small muted">Write a little more to see how it sounds.</span></div>;
+  return <Checks title="Brand voice" score={r.score} list={r.checks} />;
+}
+
+const SOURCE_LABEL = { sermon: 'From a sermon', event: 'About an event', blank: 'Your own writing' };
+const ago = (iso) => { if (!iso) return ''; const m = Math.round((Date.now() - Date.parse(iso)) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} hr ago` : new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' }); };
+
+/** Writing home: start from a transcript, a blank page or an event, and find past writing. */
+function WritingHome({ onOpen }) {
+  const { toast, go } = useApp();
+  const [drafts, setDrafts] = useState(null);
+  const [sermons, setSermons] = useState(null);
+  const [pickSermon, setPickSermon] = useState(false);
+  const [pickEvent, setPickEvent] = useState(false);
+  const cal = useChurchEvents();
+  useEffect(() => {
+    api.get('/api/writing').then((r) => setDrafts(r.drafts)).catch(() => setDrafts([]));
+    api.get('/api/projects').then((r) => setSermons(r.projects.filter((p) => p.status === 'transcribed'))).catch(() => setSermons([]));
+  }, []);
+  const create = async (body) => {
+    try { const r = await api.post('/api/writing', body); onOpen(r.id); } catch (e) { toast({ kind: 'error', text: e.message }); }
+  };
+  const upcoming = cal.events.filter((e) => new Date(e.end || e.start) >= new Date()).slice(0, 30);
+  return (
+    <div className="page">
+      <div className="stack" style={{ gap: 2 }}>
+        <h1>Writing</h1>
+        <span className="muted">Turn a transcript into a blog, or write your own.</span>
+      </div>
+      <div className="start-grid">
+        <button className="start-tile glass" onClick={() => setPickSermon(true)}>
+          <span className="type-badge" style={{ width: 40, height: 40, '--t': 'var(--tone-1)' }}><FileText size={19} /></span>
+          <strong>From a transcript</strong><span className="small muted">A blog post, email, small group guide and captions, written from the sermon's own words.</span>
+        </button>
+        <button className="start-tile glass" onClick={() => create({ type: 'blank' })}>
+          <span className="type-badge" style={{ width: 40, height: 40, '--t': 'var(--tone-2)' }}><Plus size={19} /></span>
+          <strong>Blank post</strong><span className="small muted">Start from a clean page with the same editor, SEO and brand voice checks.</span>
+        </button>
+        <button className="start-tile glass" onClick={() => setPickEvent(true)}>
+          <span className="type-badge" style={{ width: 40, height: 40, '--t': 'var(--tone-3)' }}><CalendarDays size={19} /></span>
+          <strong>About an event</strong><span className="small muted">Pick something from your church calendar and get a post, email and caption to finish.</span>
+        </button>
+      </div>
+
+      <div className="row between"><h2>Your writing</h2>{drafts?.length > 0 && <span className="muted small">{drafts.length} saved</span>}</div>
+      {drafts && !drafts.length && <div className="glass empty"><PenLine size={36} /><h3>Nothing written yet</h3><p>Start from a transcript, a blank page or an event above.</p></div>}
+      <Masonry className="item-grid">
+        {(drafts || []).map((d) => (
+          <div key={d.id} className="item-card glass">
+            <button className="item-cover" onClick={() => onOpen(d.id)}>
+              {d.header ? <img src={`/library/${d.header.split('/').map(encodeURIComponent).join('/')}`} alt="" /> : <span className="type-badge" style={{ width: 44, height: 44, '--t': `var(--tone-${d.source === 'event' ? 3 : d.source === 'blank' ? 2 : 1})` }}>{d.source === 'event' ? <CalendarDays size={20} /> : d.source === 'blank' ? <PenLine size={20} /> : <FileText size={20} />}</span>}
+            </button>
+            <div className="item-meta">
+              <div className="stack" style={{ gap: 3 }}>
+                <strong className="truncate small" title={d.title}>{d.title}</strong>
+                <span className="muted truncate" style={{ fontSize: 12 }}>{d.sermon ? `From “${d.sermon}”` : SOURCE_LABEL[d.source]} · {ago(d.updated)}</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </Masonry>
+
+      {pickSermon && (
+        <Modal onClose={() => setPickSermon(false)} width={520} label="Pick a transcript">
+          <ModalHead title="Pick a transcript" sub="Drafts are written from its words. You fill in the [bracketed] spots." />
+          {sermons && !sermons.length && <div className="stack" style={{ gap: 8 }}><span className="muted">Transcribe a video or recording first.</span><button className="btn sm" onClick={() => go({ name: 'library' })}>Go to Videos</button></div>}
+          <div className="pop-list" style={{ maxHeight: 360 }}>
+            {(sermons || []).map((p) => <button key={p.id} className="pop-item" onClick={() => { setPickSermon(false); onOpen(p.id); }}>{p.title}</button>)}
+          </div>
+        </Modal>
+      )}
+      {pickEvent && (
+        <Modal onClose={() => setPickEvent(false)} width={520} label="Pick an event">
+          <ModalHead title="Write about an event" sub="Choose an upcoming event from your church calendar." />
+          {!cal.linked && <div className="stack" style={{ gap: 8 }}><span className="muted">Add your church calendar's iCal link first.</span><button className="btn sm" onClick={() => go({ name: 'settings', section: 'connections' })}>Open Connections</button></div>}
+          {cal.linked && !upcoming.length && <span className="muted">No upcoming events found.</span>}
+          <div className="pop-list" style={{ maxHeight: 380 }}>
+            {upcoming.map((e) => (
+              <button key={e.id} className="pop-item" onClick={() => { setPickEvent(false); create({ type: 'event', event: e }); }}>
+                {e.title}<span className="pop-hint">{new Date(e.start).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}{e.allDay ? '' : ` · ${new Date(e.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`}</span>
+              </button>
+            ))}
+          </div>
+          {cal.linked && <button className="btn ghost sm" onClick={() => { setPickEvent(false); create({ type: 'blank' }); }}>Not on the calendar? Start blank</button>}
+        </Modal>
       )}
     </div>
   );

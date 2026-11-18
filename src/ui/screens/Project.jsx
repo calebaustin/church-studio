@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../App.jsx';
 import { api, fmt, fmtEta, media } from '../api.js';
-import { ArrowLeft, Square, Wand2, Download, Trash2, Plus, Send, FolderOpen, Copy, ScissorsLineDashed, AudioLines, ChevronDown, FileText, PenLine } from 'lucide-react';
+import { ArrowLeft, Square, Wand2, Download, Trash2, Plus, Send, FolderOpen, Copy, ScissorsLineDashed, AudioLines, ChevronDown, FileText, PenLine, Quote } from 'lucide-react';
 import AudioCleanup from '../components/AudioCleanup.jsx';
 import ClipEditor from './ClipEditor.jsx';
 import { StatusChip } from './Library.jsx';
@@ -122,7 +122,7 @@ export default function Project({ id, initialStep, initialClip }) {
     <div className="page">
       <div className="row between wrap">
         <div className="row grow" style={{ minWidth: 300 }}>
-          <button className="btn ghost sm" onClick={() => go({ name: 'library' })}><ArrowLeft size={15} />Library</button>
+          <button className="btn ghost sm" onClick={() => go({ name: 'library' })}><ArrowLeft size={15} />Videos</button>
           <input className="input" style={{ fontWeight: 650, fontSize: 17, background: 'transparent', border: 0, boxShadow: 'none' }}
             defaultValue={project.title} onBlur={(e) => e.target.value.trim() && e.target.value !== project.title && patch({ title: e.target.value.trim() })} />
           <StatusChip status={project.status} />
@@ -148,7 +148,7 @@ export default function Project({ id, initialStep, initialClip }) {
       )}
 
       {step === 'transcribe' && (
-        <TranscribeStep project={project} src={src} player={player} audioOnly={audioOnly} job={jobOf('transcribe') || jobOf('download')} onStart={(range) => start('transcribe', range)} />
+        <TranscribeStep project={project} src={src} player={player} audioOnly={audioOnly} job={jobOf('transcribe') || jobOf('download')} onStart={(range) => start('transcribe', range)} onRead={() => setStep('text')} />
       )}
       {step === 'sermon' && transcript && (
         <SermonStep project={project} transcript={transcript} src={src} player={player} patch={patch} audioOnly={audioOnly}
@@ -169,7 +169,8 @@ export default function Project({ id, initialStep, initialClip }) {
   );
 }
 
-function TranscribeStep({ project, src, player, job, onStart, audioOnly }) {
+function TranscribeStep({ project, src, player, job, onStart, audioOnly, onRead }) {
+  const done = project.status === 'transcribed';
   const { config } = useApp();
   const [mode, setMode] = useState('all');
   const [cleanup, setCleanup] = useState(project.audioCleanup || null);
@@ -222,7 +223,13 @@ function TranscribeStep({ project, src, player, job, onStart, audioOnly }) {
               </>
             )}
           </div>
-          {job ? <InlineJob job={job} /> : (
+          {job ? <InlineJob job={job} /> : done ? (
+            <div className="row wrap" style={{ gap: 8 }}>
+              <button className="btn primary" onClick={onRead}><FileText size={15} />Read transcript</button>
+              <button className="btn" disabled={!src || (mode === 'range' && !(range.end > range.start))}
+                onClick={() => { if (window.confirm('Transcribe again? The new transcript replaces the current one. Clips keep their times.')) onStart({ ...(mode === 'range' ? range : {}), cleanup }); }}><Wand2 size={15} />Re-transcribe</button>
+            </div>
+          ) : (
             <button className="btn primary lg" disabled={!src || (mode === 'range' && !(range.end > range.start))}
               onClick={() => onStart({ ...(mode === 'range' ? range : {}), cleanup })}><Wand2 size={16} />{mode === 'range' ? 'Transcribe sermon' : audioOnly ? 'Transcribe recording' : 'Transcribe video'}</button>
           )}
@@ -414,47 +421,116 @@ function ExportsStep({ project }) {
   );
 }
 
-/** The transcript as text: read it, copy it, save it, or write from it. */
+/** The transcript as text: read it, select part of it, copy or save it, or make something from it. */
 function TranscriptStep({ project }) {
   const { go, toast } = useApp();
   const [whole, setWhole] = useState(!project.sermon?.confirmed);
-  const [text, setText] = useState(null);
-  useEffect(() => { api.get(`/api/projects/${project.id}/transcript/text?format=${whole ? 'all' : 'txt'}`).then((r) => setText(r.text)).catch((e) => setText(e.message)); }, [project.id, whole]);
+  const [data, setData] = useState(null);
+  const [times, setTimes] = useState(() => { try { return localStorage.getItem('cs-times') === '1'; } catch { return false; } });
+  const [sel, setSel] = useState(null); // { a, b } word indexes
+  const box = useRef(null);
+  useEffect(() => {
+    setSel(null);
+    api.get(`/api/projects/${project.id}/transcript/paragraphs${whole ? '?whole=1' : ''}`).then(setData).catch((e) => setData({ error: e.message, paragraphs: [] }));
+  }, [project.id, whole]);
+  const words = useMemo(() => (data?.paragraphs || []).flatMap((p) => p.words), [data]);
+  const starts = useMemo(() => { let n = 0; return (data?.paragraphs || []).map((p) => { const s = n; n += p.words.length; return s; }); }, [data]);
+  const toggleTimes = () => { setTimes(!times); try { localStorage.setItem('cs-times', times ? '0' : '1'); } catch { /* fine */ } };
+  const text = (a, b) => words.slice(a, b + 1).map((w) => w.w).join(' ');
+  const allText = useMemo(() => (data?.paragraphs || []).map((p) => p.words.map((w) => w.w).join(' ')).join('\n\n'), [data]);
+
+  // Drag to select words, or click a paragraph to select all of it.
+  const onUp = (e, pi) => {
+    const s = window.getSelection();
+    if (s && !s.isCollapsed && box.current) {
+      const r = s.getRangeAt(0);
+      const hit = [...box.current.querySelectorAll('[data-i]')].filter((el) => r.intersectsNode(el)).map((el) => Number(el.dataset.i));
+      if (hit.length) { setSel({ a: Math.min(...hit), b: Math.max(...hit) }); s.removeAllRanges(); return; }
+    }
+    if (pi != null) {
+      const a = starts[pi]; const b = a + data.paragraphs[pi].words.length - 1;
+      setSel(sel && sel.a === a && sel.b === b ? null : { a, b });
+    }
+  };
+  useEffect(() => { const k = (e) => { if (e.key === 'Escape') setSel(null); }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k); }, []);
+
   const save = async (format) => {
     try {
-      const r = await api.post(`/api/projects/${project.id}/transcript/save`, { format });
+      const r = await api.post(`/api/projects/${project.id}/transcript/save`, { format: whole && format === 'txt' ? 'all' : format });
       toast({ text: 'Saved to Downloads.', action: { label: 'Show', run: () => api.post('/api/reveal', { path: r.file }) } });
     } catch (e) { toast({ kind: 'error', text: e.message }); }
   };
-  const words = text ? text.split('\n\n').slice(1).join(' ').split(/\s+/).filter(Boolean).length : 0;
+  const selText = sel ? text(sel.a, sel.b) : '';
+  const selStart = sel ? words[sel.a]?.start : 0; const selEnd = sel ? words[sel.b]?.end : 0;
+  const makeClip = async () => {
+    try {
+      const { clip } = await api.post(`/api/projects/${project.id}/clips`, { start: Math.max(0, selStart - 0.2), end: selEnd + 0.4, title: selText.split(' ').slice(0, 6).join(' ') });
+      go({ name: 'project', id: project.id, clip: clip.id });
+    } catch (e) { toast({ kind: 'error', text: e.message }); }
+  };
+  const total = words.length;
   return (
-    <div className="grid2" style={{ gridTemplateColumns: 'minmax(0, 1.6fr) minmax(260px, 1fr)', alignItems: 'start' }}>
-      <section className="glass panel stack">
-        <div className="row between wrap">
+    <div className="grid2 transcript-layout">
+      <section className="glass panel stack transcript-panel">
+        <div className="row between wrap" style={{ gap: 10 }}>
           <h2>Transcript</h2>
-          {project.sermon?.confirmed && (
-            <div className="seg sm">
-              <button className={!whole ? 'on' : ''} onClick={() => setWhole(false)}>{project.media?.width ? 'Sermon only' : 'Trimmed'}</button>
-              <button className={whole ? 'on' : ''} onClick={() => setWhole(true)}>Everything</button>
+          <div className="row wrap" style={{ gap: 12 }}>
+            <label className="switch small"><input type="checkbox" checked={times} onChange={toggleTimes} />Times</label>
+            {project.sermon?.confirmed && (
+              <div className="seg sm">
+                <button className={!whole ? 'on' : ''} onClick={() => setWhole(false)}>{project.media?.width ? 'Sermon only' : 'Trimmed'}</button>
+                <button className={whole ? 'on' : ''} onClick={() => setWhole(true)}>Everything</button>
+              </div>
+            )}
+          </div>
+        </div>
+        <span className="hint">Click a paragraph to select it, or drag across words.</span>
+        <div ref={box} className={`transcript-read ${times ? 'timed' : ''}`} tabIndex={0} aria-label="Transcript">
+          {!data && <span className="muted">Loading…</span>}
+          {data?.error && <span className="muted">{data.error}</span>}
+          {data?.paragraphs.map((p, pi) => (
+            <div key={pi} className="tr-para" onMouseUp={(e) => onUp(e, pi)}>
+              {times && <span className="tr-time num">{fmt(p.start)}</span>}
+              <p>{p.words.map((w, k) => {
+                const i = starts[pi] + k;
+                return <span key={k} data-i={i} className={sel && i >= sel.a && i <= sel.b ? 'sel' : undefined}>{w.w} </span>;
+              })}</p>
             </div>
-          )}
+          ))}
         </div>
-        <div className="transcript-read">{text == null ? <span className="muted">Loading…</span> : text.split('\n\n').slice(1).map((p, k) => <p key={k}>{p}</p>)}</div>
       </section>
-      <section className="glass strong panel stack" style={{ position: 'sticky', top: 0 }}>
-        <span className="eyebrow">{words.toLocaleString()} words</span>
-        <h3>Take it with you</h3>
-        <div className="stack" style={{ gap: 8 }}>
-          <button className="btn" onClick={() => { navigator.clipboard.writeText(text || ''); toast({ text: 'Copied the transcript.' }); }}><Copy size={14} />Copy text</button>
-          <button className="btn" onClick={() => save('txt')}><FileText size={14} />Save as text</button>
-          <button className="btn" onClick={() => save('timed')}><FileText size={14} />Text with times</button>
-          <button className="btn" onClick={() => save('srt')}><Download size={14} />Captions (.srt)</button>
-          <button className="btn" onClick={() => save('vtt')}><Download size={14} />Captions (.vtt)</button>
-        </div>
-        <hr className="hairline" />
-        <button className="btn primary" onClick={() => go({ name: 'writing', project: project.id })}><PenLine size={14} />Write from it</button>
-        <span className="hint">Blog post, email, small group guide and social captions.</span>
-      </section>
+      <div className="stack transcript-side">
+        <section className="glass strong panel stack">
+          <span className="eyebrow">{total.toLocaleString()} words</span>
+          <h3>Take it with you</h3>
+          <div className="stack" style={{ gap: 8 }}>
+            <button className="btn" onClick={() => { navigator.clipboard.writeText(allText); toast({ text: 'Copied the transcript.' }); }}><Copy size={14} />Copy text</button>
+            <button className="btn" onClick={() => save('txt')}><FileText size={14} />Save as text</button>
+            <button className="btn" onClick={() => save('timed')}><FileText size={14} />Text with times</button>
+            <button className="btn" onClick={() => save('srt')}><Download size={14} />Captions (.srt)</button>
+            <button className="btn" onClick={() => save('vtt')}><Download size={14} />Captions (.vtt)</button>
+          </div>
+          <hr className="hairline" />
+          <button className="btn primary" onClick={() => go({ name: 'writing', project: project.id })}><PenLine size={14} />Write from it</button>
+        </section>
+        {sel && (
+          <section className="glass panel stack sel-panel" aria-live="polite">
+            <div className="row between"><span className="eyebrow">Selected text</span><button className="btn ghost sm" onClick={() => setSel(null)}>Clear</button></div>
+            <div className="sel-stats">
+              <div><strong className="num">{(sel.b - sel.a + 1).toLocaleString()}</strong><span className="small muted">words</span></div>
+              <div><strong className="num">{fmt(Math.max(0, selEnd - selStart))}</strong><span className="small muted">long</span></div>
+              <div><strong className="num">{fmt(selStart)}</strong><span className="small muted">starts at</span></div>
+            </div>
+            <p className="small muted sel-quote">“{selText.length > 160 ? `${selText.slice(0, 160)}…` : selText}”</p>
+            <div className="row wrap" style={{ gap: 6 }}>
+              <button className="btn sm" onClick={() => { navigator.clipboard.writeText(selText); toast({ text: 'Copied.' }); }}><Copy size={13} />Copy</button>
+              {project.media?.width > 0 && <button className="btn sm primary" onClick={makeClip}><ScissorsLineDashed size={13} />Make a clip</button>}
+              <button className="btn sm" onClick={() => go({ name: 'graphics', quote: selText })}><Quote size={13} />Quote graphic</button>
+              <button className="btn sm" onClick={() => go({ name: 'social', caption: selText })}><Send size={13} />Social post</button>
+            </div>
+          </section>
+        )}
+      </div>
     </div>
   );
 }

@@ -111,7 +111,7 @@ export default function Dashboard() {
 
   // Quick actions for the tools this church uses.
   const actions = [
-    ['New sermon', Plus, () => go({ name: 'library', pick: true }), 'library'],
+    ['New video', Plus, () => go({ name: 'library', pick: true }), 'library'],
     ['Find clips', Wand2, latest ? () => go({ name: 'project', id: latest.id }) : null, 'library'],
     ['Write', PenLine, () => go({ name: 'writing' }), 'writing'],
     ['Design', Shapes, () => go({ name: 'graphics' }), 'graphics'],
@@ -238,7 +238,7 @@ export default function Dashboard() {
 
       {on('library') && stats?.projects.length > 0 && (
         <>
-          <div className="row between"><h2>Recent sermons</h2><button className="btn ghost sm" onClick={() => go({ name: 'library' })}>See all<ArrowRight size={14} /></button></div>
+          <div className="row between"><h2>Recent projects</h2><button className="btn ghost sm" onClick={() => go({ name: 'library' })}>See all<ArrowRight size={14} /></button></div>
           <div className="projects">
             {stats.projects.slice(0, 3).map((p) => (
               <div key={p.id} className="glass card" onClick={() => go({ name: 'project', id: p.id })}>
