@@ -100,6 +100,37 @@ async function askOllama(cfg, text) {
 }
 
 const PROVIDERS = { anthropic: askAnthropic, openai: askOpenAI, gemini: askGemini, ollama: askOllama };
+export const PROVIDER_NAMES = { anthropic: 'Claude', openai: 'OpenAI', gemini: 'Gemini', ollama: 'Ollama' };
+
+// ---- status: "Working with Claude" until a usage problem, then "Working locally" for an hour.
+const status = { degradedUntil: 0, reason: null, notice: null };
+/** Usage, quota, billing, key or rate-limit problems (not bugs in our request). */
+export function isUsageError(e) {
+  const code = e?.status ?? e?.statusCode;
+  const msg = String(e?.message || e);
+  return [401, 402, 403, 429, 529].includes(code) || /\b(401|402|403|429|529)\b|quota|rate.?limit|usage|credit|billing|insufficient|exceeded|overloaded|invalid.?api.?key|authentication|not running/i.test(msg);
+}
+export function markUsageProblem(cfg, e) {
+  const name = PROVIDER_NAMES[cfg.llmProvider] || 'The AI helper';
+  status.degradedUntil = Date.now() + 60 * 60_000;
+  status.reason = String(e?.message || e).slice(0, 200);
+  status.notice = { id: Date.now(), text: `${name} hit a usage limit or key problem, so Church Studio is working locally for now. Everything still works.` };
+}
+export function resetAiStatus() { status.degradedUntil = 0; status.reason = null; }
+export function aiStatus(cfg) {
+  const ready = providerReady(cfg);
+  const degraded = ready && Date.now() < status.degradedUntil;
+  return { provider: cfg.llmProvider, name: PROVIDER_NAMES[cfg.llmProvider] || null, ready, degraded, active: ready && !degraded, reason: degraded ? status.reason : null, notice: status.notice };
+}
+/** Run an AI call; on a usage problem, note it and return the fallback instead of failing. */
+export async function withFallback(cfg, fn, fallback) {
+  if (!aiStatus(cfg).active) return { value: await fallback(), local: true };
+  try { return { value: await fn(), local: false }; } catch (e) {
+    if (!isUsageError(e)) throw e;
+    markUsageProblem(cfg, e);
+    return { value: await fallback(), local: true, notice: status.notice };
+  }
+}
 
 export function providerReady(cfg) {
   const p = cfg.llmProvider;

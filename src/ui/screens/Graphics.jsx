@@ -11,16 +11,17 @@ import { KINDS, SIZE_PRESETS, TEMPLATES, blankPage, loadAssets, page as newPage,
 
 export { cohesive } from '../design/model.js';
 
+// Tile colors come from the app theme (tone-1 to tone-6 in styles.css), so they follow the user's colors.
 const TILES = [
-  ['presentation', Presentation, ['#FF8A3D', '#F0592A']],
-  ['post', Heart, ['#FF5C7A', '#E8364F']],
-  ['carousel', GalleryHorizontalEnd, ['#B66DFF', '#8A3FF0']],
-  ['story', Smartphone, ['#7A6CFF', '#5146E5']],
-  ['thumbnail', MonitorPlay, ['#FF5F57', '#D63A33']],
-  ['flyer', Printer, ['#3FA9F5', '#1F7AD6']],
-  ['notes', NotebookPen, ['#2BB59A', '#16917A']],
-  ['sermon', Sparkles, ['#3E9B72', '#226B4E']],
-  ['custom', Scaling, null],
+  ['presentation', Presentation, 1],
+  ['post', Heart, 2],
+  ['carousel', GalleryHorizontalEnd, 3],
+  ['story', Smartphone, 4],
+  ['thumbnail', MonitorPlay, 5],
+  ['flyer', Printer, 6],
+  ['notes', NotebookPen, 4],
+  ['sermon', Sparkles, 1],
+  ['custom', Scaling, 0],
 ];
 const SERMON_OUTPUTS = [
   ['deck-sermon', 'Sermon slides', 'Title, passages, main points, quotes and next steps'],
@@ -65,10 +66,10 @@ function TemplateThumb({ tpl, ctx }) {
 }
 TemplateThumb.cache = {};
 
-export default function Graphics({ image }) {
+export default function Graphics({ image, design }) {
   const { toast } = useApp();
   const ctx = useBrandCtx();
-  const [open, setOpen] = useState(null);
+  const [open, setOpen] = useState(design || null);
   const [designs, setDesigns] = useState(null);
   const [tab, setTab] = useState('home');
   const [kind, setKind] = useState(null);
@@ -116,7 +117,7 @@ export default function Graphics({ image }) {
       <div className="dz-tiles">
         {TILES.map(([k, Icon, grad]) => (
           <button key={k} className={`dz-tile ${kind === k ? 'on' : ''}`} onClick={() => pick(k)}>
-            <span className={`dz-tile-icon ${grad ? '' : 'plain'}`} style={grad ? { background: `linear-gradient(145deg, ${grad[0]}, ${grad[1]})` } : undefined}><Icon size={24} /></span>
+            <span className={`dz-tile-icon ${grad ? `tone tone-${grad}` : 'plain'}`}><Icon size={24} /></span>
             <span>{k === 'sermon' ? 'From a sermon' : KINDS[k].label}</span>
           </button>
         ))}
@@ -146,7 +147,7 @@ export default function Graphics({ image }) {
                   </div>
                   <div className="row" style={{ gap: 2 }}>
                     <button className="rt-btn" title="Make a copy" aria-label="Make a copy" onClick={async () => { const { design } = await api.get(`/api/designs/${d.id}`); await api.put(`/api/designs/${uid()}`, { ...design, name: `${design.name} copy` }); load(); }}><Copy size={14} /></button>
-                    <button className="rt-btn" title="Delete" aria-label="Delete" onClick={async () => { if (window.confirm(`Delete “${d.name}”? Exported files in your library stay.`)) { await api.del(`/api/designs/${d.id}`); load(); toast({ text: 'Design deleted.' }); } }}><Trash2 size={14} /></button>
+                    <button className="rt-btn" title="Move to trash" aria-label="Move to trash" onClick={async () => { await api.post('/api/finder/trash', { key: `design:${d.id}` }); load(); toast({ text: `“${d.name}” moved to the trash.`, action: { label: 'Undo', run: async () => { await api.post('/api/finder/restore', { key: `design:${d.id}` }); load(); } } }); }}><Trash2 size={14} /></button>
                   </div>
                 </div>
               </div>

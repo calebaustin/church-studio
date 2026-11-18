@@ -88,7 +88,8 @@ const EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'application/pdf': 'pdf',
 const clean = (n) => String(n || 'Design').replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 80) || 'Design';
 
 /** Save a design export into Graphics: one file as Graphics/<name>.<ext>, several pages into Graphics/<name>/. */
-export async function saveExport(name, files) {
+export async function saveExport(name, files, folder = 'Graphics') {
+  if (!['Graphics', 'Writing'].includes(folder)) throw new Error('Unknown folder');
   const root = await ensureLibrary();
   const decoded = files.map((f) => {
     const m = String(f.dataUrl).match(/^data:([\w/.+-]+);base64,(.+)$/);
@@ -100,14 +101,14 @@ export async function saveExport(name, files) {
   const base = clean(name);
   if (decoded.length === 1) {
     const d = decoded[0];
-    let file = path.join(root, 'Graphics', `${base}.${d.ext}`);
-    for (let n = 2; existsSync(file); n++) file = path.join(root, 'Graphics', `${base} ${n}.${d.ext}`);
+    let file = path.join(root, folder, `${base}.${d.ext}`);
+    for (let n = 2; existsSync(file); n++) file = path.join(root, folder, `${base} ${n}.${d.ext}`);
     await writeFile(file, d.data);
-    return { file, rel: `Graphics/${path.basename(file)}` };
+    return { file, rel: `${folder}/${path.basename(file)}` };
   }
-  let dir = path.join(root, 'Graphics', base);
-  for (let n = 2; existsSync(dir); n++) dir = path.join(root, 'Graphics', `${base} ${n}`);
+  let dir = path.join(root, folder, base);
+  for (let n = 2; existsSync(dir); n++) dir = path.join(root, folder, `${base} ${n}`);
   await mkdir(dir, { recursive: true });
   for (const d of decoded) await writeFile(path.join(dir, `${d.name}.${d.ext}`), d.data);
-  return { file: dir, rel: `Graphics/${path.basename(dir)}`, count: decoded.length };
+  return { file: dir, rel: `${folder}/${path.basename(dir)}`, count: decoded.length };
 }

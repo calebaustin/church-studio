@@ -1,6 +1,7 @@
 {
   "name": "church-studio",
-  "version": "0.1.0",
+  "version": "0.3.0",
+  "updateRepo": "calebaustin/church-studio",
   "private": true,
   "description": "Local desktop app: sermon video -> captioned, auto-centered 9:16 clips. Offline, no LLM required.",
   "type": "module",
@@ -22,9 +23,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^1.10.0",
     "@ffprobe-installer/ffprobe": "^2.1.2",
-    "ffmpeg-static": "^5.3.0",
-    "jspdf": "4.2.1",
-    "pptxgenjs": "4.0.1"
+    "ffmpeg-static": "^5.3.0"
   },
   "devDependencies": {
     "@expo-google-fonts/montserrat": "^0.4.2",
@@ -33,6 +32,8 @@
     "cross-env": "^7.0.3",
     "electron": "^38.0.0",
     "electron-builder": "^26.18.0",
+    "jspdf": "4.2.1",
+    "pptxgenjs": "4.0.1",
     "lucide-react": "^1.74.0",
     "qrcode": "^1.5.4",
     "react": "19.1.0",
@@ -60,6 +61,7 @@
       "src/daemon/**",
       "dist/ui/**",
       "package.json",
+      "CHANGELOG.md",
       "!node_modules/ffmpeg-static/**",
       "!node_modules/@ffprobe-installer/**",
       "!node_modules/@expo-google-fonts/**"

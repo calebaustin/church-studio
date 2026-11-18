@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Copy, FileDown, PenLine, Sparkles, Wand2, Check, RefreshCw, Undo2, Link2 } from 'lucide-react';
+import { Copy, FileDown, PenLine, Sparkles, Wand2, Check, RefreshCw, Undo2, Link2, Info, Printer } from 'lucide-react';
+import HeaderImage from '../components/HeaderImage.jsx';
+import PrintDialog from '../components/PrintDialog.jsx';
+import LibraryPicker from '../components/LibraryPicker.jsx';
 import { useApp } from '../App.jsx';
 import { api } from '../api.js';
 import { seoChecks } from '../seo.js';
@@ -43,10 +46,27 @@ const KINDS = [
   ['social', 'Social captions'],
 ];
 
-function Checks({ title, score, list }) {
+function SeoInfo() {
+  const [open, setOpen] = useState(false);
+  return (
+    <span style={{ position: 'relative', display: 'inline-flex' }}>
+      <button className="seo-info" data-pop-trigger aria-label="What is good SEO?" title="What is good SEO?" onClick={() => setOpen(!open)}><Info size={13} /></button>
+      <Popover open={open} onClose={() => setOpen(false)} width={340}>
+        <div className="seo-pop">
+          <strong>What is good SEO?</strong>
+          <span>Search engines show the pages that most clearly answer what someone is looking for. Using one focus keyphrase in your title, first paragraph, a heading and the web address tells Google what your post is about, and the meta description is the preview people read before they click.</span>
+          <span>Clear, readable posts keep visitors on the page, which search engines notice and reward.</span>
+          <span>Every sermon you publish this way is another page people nearby can find when they search for hope, answers or a church to visit, and over time that builds your church's presence online.</span>
+        </div>
+      </Popover>
+    </span>
+  );
+}
+
+function Checks({ title, score, list, info }) {
   return (
     <div className="stack" style={{ gap: 6 }}>
-      <div className="row between"><strong>{title}</strong><span className={`chip ${score >= 75 ? 'ok' : score >= 50 ? 'warn' : 'bad'}`}>{score}/100</span></div>
+      <div className="row between"><span className="row" style={{ gap: 6 }}><strong>{title}</strong>{info}</span><span className={`chip ${score >= 75 ? 'ok' : score >= 50 ? 'warn' : 'bad'}`}>{score}/100</span></div>
       {list.map((c) => (
         <div key={c.label} className="row small" style={{ alignItems: 'flex-start' }}>
           <span className="dot" style={{ color: c.status === 'good' ? 'var(--ok)' : c.status === 'ok' ? 'var(--warn)' : 'var(--bad)', marginTop: 6 }} />
@@ -57,7 +77,7 @@ function Checks({ title, score, list }) {
   );
 }
 
-export default function Writing() {
+export default function Writing({ project: startProject }) {
   const { toast, config, go } = useApp();
   const [projects, setProjects] = useState(null);
   const [pid, setPid] = useState(null);
@@ -69,15 +89,18 @@ export default function Writing() {
   const [angle, setAngle] = useState('teaching');
   const [useAi, setUseAi] = useState(false);
   const [undoBlog, setUndoBlog] = useState(null);
+  const [printing, setPrinting] = useState(false);
+  const [trashed, setTrashed] = useState(false);
+  const [imgPick, setImgPick] = useState(null); // resolve() for the editor's image button
 
   useEffect(() => {
     api.get('/api/projects').then(({ projects: ps }) => {
       const ready = ps.filter((p) => p.status === 'transcribed');
       setProjects(ready);
-      if (ready[0]) setPid(ready[0].id);
+      if (ready[0]) setPid((ready.find((p) => p.id === startProject) || ready[0]).id);
     });
   }, []);
-  useEffect(() => { if (pid) api.get(`/api/writing/${pid}`).then((r) => { setDraft(r.draft); setDirty(false); setIdeas(null); setUndoBlog(null); setAngle(r.draft?.angle || 'teaching'); }); }, [pid]);
+  useEffect(() => { if (pid) api.get(`/api/writing/${pid}`).then((r) => { setDraft(r.draft); setTrashed(Boolean(r.trashed)); setDirty(false); setIdeas(null); setUndoBlog(null); setAngle(r.draft?.angle || 'teaching'); }); }, [pid]);
   const loadIdeas = (kp = draft?.keyphrase) => api.post(`/api/writing/${pid}/suggest`, { keyphrase: kp }).then(setIdeas).catch(() => setIdeas({ titles: [], keyphrases: [], metas: [] }));
   const rewrite = async () => {
     setBusy(true);
@@ -85,7 +108,7 @@ export default function Writing() {
       const r = await api.post(`/api/writing/${pid}/rewrite`, { title: draft.title, keyphrase: draft.keyphrase, slug: draft.slug, metaDescription: draft.metaDescription, angle, ai: useAi });
       setUndoBlog(draft.blog);
       set({ blog: r.text, angle });
-      toast({ text: `Rewritten as “${ANGLES.find((a) => a[0] === angle)[1]}”. Read it over, then save.` });
+      toast({ text: r.notice || `Rewritten as “${ANGLES.find((a) => a[0] === angle)[1]}”. Read it over, then save.` });
     } catch (e) { toast({ kind: 'error', text: e.message }); }
     setBusy(false);
   };
@@ -99,13 +122,26 @@ export default function Writing() {
   const set = (p) => { setDraft((d) => ({ ...d, ...p })); setDirty(true); };
   const polish = async () => {
     setBusy(true);
-    try { const r = await api.post(`/api/writing/${pid}/polish`, { kind, text: draft[kind] }); set({ [kind]: r.text }); toast({ text: 'Polished. Read it over before using it.' }); } catch (e) { toast({ kind: 'error', text: e.message }); }
+    try { const r = await api.post(`/api/writing/${pid}/polish`, { kind, text: draft[kind] }); set({ [kind]: r.text }); toast({ text: r.notice || 'Polished. Read it over before using it.' }); } catch (e) { toast({ kind: 'error', text: e.message }); }
     setBusy(false);
+  };
+  const header = draft?.headers?.[kind] || null;
+  const setHeader = (h) => set({ headers: { ...(draft.headers || {}), [kind]: h } });
+  // Images go along as data, so they paste into email and website tools.
+  const inlineImages = async (html) => {
+    const srcs = [...new Set([...html.matchAll(/src="(\/library\/[^"]+)"/g)].map((m) => m[1]))];
+    for (const src of srcs) {
+      const blob = await fetch(src).then((r) => r.blob());
+      const data = await new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(blob); });
+      html = html.split(`src="${src}"`).join(`src="${data}"`);
+    }
+    return html;
   };
   const copy = async (asHtml) => {
     const text = draft[kind];
     if (asHtml && window.ClipboardItem) {
-      const html = mdToHtml(text);
+      const top = header?.rel && header.style !== 'color' ? `<p><img src="/library/${header.rel.split('/').map(encodeURIComponent).join('/')}" alt="" style="max-width:100%"></p>` : '';
+      const html = await inlineImages(top + mdToHtml(text));
       await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([text], { type: 'text/plain' }) })]);
     } else await navigator.clipboard.writeText(text);
     toast({ text: asHtml ? 'Copied with formatting. Paste into your website or email tool.' : 'Copied.' });
@@ -141,6 +177,9 @@ export default function Writing() {
         <div className="glass empty"><PenLine size={40} /><h3>No drafts for this sermon yet</h3><p>Press Write drafts. Everything comes from the sermon's words; you fill in the details.</p></div>
       )}
 
+      {draft && trashed && (
+        <div className="banner"><Info size={16} />This writing is in the trash.<button className="btn sm" onClick={async () => { await api.post('/api/finder/restore', { key: `writing:${pid}` }); setTrashed(false); }}>Restore</button></div>
+      )}
       {draft && (
         <>
           <div className="row between wrap">
@@ -149,6 +188,7 @@ export default function Writing() {
               {placeholders > 0 && <span className="chip warn">{placeholders} spot{placeholders > 1 ? 's' : ''} to fill in</span>}
               <button className="btn sm" onClick={() => copy(false)}><Copy size={13} />Copy</button>
               <button className="btn sm" onClick={() => copy(true)}><Copy size={13} />Copy formatted</button>
+              {kind !== 'social' && <button className="btn sm" onClick={() => setPrinting(true)}><Printer size={13} />Print or PDF</button>}
               <button className="btn sm" onClick={() => api.post(`/api/writing/${pid}/save-file`, { name: `${draft.title} - ${KINDS.find((k) => k[0] === kind)[1]}`, text: draft[kind] })}><FileDown size={13} />Save to library</button>
               {config.llmProvider !== 'none' && <button className="btn sm" disabled={busy} onClick={polish}><Sparkles size={13} />Polish with AI</button>}
               <button className={`btn sm ${dirty ? 'accent' : ''}`} disabled={!dirty} onClick={save}><Check size={13} />{dirty ? 'Save' : 'Saved'}</button>
@@ -190,19 +230,30 @@ export default function Writing() {
                   </div>
                 </section>
               )}
+              {kind !== 'social' && (
+                <HeaderImage pid={pid} value={header} onChange={setHeader} brandColors={config.brandColors || []}
+                  title={kind === 'blog' ? draft.title : (draft[kind].match(/^#\s+(.*)/m)?.[1] || draft.title).replace(/^Small group guide:\s*/i, '')}
+                  styles={kind === 'group' ? ['full', 'blur', 'color'] : ['full']} />
+              )}
               <section className="glass strong panel rt-panel">
-                <RichEditor key={kind} value={draft[kind]} onChange={(v) => set({ [kind]: v })} />
+                <RichEditor key={kind} value={draft[kind]} onChange={(v) => set({ [kind]: v })}
+                  onPickImage={kind === 'social' ? undefined : () => new Promise((resolve) => setImgPick(() => resolve))} />
               </section>
             </div>
             {kind === 'blog' && checks && (
               <aside className="glass panel stack sticky-col" style={{ gap: 16 }}>
-                <Checks title="Search" score={checks.seoScore} list={checks.seo} />
+                <Checks title="Search" score={checks.seoScore} list={checks.seo} info={<SeoInfo />} />
                 <hr className="hairline" />
                 <Checks title="Readability" score={checks.readScore} list={checks.read} />
                 <span className="muted small num">{checks.words} words</span>
               </aside>
             )}
           </div>
+          {printing && <PrintDialog pid={pid} kind={kind} kindLabel={KINDS.find((k) => k[0] === kind)[1]} draft={draft} header={header} onClose={() => setPrinting(false)} />}
+          {imgPick && (
+            <LibraryPicker title="Add an image" onClose={() => { imgPick(null); setImgPick(null); }}
+              onPick={(i) => { imgPick({ url: `/library/${i.rel.split('/').map(encodeURIComponent).join('/')}`, alt: i.name.replace(/\.[a-z]+$/i, '') }); setImgPick(null); }} />
+          )}
         </>
       )}
     </div>

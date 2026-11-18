@@ -11,7 +11,7 @@ import { toSentences, backgroundOf, keywords, STOPWORDS } from './text.js';
 import { lineScore, lineFeatures } from './clips.js';
 import { normalizeWords, normalizeText, extractRefs } from './scripture.js';
 import { loadConfig } from './config.js';
-import { complete, providerReady } from './ai.js';
+import { complete, providerReady, withFallback } from './ai.js';
 
 const DRAFTS = path.join(DATA_DIR, 'writing');
 
@@ -309,12 +309,26 @@ const ANGLE_NOTES = {
 export async function rewriteBlog(projectId, { title, keyphrase, slug, metaDescription, angle = 'teaching', ai = false } = {}) {
   const { project, a } = await load(projectId);
   const draft = blogFor(a, project, { title, keyphrase, angle });
-  if (!ai) return draft;
+  if (!ai) return { text: draft };
   const cfg = await loadConfig();
   if (!providerReady(cfg)) throw new Error('Turn on an AI helper in Settings to rewrite with AI.');
   const system = `${POLISH_SYSTEM}\nThis is a church blog post. ${ANGLE_NOTES[angle] || ''} Use the title "${title}" as the H1.
 Use the focus keyphrase "${keyphrase}" naturally in the first paragraph and in one subheading. Keep it between 600 and 1000 words.`;
-  return complete(cfg, system, `Meta description (for context): ${metaDescription}\nWeb address: ${slug}\n\nSermon excerpt:\n${a.all.slice(0, 14000)}\n\nStarting draft:\n${draft}`);
+  const r = await withFallback(cfg, () => complete(cfg, system, `Meta description (for context): ${metaDescription}\nWeb address: ${slug}\n\nSermon excerpt:\n${a.all.slice(0, 14000)}\n\nStarting draft:\n${draft}`), () => draft);
+  return { text: r.value, notice: r.notice?.text || null };
+}
+
+/** Good moments for a still from the sermon video: strong lines, at least 40 seconds apart. */
+export async function stillTimes(projectId, n = 6) {
+  const { a, project } = await load(projectId);
+  const picks = [];
+  for (const s of a.best) {
+    if (s.f.housekeeping || s.f.logistics) continue;
+    const t = s.start + Math.min(1.5, (s.end - s.start) / 2);
+    if (picks.every((p) => Math.abs(p - t) > 40)) picks.push(t);
+    if (picks.length >= n) break;
+  }
+  return { times: picks.sort((x, y) => x - y), project };
 }
 
 /** A sermon outline for slides and carousels: title, passages, main points, quotes, questions. */
@@ -355,5 +369,6 @@ export async function polish(projectId, kind, text) {
   if (!providerReady(cfg)) throw new Error('Turn on an AI helper in Settings to polish drafts.');
   const transcript = await getTranscript(projectId);
   const excerpt = (transcript?.words || []).map((w) => w.w).join(' ').slice(0, 12000);
-  return complete(cfg, POLISH_SYSTEM, `Kind: ${kind}\n\nSermon excerpt:\n${excerpt}\n\nDraft:\n${text}`);
+  const r = await withFallback(cfg, () => complete(cfg, POLISH_SYSTEM, `Kind: ${kind}\n\nSermon excerpt:\n${excerpt}\n\nDraft:\n${text}`), () => text);
+  return { text: r.value, notice: r.notice?.text || null };
 }

@@ -19,3 +19,5 @@ dist/
 # Reference samples (third-party zips, not part of the app)
 Build Samples/
 build/
+backups/
+version.json

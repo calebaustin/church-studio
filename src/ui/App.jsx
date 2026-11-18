@@ -1,9 +1,10 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { Clapperboard, Send, Settings as SettingsIcon, WifiOff, LayoutDashboard, MonitorPlay, PenLine, Shapes, FolderHeart, UserRound } from 'lucide-react';
+import { Clapperboard, Send, Settings as SettingsIcon, HardDrive, LayoutDashboard, LayoutGrid, MonitorPlay, PenLine, Shapes, FolderHeart, UserRound } from 'lucide-react';
 import { api, fmt as fmtClock } from './api.js';
 import Library from './screens/Library.jsx';
 import Dashboard from './screens/Dashboard.jsx';
 import Writing from './screens/Writing.jsx';
+import AllProjects from './screens/AllProjects.jsx';
 import Graphics from './screens/Graphics.jsx';
 import BrandLibrary from './screens/BrandLibrary.jsx';
 import MyApp from './screens/MyApp.jsx';
@@ -103,6 +104,38 @@ export default function App() {
   }, []);
   const dismissToast = useCallback((id) => setToasts((ts) => ts.filter((t) => t.id !== id)), []);
 
+  // AI status: "Working with Claude", or "Working locally" (no helper, or it ran out of usage).
+  const [ai, setAi] = useState(null);
+  const seenNotice = useRef(null);
+  useEffect(() => {
+    let live = true;
+    const poll = () => api.get('/api/ai-status').then((st) => {
+      if (!live) return;
+      setAi(st);
+      if (st.notice && seenNotice.current !== null && st.notice.id !== seenNotice.current) toast({ text: st.notice.text });
+      seenNotice.current = st.notice?.id ?? 0;
+    }).catch(() => {});
+    poll();
+    const id = setInterval(poll, 20000);
+    const off = (() => { listeners.current.add(poll); return () => listeners.current.delete(poll); })();
+    return () => { live = false; clearInterval(id); off(); };
+  }, [config?.llmProvider, toast]);
+
+  // Once a day: is there a newer version? Quiet unless there is.
+  const [update, setUpdate] = useState(null);
+  useEffect(() => {
+    if (!config || config.autoUpdateCheck === false) return;
+    const last = config.lastUpdateCheck ? Date.parse(config.lastUpdateCheck) : 0;
+    if (Date.now() - last < 20 * 3600_000) return;
+    api.post('/api/updates/check').then((r) => {
+      api.put('/api/config', { lastUpdateCheck: new Date().toISOString() }).catch(() => {});
+      if (r.available) {
+        setUpdate(r);
+        toast({ text: `Church Studio ${r.latest} is ready to download.`, action: { label: 'See what\'s new', run: () => setRoute({ name: 'settings', section: 'updates' }) } });
+      }
+    }).catch(() => {});
+  }, [config == null]);
+
   // Job polling: fast while something runs. Finished jobs notify subscribers once.
   useEffect(() => {
     let stop = false;
@@ -186,6 +219,7 @@ export default function App() {
 
   const nav = [
     ['home', 'Dashboard', LayoutDashboard, route.name === 'home'],
+    ['projects', 'All projects', LayoutGrid, route.name === 'projects'],
     ['library', 'Sermons', Clapperboard, route.name === 'library' || route.name === 'project'],
     ['social', 'Social', Send, route.name === 'social'],
     ['writing', 'Writing', PenLine, route.name === 'writing'],
@@ -222,19 +256,25 @@ export default function App() {
             {bottomNav.map(([name, label, Icon, on]) => (
               <button key={name} className={on ? 'on' : ''} aria-current={on ? 'page' : undefined} onClick={() => go({ name })}>
                 <Icon size={18} aria-hidden="true" /><span className="grow">{label}</span>
+                {name === 'settings' && update && <span className="badge" aria-label="Update available">1</span>}
               </button>
             ))}
           </nav>
-          <span className="side-foot small" title="No account, no cloud. Everything runs on this Mac."><WifiOff size={13} aria-hidden="true" />Offline, on this Mac</span>
+          <button className={`side-foot small ${ai?.active ? 'ai-on' : ''}`} onClick={() => go({ name: 'settings', section: 'ai' })}
+            title={ai?.active ? `Clip picks and writing help use ${ai.name}. Everything else runs on this Mac.` : ai?.degraded ? `${ai.name} is paused after a usage problem. Everything runs on this Mac for now.` : 'No account, no cloud. Everything runs on this Mac.'}>
+            {ai?.active ? <span className="status-dot" aria-hidden="true" /> : <HardDrive size={13} aria-hidden="true" />}
+            <span className="grow">{ai?.active ? `Working with ${ai.name}` : 'Working locally'}</span>
+          </button>
         </aside>
         <main className="main">
           <div className="top-drag" />
           {!config ? null : route.name === 'settings' ? <Settings section={route.section} key={route.section || 's'} />
             : route.name === 'social' ? <Social compose={route.compose} key={route.compose?.clipId || 'social'} />
-              : route.name === 'project' ? <Project id={route.id} initialStep={route.step} key={route.id + (route.step || '')} />
+              : route.name === 'project' ? <Project id={route.id} initialStep={route.clip ? 'edit' : route.step} initialClip={route.clip} key={route.id + (route.step || '') + (route.clip || '')} />
                 : route.name === 'library' ? <Library openPicker={route.pick} key={route.pick ? 'pick' : 'lib'} />
-                  : route.name === 'writing' ? <Writing />
-                    : route.name === 'graphics' ? <Graphics image={route.image} key={route.image || 'g'} />
+                  : route.name === 'writing' ? <Writing project={route.project} key={route.project || 'w'} />
+                    : route.name === 'projects' ? <AllProjects />
+                    : route.name === 'graphics' ? <Graphics image={route.image} design={route.design} key={route.image || route.design || 'g'} />
                       : route.name === 'assets' ? <BrandLibrary />
                         : route.name === 'me' ? <MyApp />
                   : <Dashboard />}

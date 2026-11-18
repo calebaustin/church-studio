@@ -2,7 +2,7 @@
 import { getProject, getTranscript, updateProject } from './projects.js';
 import { loadConfig } from './config.js';
 import { proposeHeuristic } from './clips.js';
-import { providerReady, rerank } from './ai.js';
+import { aiStatus, isUsageError, markUsageProblem, PROVIDER_NAMES, rerank } from './ai.js';
 
 export async function proposeClips(id, { prompt = '', count, min, max, replace = true } = {}, ctx) {
   const project = await getProject(id);
@@ -15,7 +15,7 @@ export async function proposeClips(id, { prompt = '', count, min, max, replace =
   const range = project.sermon || { start: null, end: null };
 
   ctx.progress(10, 'Scoring every possible clip…');
-  const useAI = providerReady(cfg);
+  const useAI = aiStatus(cfg).active;
   // Ask the heuristic for extra candidates when an AI will choose among them.
   const heur = proposeHeuristic(transcript.words, { start: range.start, end: range.end, count: useAI ? count * 3 : count, min, max, prompt });
   let clips = heur.slice(0, count);
@@ -33,7 +33,8 @@ export async function proposeClips(id, { prompt = '', count, min, max, replace =
       const ranked = await rerank(cfg, cands, { title: project.title, count });
       if (ranked.length) { clips = ranked; method = cfg.llmProvider; } else warning = 'The AI returned no clips; kept the offline picks.';
     } catch (e) {
-      warning = `AI ranking failed (${e.message.slice(0, 160)}); kept the offline picks.`;
+      if (isUsageError(e)) { markUsageProblem(cfg, e); warning = `${PROVIDER_NAMES[cfg.llmProvider]} is out of usage right now, so clips were picked locally.`; }
+      else warning = `AI ranking failed (${e.message.slice(0, 160)}); kept the offline picks.`;
     }
   }
 

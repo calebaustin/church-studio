@@ -107,6 +107,7 @@ export default function BrandLibrary() {
           { label: 'Add a light version', help: 'A white or one-color logo for dark backgrounds and video.', ok: (counts.Logos || 0) >= 2, action: () => addTo('Logos'), cta: 'Add' },
           { label: 'Set your brand colors', help: 'Pull them from your logo or pick your own.', ok: Boolean(config.brandColorsSet), action: kit, cta: 'Set colors' },
           { label: 'Pick your fonts', help: 'One for headings, one for body text.', ok: Boolean(config.brandFontsSet), action: kit, cta: 'Pick fonts' },
+          { label: 'Add your church info', help: 'Name, service times and address for printed guides.', ok: Boolean(config.churchInfo?.name), action: () => go({ name: 'settings', section: 'church' }), cta: 'Add info' },
           { label: 'Add a few photos', help: 'Your building, your people, worship. Three or more.', ok: (counts.Photos || 0) >= 3, action: () => addTo('Photos'), cta: 'Add photos' },
           { label: 'Make your first graphic', help: 'A quote card from Sunday is a good start.', ok: (counts.Graphics || 0) >= 1, action: () => go({ name: 'graphics' }), cta: 'Make one' },
         ]} />

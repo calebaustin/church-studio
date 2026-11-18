@@ -2,13 +2,13 @@
 // All heavy work happens here (via the job queue); the UI stays thin.
 import http from 'node:http';
 import { createReadStream, existsSync, statSync } from 'node:fs';
-
+import { mkdir, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { ROOT, PROJECTS_DIR, toolStatus, repairTool } from './tools.js';
+import { ROOT, PROJECTS_DIR, toolStatus, repairTool, run, tool } from './tools.js';
 import { loadConfig, saveConfig, mask, KEY_GUIDE } from './config.js';
 import * as jobs from './jobs.js';
-import { listProjects, getProject, updateProject, deleteProject, getTranscript, projectDir } from './projects.js';
+import { listProjects, getProject, updateProject, deleteProject, getTranscript, projectDir, file as fileOf } from './projects.js';
 import { channelDetails, listChannel, downloadToProject, importLocalFile, scoutVideo } from './youtube.js';
 import { transcribeProject } from './transcribe.js';
 import { proposeClips } from './pipeline.js';
@@ -18,11 +18,13 @@ import * as workspaces from './workspaces.js';
 import * as library from './library.js';
 import * as writing from './writing.js';
 import * as designs from './designs.js';
+import * as updates from './updates.js';
+import * as finder from './finder.js';
 import { WORKSPACE } from './tools.js';
 import { toSentences, backgroundOf, keywords as topKeywords } from './text.js';
 import { listThemes, saveTheme, deleteTheme, refreshSystemFonts, bundledFontDir } from './themes.js';
 import { makeThumbs } from './thumbs.js';
-import { testProvider } from './ai.js';
+import { aiStatus, resetAiStatus, testProvider } from './ai.js';
 import { binTranscript } from './sermon.js';
 import * as social from './social/hub.js';
 import * as socialStore from './social/store.js';
@@ -74,7 +76,7 @@ async function requireProject(id) {
 // ---------------------------------------------------------------- settings
 route('GET', '/api/health', () => ({ ok: true, version: '0.1.0' }));
 route('GET', '/api/config', async () => ({ config: mask(await loadConfig()), keyGuide: KEY_GUIDE }));
-route('PUT', '/api/config', async (_p, b) => ({ config: mask(await saveConfig(b)) }));
+route('PUT', '/api/config', async (_p, b) => { if (['llmProvider', 'anthropicApiKey', 'openaiApiKey', 'geminiApiKey', 'ollamaUrl', 'ollamaModel'].some((k) => k in b)) resetAiStatus(); return { config: mask(await saveConfig(b)) }; });
 route('GET', '/api/tools', async () => ({ tools: await toolStatus() }));
 route('POST', '/api/tools/repair', (_p, b) => ({ job: jobs.view(jobs.enqueue({ kind: 'repair', label: 'Repairing a helper', key: `repair:${b.name}` }, (ctx) => repairTool(String(b.name || ''), ctx))) }));
 route('POST', '/api/ai/test', async (_p, b) => {
@@ -334,12 +336,12 @@ route('POST', '/api/library/save', async (_p, b) => { try { return await library
 route('POST', '/api/library/import', async (_p, b) => ({ files: await library.importFiles(Array.isArray(b.paths) ? b.paths : [], b.folder) }));
 
 // ---------------------------------------------------------------- writing
-route('GET', '/api/writing/:id', async ({ id }) => ({ draft: await writing.loadDraft(id) }));
+route('GET', '/api/writing/:id', async ({ id }) => ({ draft: await writing.loadDraft(id), trashed: await finder.isTrashed(`writing:${id}`) }));
 route('POST', '/api/writing/:id/generate', async ({ id }) => { try { return { draft: await writing.saveDraft(id, await writing.generate(id)) }; } catch (e) { throw new HttpError(400, e.message); } });
 route('PUT', '/api/writing/:id', async ({ id }, b) => ({ draft: await writing.saveDraft(id, b) }));
 route('POST', '/api/writing/:id/suggest', async ({ id }, b) => { try { return await writing.suggest(id, b || {}); } catch (e) { throw new HttpError(400, e.message); } });
-route('POST', '/api/writing/:id/rewrite', async ({ id }, b) => { try { return { text: await writing.rewriteBlog(id, b || {}) }; } catch (e) { throw new HttpError(400, e.message); } });
-route('POST', '/api/writing/:id/polish', async ({ id }, b) => { try { return { text: await writing.polish(id, b.kind, b.text) }; } catch (e) { throw new HttpError(400, e.message); } });
+route('POST', '/api/writing/:id/rewrite', async ({ id }, b) => { try { return await writing.rewriteBlog(id, b || {}); } catch (e) { throw new HttpError(400, e.message); } });
+route('POST', '/api/writing/:id/polish', async ({ id }, b) => { try { return await writing.polish(id, b.kind, b.text); } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/writing/:id/save-file', async ({ id }, b) => {
   const p = await getProject(id);
   const r = await library.saveText('Writing', `${b.name || p?.title || 'Draft'}`, String(b.text || ''));
@@ -347,15 +349,68 @@ route('POST', '/api/writing/:id/save-file', async ({ id }, b) => {
   return r;
 });
 
+route('GET', '/api/ai-status', async () => aiStatus(await loadConfig()));
+
+// ---------------------------------------------------------------- all projects (finder)
+route('GET', '/api/finder', () => finder.finder());
+route('POST', '/api/finder/folders', async (_p, b) => ({ folder: await finder.createFolder(b.name) }));
+route('PATCH', '/api/finder/folders/:fid', async ({ fid }, b) => ({ folder: await finder.updateFolder(fid, b) }));
+route('DELETE', '/api/finder/folders/:fid', async ({ fid }) => { await finder.deleteFolder(fid); return { ok: true }; });
+route('POST', '/api/finder/folders/:fid/items', async ({ fid }, b) => { await finder.addToFolder(fid, String(b.key)); return { ok: true }; });
+route('POST', '/api/finder/folders/:fid/remove', async ({ fid }, b) => { await finder.removeFromFolder(fid, String(b.key)); return { ok: true }; });
+route('POST', '/api/finder/star', async (_p, b) => { await finder.star(String(b.key), Boolean(b.on)); return { ok: true }; });
+route('POST', '/api/finder/trash', async (_p, b) => { try { await finder.trashItem(String(b.key)); return { ok: true }; } catch (e) { throw new HttpError(400, e.message); } });
+route('POST', '/api/finder/restore', async (_p, b) => { await finder.restoreItem(String(b.key)); return { ok: true }; });
+route('POST', '/api/finder/delete', async (_p, b) => { try { await finder.deleteForever(String(b.key)); return { ok: true }; } catch (e) { throw new HttpError(400, e.message); } });
+route('POST', '/api/finder/empty-trash', async () => { await finder.emptyTrash(); return { ok: true }; });
+
+// ---------------------------------------------------------------- updates
+route('GET', '/api/version', async () => ({ version: updates.VERSION, repo: updates.UPDATE_REPO, last: updates.lastUpdateCheck(), upgrade }));
+route('POST', '/api/updates/check', async () => { try { return await updates.checkForUpdate(); } catch (e) { throw new HttpError(502, `Couldn't reach the update server. ${e.message}`); } });
+route('POST', '/api/updates/download', () => ({ job: jobs.view(jobs.enqueue({ kind: 'update', label: 'Download update', key: 'update' }, (ctx) => updates.downloadUpdate(ctx))) }));
+route('GET', '/api/changelog', async () => ({ text: await updates.changelog(), version: updates.VERSION }));
+
+// ---------------------------------------------------------------- sermon stills (header images)
+route('GET', '/api/projects/:id/stills', async ({ id }) => {
+  try {
+    const { times, project } = await writing.stillTimes(id);
+    if (!project.sourceFile) return { stills: [] };
+    const dir = path.join(projectDir(id), 'stills');
+    await mkdir(dir, { recursive: true });
+    const out = [];
+    for (const t of times) {
+      const name = `s${Math.round(t)}.jpg`;
+      if (!existsSync(path.join(dir, name))) await run(tool('ffmpeg'), ['-y', '-loglevel', 'error', '-ss', String(t), '-i', fileOf(id, project.sourceFile), '-frames:v', '1', '-vf', 'scale=640:-2', '-q:v', '4', path.join(dir, name)]);
+      out.push({ t, url: `/media/${encodeURIComponent(id)}/stills/${name}` });
+    }
+    return { stills: out };
+  } catch (e) { throw new HttpError(400, e.message); }
+});
+route('POST', '/api/projects/:id/stills', async ({ id }, b) => {
+  const project = await getProject(id);
+  if (!project?.sourceFile) throw new HttpError(400, 'The video is not downloaded.');
+  const t = Math.max(0, Number(b.t) || 0);
+  const tmp = path.join(projectDir(id), 'stills', `full-${Math.round(t)}.jpg`);
+  await mkdir(path.dirname(tmp), { recursive: true });
+  await run(tool('ffmpeg'), ['-y', '-loglevel', 'error', '-ss', String(t), '-i', fileOf(id, project.sourceFile), '-frames:v', '1', '-vf', 'scale=1920:-2', '-q:v', '2', tmp]);
+  const mm = `${Math.floor(t / 60)}-${String(Math.floor(t % 60)).padStart(2, '0')}`;
+  const r = await library.saveDataUrl('Photos', `${project.title} still ${mm}`, `data:image/jpeg;base64,${(await readFile(tmp)).toString('base64')}`);
+  await rm(tmp, { force: true });
+  return { rel: r.rel, url: `/library/${r.rel.split('/').map(encodeURIComponent).join('/')}` };
+});
+
 // ---------------------------------------------------------------- designs (Graphics)
-route('GET', '/api/designs', async () => ({ designs: await designs.listDesigns() }));
+route('GET', '/api/designs', async () => {
+  const trashed = new Set((await finder.finder()).trash.map((t) => t.key));
+  return { designs: (await designs.listDesigns()).filter((d) => !trashed.has(`design:${d.id}`)) };
+});
 route('GET', '/api/designs/:id', async ({ id }) => { const d = await designs.getDesign(id); if (!d) throw new HttpError(404, 'Design not found'); return { design: d }; });
 route('PUT', '/api/designs/:id', async ({ id }, b) => ({ design: await designs.saveDesign(id, b) }));
 route('DELETE', '/api/designs/:id', async ({ id }) => { await designs.deleteDesign(id); return { ok: true }; });
 route('GET', '/api/outline/:id', async ({ id }) => { try { return { outline: await writing.outline(id) }; } catch (e) { throw new HttpError(400, e.message); } });
 // Export every page of a design into the brand library (Graphics/<name>/), or one file (PDF, PPTX).
 route('POST', '/api/designs/export', async (_p, b) => {
-  return library.saveExport(String(b.name || 'Design'), b.files || []);
+  return library.saveExport(String(b.name || 'Design'), b.files || [], b.folder || 'Graphics');
 });
 
 // ---------------------------------------------------------------- ideas (My App)
@@ -497,6 +552,10 @@ const server = http.createServer(async (req, res) => {
     return send(res, status, { error: e.message });
   }
 });
+
+// Back up and migrate data once when the app version changes, before serving anything.
+let upgrade = { upgraded: false };
+try { upgrade = await updates.prepareUpgrade(); if (upgrade.upgraded) console.log(`Updated ${upgrade.from} -> ${upgrade.to}. Backup: ${upgrade.backup}`); } catch (e) { console.error('Upgrade check failed:', e.message); }
 
 server.listen(PORT, HOST, () => {
   social.startScheduler().catch((e) => console.error('[social] scheduler failed to start', e));

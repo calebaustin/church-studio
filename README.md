@@ -55,10 +55,23 @@ More tools:
   PowerPoint (with speaker notes). Saved graphics can go into a clip as a corner logo or an end card.
 - **Brand library:** a normal folder in Documents (Photos, Logos, Graphics, Brand, Writing) that every tool uses,
   with a brand kit (colors, including "colors from my logo", and heading and body fonts) and a setup checklist.
+- **All projects:** sermons, clips, writing and designs in one place, with folders (drag items onto them),
+  stars, recents and a trash for designs and writing.
+- **Printable guides:** any writing prints or saves as a PDF, full page (guides get the sermon outline down the
+  left third) or half page (two 5.5 × 8.5 in copies per sheet). Header images can be a photo, a graphic or a
+  still from the sermon video. Your logo and church info go in the footer.
+- **Status:** the sidebar says "Working locally", or "Working with Claude" (or another helper). If the helper
+  hits a usage limit, the app quietly works locally and shows a note.
 - **Workspaces:** separate brands or ministries, each with its own settings, sermons, accounts and library.
 - **My App:** your setup at a glance, plus ideas based on your sermon topics.
 
 Name ideas and icon mockups: `docs/NAMING.md`.
+
+## Updates
+
+Settings › Updates checks GitHub releases (`updateRepo` in package.json), shows the notes, and downloads the
+new .dmg. Data lives outside the app, and the first launch of a new version backs up settings and data files
+to `backups/` (last five kept) before running any migrations. See `docs/RELEASING.md`.
 
 ## Layout
 

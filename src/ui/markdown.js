@@ -7,6 +7,7 @@ const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, 
 
 function inline(s) {
   return esc(s)
+    .replace(/!\[([^\]]*)\]\(((?:\/library\/|https?:|data:image\/)[^)\s]+)\)/g, '<img src="$2" alt="$1" />')
     .replace(/\[([^\]]+)\]\(((?:https?:|mailto:)[^)\s]+)\)/g, '<a href="$2">$1</a>')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/(^|[^*\w])\*(?!\s)(.+?)\*(?!\w)/g, '$1<em>$2</em>')
@@ -65,6 +66,7 @@ export function htmlToMd(root) {
       else if (tag === 's' || tag === 'strike' || tag === 'del') s += wrap('~~');
       else if (tag === 'a' && n.getAttribute('href')) s += `[${inner}](${n.getAttribute('href')})`;
       else if (tag === 'br') s += '\n';
+      else if (tag === 'img' && n.getAttribute('src')) s += `![${(n.getAttribute('alt') || '').replace(/[[\]]/g, '')}](${n.getAttribute('src')})`;
       else if (tag === 'span' && /font-weight:\s*(bold|[6-9]00)/.test(n.getAttribute('style') || '')) s += wrap('**');
       else if (tag === 'span' && /font-style:\s*italic/.test(n.getAttribute('style') || '')) s += wrap('*');
       else s += inner;

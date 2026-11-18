@@ -4,6 +4,9 @@ import { useApp, applyAppTheme, activeAppTheme } from '../App.jsx';
 import { api, desktop, openLink, fmt } from '../api.js';
 import VideoThemeEditor from '../components/VideoThemeEditor.jsx';
 import ColorField from '../components/ColorField.jsx';
+import ChurchInfoFields from '../components/ChurchInfoFields.jsx';
+import { mdToHtml } from '../markdown.js';
+import { Download, RefreshCw, ShieldCheck, Sparkles } from 'lucide-react';
 
 const SECTIONS = [
   ['tools', 'Tools'],
@@ -13,6 +16,8 @@ const SECTIONS = [
   ['export', 'Exports'],
   ['app-theme', 'App theme'],
   ['video-themes', 'Caption themes'],
+  ['church', 'Church info'],
+  ['updates', 'Updates'],
 ];
 
 export default function Settings({ section: initial }) {
@@ -32,6 +37,8 @@ export default function Settings({ section: initial }) {
         {section === 'export' && <ExportSettings />}
         {section === 'app-theme' && <AppTheme />}
         {section === 'video-themes' && <VideoThemes />}
+        {section === 'church' && <section className="glass strong panel stack"><h2>Church info</h2><p className="muted">Printed guides and notes show this in the footer, next to your logo.</p><ChurchInfoFields /></section>}
+        {section === 'updates' && <Updates />}
       </div>
     </div>
   );
@@ -458,5 +465,81 @@ function VideoThemes() {
         themes={themes}
       />
     </section>
+  );
+}
+
+/** Changelog markdown -> one card per version. */
+function Changelog({ text, current }) {
+  const parts = text.split(/^## /m).slice(1).map((chunk) => {
+    const [head, ...rest] = chunk.split('\n');
+    const [version, date] = head.split(' · ');
+    return { version: version.trim(), date: date?.trim(), body: rest.join('\n').trim() };
+  });
+  return (
+    <div className="changelog">
+      {parts.map((p) => (
+        <article key={p.version} className="cl-entry">
+          <div className="cl-side">
+            <span className="cl-version">{p.version}</span>
+            {p.date && <span className="muted small">{p.date}</span>}
+            {p.version === current && <span className="chip ok">You have this</span>}
+          </div>
+          <div className="prose cl-body" dangerouslySetInnerHTML={{ __html: mdToHtml(p.body.replace(/^### /gm, '### ')) }} />
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function Updates() {
+  const { config, saveConfig, trackJob, toast } = useApp();
+  const [ver, setVer] = useState(null);
+  const [check, setCheck] = useState(null);
+  const [log, setLog] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    api.get('/api/version').then((v) => { setVer(v); if (v.last) setCheck(v.last); });
+    api.get('/api/changelog').then((r) => setLog(r.text));
+  }, []);
+  const run = async () => {
+    setBusy(true);
+    try { setCheck(await api.post('/api/updates/check')); saveConfig({ lastUpdateCheck: new Date().toISOString() }); } catch (e) { setCheck({ error: e.message }); }
+    setBusy(false);
+  };
+  const download = async () => {
+    try { const r = await api.post('/api/updates/download'); trackJob?.(r.job); toast({ text: 'Downloading the update. It opens when it is ready.' }); } catch (e) { toast({ kind: 'error', text: e.message }); }
+  };
+  return (
+    <>
+      <section className="glass strong panel stack" style={{ gap: 14 }}>
+        <div className="row between wrap">
+          <div className="stack" style={{ gap: 2 }}>
+            <h2>Updates</h2>
+            <span className="muted">You have Church Studio <strong className="num">{ver?.version || '…'}</strong>.</span>
+          </div>
+          <button className="btn primary" disabled={busy} onClick={run}><RefreshCw size={15} className={busy ? 'spin' : ''} />{busy ? 'Checking…' : 'Check for updates'}</button>
+        </div>
+        {check?.error && <div className="banner bad">{check.error}</div>}
+        {check && !check.error && !check.available && <div className="banner info"><ShieldCheck size={16} />{check.message || 'You have the latest version.'}</div>}
+        {check?.available && (
+          <div className="update-card">
+            <div className="row between wrap">
+              <div className="stack" style={{ gap: 2 }}><span className="eyebrow">Update available</span><h3 style={{ margin: 0 }}>Church Studio {check.latest}</h3></div>
+              <button className="btn primary" disabled={!check.asset} onClick={download}><Download size={15} />Download update</button>
+            </div>
+            {check.notes?.map((n) => (
+              <div key={n.version} className="prose" dangerouslySetInnerHTML={{ __html: mdToHtml(n.notes) }} />
+            ))}
+            <span className="muted small">The download opens when it's done. Drag Church Studio into Applications and choose Replace. Your sermons, designs and settings stay as they are.</span>
+          </div>
+        )}
+        <label className="switch"><input type="checkbox" checked={config.autoUpdateCheck !== false} onChange={(e) => saveConfig({ autoUpdateCheck: e.target.checked })} />Check once a day when the app opens</label>
+        {ver?.upgrade?.upgraded && <span className="muted small"><Sparkles size={12} /> Updated from {ver.upgrade.from}. Your settings were backed up first.</span>}
+      </section>
+      <section className="glass panel stack" style={{ gap: 14 }}>
+        <h2>What's new</h2>
+        {log ? <Changelog text={log} current={ver?.version} /> : <div className="skeleton" style={{ height: 200 }} />}
+      </section>
+    </>
   );
 }

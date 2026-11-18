@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   Bold, ChevronDown, IndentDecrease, IndentIncrease, Italic, Link2, List, ListOrdered, Quote, Redo2,
-  RemoveFormatting, Strikethrough, Undo2, Unlink,
+  RemoveFormatting, Strikethrough, Undo2, Unlink, ImagePlus,
 } from 'lucide-react';
 import { htmlToMd, mdToHtml } from '../markdown.js';
 import Popover from './Popover.jsx';
@@ -27,7 +27,7 @@ function Tool({ icon: Icon, label, on, onClick, disabled }) {
  * Formatted editor over Markdown. `value` and `onChange` are Markdown; the person edits the
  * formatted text, or switches to Markdown to check or fix the source.
  */
-export default function RichEditor({ value, onChange, minHeight = '56vh' }) {
+export default function RichEditor({ value, onChange, minHeight = '56vh', onPickImage }) {
   const [mode, setMode] = useState('rich');
   const ref = useRef(null);
   const last = useRef(null);
@@ -150,6 +150,16 @@ export default function RichEditor({ value, onChange, minHeight = '56vh' }) {
               </form>
             </Popover>
           </div>
+          {onPickImage && <Tool icon={ImagePlus} label="Add an image here" disabled={!rich} onClick={async () => {
+            keepSelection();
+            const img = await onPickImage();
+            if (!img) return;
+            ref.current?.focus();
+            const sel = document.getSelection();
+            if (saved.current) { sel.removeAllRanges(); sel.addRange(saved.current); }
+            document.execCommand('insertHTML', false, `<p><img src="${img.url}" alt="${String(img.alt || '').replace(/"/g, '')}"></p>`);
+            emit();
+          }} />}
           {state.link && <Tool icon={Unlink} label="Remove link" disabled={!rich} onClick={() => { const r = document.createRange(); r.selectNodeContents(state.link); const s = document.getSelection(); s.removeAllRanges(); s.addRange(r); exec('unlink'); }} />}
         </div>
         <span className="rt-sep" />

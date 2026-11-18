@@ -37,6 +37,9 @@ export const DEFAULTS = {
   brandColors: ['#2B7F5F', '#D9A441', '#1B2440', '#F4EFE6', '#8FB8A8'], // brand kit, used by Graphics
   brandFonts: { heading: 'Montserrat', body: 'Montserrat' },
   dismissed: {}, // setup checklists the user closed
+  churchInfo: { name: '', address: '', website: '', phone: '', email: '', times: '' }, // printed footers
+  autoUpdateCheck: true,
+  lastUpdateCheck: null,
 };
 
 /** Fields that hold secrets: masked on read, only overwritten when a new value is sent. */

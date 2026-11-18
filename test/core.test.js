@@ -70,3 +70,26 @@ test('spoken Bible references are written the standard way', async () => {
   assert.equal(out[0].start, 0);
   assert.equal(out.at(-1).end, 6.5);
 });
+
+test('update versions compare correctly', async () => {
+  const { newer } = await import('../src/daemon/updates.js');
+  assert.equal(newer('0.3.1', '0.3.0'), true);
+  assert.equal(newer('0.10.0', '0.9.9'), true);
+  assert.equal(newer('v1.0.0', '1.0.0'), false);
+  assert.equal(newer('1.0.0', '1.0.0-beta'), true);
+});
+
+test('AI usage problems fall back to working locally', async () => {
+  const ai = await import('../src/daemon/ai.js');
+  const cfg = { llmProvider: 'ollama', ollamaUrl: 'http://127.0.0.1:1' };
+  ai.resetAiStatus();
+  assert.equal(ai.aiStatus(cfg).active, true);
+  const err = Object.assign(new Error('rate limit exceeded'), { status: 429 });
+  const r = await ai.withFallback(cfg, async () => { throw err; }, async () => 'local');
+  assert.equal(r.value, 'local');
+  assert.equal(r.local, true);
+  assert.ok(r.notice.text.includes('working locally'));
+  assert.equal(ai.aiStatus(cfg).active, false);
+  ai.resetAiStatus();
+  await assert.rejects(() => ai.withFallback(cfg, async () => { throw new Error('bad JSON'); }, async () => 'x'));
+});

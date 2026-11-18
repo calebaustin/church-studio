@@ -64,6 +64,22 @@ ipcMain.handle('pick-folder', async () => {
   const r = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] });
   return r.canceled ? null : r.filePaths[0];
 });
+// Print or make a PDF from a self-contained HTML page (writing guides). The page sets
+// window.__ready once its images are loaded and its text is sized to fit.
+ipcMain.handle('print-doc', async (_e, { html, landscape = false, action = 'pdf' }) => {
+  const win = new BrowserWindow({ show: false, width: 1100, height: 1400, webPreferences: { sandbox: true, javascript: true } });
+  try {
+    await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+    for (let i = 0; i < 100; i++) { if (await win.webContents.executeJavaScript('window.__ready === true')) break; await new Promise((r) => setTimeout(r, 100)); }
+    if (action === 'print') {
+      return await new Promise((resolve) => win.webContents.print({ printBackground: true, landscape }, (ok, reason) => resolve({ ok, reason })));
+    }
+    const pdf = await win.webContents.printToPDF({ pageSize: 'Letter', landscape, printBackground: true, margins: { marginType: 'none' }, preferCSSPageSize: true });
+    return { ok: true, pdf: pdf.toString('base64') };
+  } finally {
+    setTimeout(() => { if (!win.isDestroyed()) win.destroy(); }, action === 'print' ? 60_000 : 0);
+  }
+});
 ipcMain.handle('open-external', (_e, url) => { if (/^https:\/\//.test(url)) shell.openExternal(url); });
 
 /** The app used to be called Sermon Clips. Move its data to the new folder once, keeping workspace paths valid. */

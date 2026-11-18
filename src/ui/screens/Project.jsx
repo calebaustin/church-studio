@@ -41,7 +41,7 @@ function TimeInput({ value, onChange }) {
   );
 }
 
-export default function Project({ id, initialStep }) {
+export default function Project({ id, initialStep, initialClip }) {
   const { go, trackJob, onJobFinished, jobs, confirmLeave } = useApp();
   const [project, setProject] = useState(null);
   const [transcript, setTranscript] = useState(null);
@@ -63,7 +63,7 @@ export default function Project({ id, initialStep }) {
   useEffect(() => {
     load().then((p) => {
       const fallback = p.status !== 'transcribed' ? 'transcribe' : p.clips.length ? 'clips' : 'sermon';
-      if (initialStep === 'edit' && p.clips.length) { setSelected((p.clips.find((c) => c.status === 'kept' || c.status === 'exported') || p.clips[0]).id); setStep('edit'); }
+      if (initialStep === 'edit' && p.clips.length) { setSelected((p.clips.find((c) => c.id === initialClip) || p.clips.find((c) => c.status === 'kept' || c.status === 'exported') || p.clips[0]).id); setStep('edit'); }
       else setStep(fallback);
     }).catch(() => go({ name: 'library' }));
   }, [load]);
