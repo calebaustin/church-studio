@@ -203,7 +203,7 @@ function Calendar({ s, plat, onEdit, onNew }) {
       </div>
       <div className="row wrap" style={{ gap: 14 }}>
         {cal.linked ? <span className="row small muted"><span className="month-event-key" />Church events from {cal.source || 'your calendar'}</span>
-          : <span className="small muted">Connect Planning Center or your church calendar in Settings to see events here.</span>}
+          : <span className="small muted">Add your church calendar's iCal link in Settings › Connections to see events here.</span>}
         {s.posts.some((p) => p.status === 'draft') && <span className="muted small">Drafts show on the calendar once you schedule them.</span>}
       </div>
       {ev && <EventCard event={ev} onClose={() => setEv(null)} onPlanPost={(e) => { const t = new Date(e.start); t.setDate(t.getDate() - 2); t.setHours(12, 0, 0, 0); onNew(t < new Date() ? new Date(Date.now() + 3600_000) : t); }} />}

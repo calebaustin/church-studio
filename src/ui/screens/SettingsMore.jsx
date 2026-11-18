@@ -6,7 +6,7 @@ import ToolPicker from '../components/ToolPicker.jsx';
 
 // ---------------------------------------------------------------- your tools
 export function YourTools() {
-  const { config, saveConfig } = useApp();
+  const { config, saveConfig, go } = useApp();
   return (
     <>
     <section className="glass strong panel stack" style={{ gap: 14 }}>
@@ -15,7 +15,10 @@ export function YourTools() {
         <p className="muted" style={{ margin: 0 }}>Turn off what you don't use and drag the rest into the order you like. The menu and dashboard follow along.</p>
       </div>
       <ToolPicker order={config.toolOrder} off={config.toolsOff} onChange={(v) => saveConfig({ toolOrder: v.order, toolsOff: v.off })} />
-      <span className="hint">Turning a tool off only hides it. Nothing you made is deleted.</span>
+      <div className="row between wrap" style={{ gap: 8 }}>
+        <span className="hint">Turning a tool off only hides it. Nothing you made is deleted.</span>
+        <button className="btn sm ghost" onClick={async () => { await saveConfig({ onboarded: false }); go({ name: 'home' }); }}>Welcome walkthrough</button>
+      </div>
     </section>
     <section className="glass panel stack" style={{ gap: 10 }}>
       <h3>Notifications</h3>
@@ -52,31 +55,42 @@ export function AppLogo() {
 }
 
 // ---------------------------------------------------------------- connections
-const PCO_STEPS = [
-  ['Open Planning Center developer settings', 'https://api.planningcenteronline.com/oauth/applications'],
-  ['Under Personal Access Tokens, choose Create one now', null],
-  ['Name it Church Studio and press Submit', null],
-  ['Copy the Application ID and the Secret into the boxes below', null],
+const GUIDES = [
+  ['Planning Center', 'In Calendar, open Share or Subscribe and copy the iCal feed link. Choose public times only if you like.', 'https://help.planningcenter.com/en/share-events-with-personal-calendars.html'],
+  ['Church Center', 'On your Church Center calendar page, open Subscribe and copy the link.', 'https://www.planningcenter.com/changelog/church-center/29674420892827-improved-calendar-feed-for-all-your-events'],
+  ['Subsplash', 'Use the public iCal link of the calendar your app shows.', 'https://support.subsplash.com/s/article/How-do-I-add-an-iCal-feed-to-my-app'],
+  ['Tithe.ly', 'Calendar Integration, then Export to External Calendar, then copy the iCal link.', 'https://support.tithe.ly/hc/en-us/articles/31815197173271'],
+  ['Google Calendar', 'Settings for the calendar, then copy the Public or Secret address in iCal format.', 'https://support.google.com/calendar/answer/37648'],
 ];
 
 export function Connections() {
   const { config, saveConfig, toast } = useApp();
-  const [appId, setAppId] = useState(config.pcoAppId || '');
-  const [secret, setSecret] = useState('');
-  const [ical, setIcal] = useState(config.calendarIcal || '');
+  const feeds = config.calendarFeeds?.length ? config.calendarFeeds : config.calendarIcal ? [{ id: 'cal', name: 'Church calendar', url: config.calendarIcal }] : [];
+  const [name, setName] = useState('');
+  const [url, setUrl] = useState('');
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState(null);
   const [request, setRequest] = useState('');
   useEffect(() => { api.get('/api/calendar/events').then(setStatus).catch(() => {}); }, []);
-  const saveAndTest = async (patch) => {
+  const refresh = async (list) => {
     setBusy(true);
     try {
-      await saveConfig(patch);
+      if (list) await saveConfig({ calendarFeeds: list, calendarIcal: '' });
       const r = await api.post('/api/calendar/refresh');
       setStatus(r);
-      toast({ text: `Connected. Found ${r.events.length} upcoming event${r.events.length === 1 ? '' : 's'}.` });
+      toast({ text: r.problems?.length ? r.problems.join(' ') : `Found ${r.events.length} upcoming event${r.events.length === 1 ? '' : 's'}.`, kind: r.problems?.length ? 'error' : undefined });
     } catch (e) { toast({ kind: 'error', text: e.message }); }
     setBusy(false);
+  };
+  const add = async () => {
+    const u = url.trim();
+    await refresh([...feeds, { id: Math.random().toString(36).slice(2, 8), name: name.trim() || 'Church calendar', url: u }]);
+    setName(''); setUrl('');
+  };
+  const remove = async (id) => {
+    const list = feeds.filter((f) => f.id !== id);
+    await saveConfig({ calendarFeeds: list, calendarIcal: '' });
+    if (list.length) refresh(); else setStatus(null);
   };
   const sendRequest = async () => {
     try {
@@ -86,51 +100,45 @@ export function Connections() {
       setRequest('');
     } catch (e) { toast({ kind: 'error', text: e.message }); }
   };
-  const pcoOn = Boolean(config.pcoAppId && config.pcoSecret);
   return (
     <>
       <section className="glass strong panel stack" style={{ gap: 14 }}>
         <div className="stack" style={{ gap: 4 }}>
           <h2>Church calendar</h2>
-          <p className="muted" style={{ margin: 0 }}>Bring in your events to see them next to your social posts and to make quick graphics. We check once a week, on Monday mornings, and you can refresh anytime.</p>
+          <p className="muted" style={{ margin: 0 }}>Add your calendar's iCal link to see events next to your social posts and make quick graphics. We check once a week, on Monday mornings, and you can refresh anytime.</p>
         </div>
-        {status?.fetched && (
-          <div className="keycard row between wrap">
-            <span className="row small"><CalendarDays size={15} />{status.events.length} upcoming events from {status.source}. Updated {new Date(status.fetched).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}.</span>
-            <button className="btn sm" disabled={busy} onClick={() => saveAndTest({})}><RefreshCw size={13} className={busy ? 'spin' : ''} />Refresh now</button>
+        {feeds.length > 0 && (
+          <div className="stack" style={{ gap: 6 }}>
+            {feeds.map((f) => (
+              <div key={f.id} className="tool-row">
+                <span className="type-badge" style={{ width: 30, height: 30 }}><CalendarDays size={15} /></span>
+                <div className="stack grow" style={{ gap: 0, minWidth: 0 }}><strong className="small">{f.name}</strong><span className="small muted truncate">{f.url}</span></div>
+                <button className="btn ghost sm" onClick={() => remove(f.id)}>Remove</button>
+              </div>
+            ))}
+            <div className="row between wrap" style={{ gap: 8 }}>
+              <span className="small muted">{status?.fetched ? `${status.events.length} upcoming events. Updated ${new Date(status.fetched).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}.` : 'Not checked yet.'}</span>
+              <button className="btn sm" disabled={busy} onClick={() => refresh()}><RefreshCw size={13} className={busy ? 'spin' : ''} />Refresh now</button>
+            </div>
           </div>
         )}
+        <div className="token-grid" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 2fr)' }}>
+          <label className="field">Name<input className="input" value={name} placeholder="Church calendar" onChange={(e) => setName(e.target.value)} /></label>
+          <label className="field">iCal link<input className="input" value={url} placeholder="https://… or webcal://…" onChange={(e) => setUrl(e.target.value)} /></label>
+        </div>
+        <button className="btn primary sm" disabled={busy || !/^(https?|webcal):\/\//i.test(url.trim())} onClick={add}>{busy ? 'Checking…' : 'Add calendar'}</button>
+        <span className="hint">Church Studio only reads the calendar. The link stays on this Mac.</span>
       </section>
 
-      <section className="glass panel stack" style={{ gap: 12 }}>
-        <div className="row between"><h3>Planning Center</h3>{pcoOn && <span className="chip ok"><Check size={12} />Connected</span>}</div>
-        <ol className="steps-list small">
-          {PCO_STEPS.map(([t, link], k) => <li key={k}>{link ? <button className="linkish" onClick={() => openLink(link)}>{t}<ExternalLink size={12} /></button> : t}</li>)}
-        </ol>
-        <div className="token-grid">
-          <label className="field">Application ID<input className="input mono" value={appId} onChange={(e) => setAppId(e.target.value.trim())} autoComplete="off" /></label>
-          <label className="field">Secret<input className="input mono" type="password" value={secret} placeholder={pcoOn ? 'Saved. Paste a new one to change it.' : ''} onChange={(e) => setSecret(e.target.value.trim())} autoComplete="off" /></label>
-        </div>
-        <label className="switch"><input type="checkbox" checked={config.calendarPublicOnly !== false} onChange={(e) => saveConfig({ calendarPublicOnly: e.target.checked })} />Only events shown in Church Center</label>
-        <div className="row" style={{ gap: 8 }}>
-          <button className="btn primary sm" disabled={busy || !appId || (!secret && !pcoOn)} onClick={() => saveAndTest({ pcoAppId: appId, ...(secret ? { pcoSecret: secret } : {}) })}>{busy ? 'Checking…' : pcoOn ? 'Save and check' : 'Connect'}</button>
-          {pcoOn && <button className="btn ghost sm" onClick={() => { saveConfig({ pcoAppId: '', pcoSecret: '' }); setAppId(''); setSecret(''); }}>Disconnect</button>}
-        </div>
-        <span className="hint">Church Studio only reads your calendar. The token stays on this Mac.</span>
-      </section>
-
-      <section className="glass panel stack" style={{ gap: 12 }}>
-        <div className="row between"><h3>Any calendar link</h3>{config.calendarIcal && <span className="chip ok"><Check size={12} />Connected</span>}</div>
-        <p className="muted small" style={{ margin: 0 }}>Works with Subsplash, Tithe.ly, Google Calendar, Outlook and most church software. Look for a link called iCal, ICS or Subscribe.</p>
-        <div className="row wrap small" style={{ gap: 12 }}>
-          <button className="linkish" onClick={() => openLink('https://support.tithe.ly/hc/en-us/articles/31815197173271')}>Tithe.ly: find your iCal link<ExternalLink size={12} /></button>
-          <button className="linkish" onClick={() => openLink('https://support.subsplash.com/s/article/How-do-I-add-an-iCal-feed-to-my-app')}>Subsplash: calendar feeds<ExternalLink size={12} /></button>
-          <button className="linkish" onClick={() => openLink('https://support.google.com/calendar/answer/37648')}>Google Calendar: secret address<ExternalLink size={12} /></button>
-        </div>
-        <div className="row" style={{ gap: 8 }}>
-          <input className="input grow" value={ical} placeholder="https://… .ics" onChange={(e) => setIcal(e.target.value.trim())} aria-label="Calendar link" />
-          <button className="btn sm" disabled={busy || !/^(https?|webcal):\/\//i.test(ical)} onClick={() => saveAndTest({ calendarIcal: ical })}>Connect</button>
-          {config.calendarIcal && <button className="btn ghost sm" onClick={() => { saveConfig({ calendarIcal: '' }); setIcal(''); }}>Remove</button>}
+      <section className="glass panel stack" style={{ gap: 10 }}>
+        <h3>Where to find your iCal link</h3>
+        <div className="stack" style={{ gap: 8 }}>
+          {GUIDES.map(([n, how, link]) => (
+            <div key={n} className="stack" style={{ gap: 1 }}>
+              <button className="linkish" onClick={() => openLink(link)}>{n}<ExternalLink size={12} /></button>
+              <span className="small muted">{how}</span>
+            </div>
+          ))}
         </div>
       </section>
 

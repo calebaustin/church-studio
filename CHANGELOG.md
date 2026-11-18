@@ -2,6 +2,21 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## 0.4.1 · November 18, 2026
+
+### Changed
+- **Church calendars use iCal links.** Add one or more calendar links from Planning Center, Church Center, Subsplash, Tithe.ly or Google, with steps for finding each one. Repeating events now show every time they happen. A link you already added carries over.
+- **All projects and Graphics** lay out as masonry, so tall and wide covers fit together without gaps.
+- **Welcome walkthrough.** Start it again anytime from My App or Settings › Your tools.
+- Every dialog has the same close button in the corner.
+
+### Fixed
+- Pop-up cards, like "What is good SEO?", stay inside the window and open above their button when there's no room below.
+- Pop-ups and dialogs always open in front, including the header image picker in Writing.
+- Three-stack clips use the same background above and below the middle frame, in the preview and the export.
+- The design editor's top bar stays on one line on laptop screens.
+- The menu no longer flashes a blank highlight when you switch screens.
+
 ## 0.4.0 · November 18, 2026
 
 ### New

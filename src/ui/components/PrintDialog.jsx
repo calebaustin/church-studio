@@ -62,7 +62,7 @@ export default function PrintDialog({ pid, kind, kindLabel, draft, header, onClo
   const scale = half ? 0.62 : 0.5;
   return (
     <Modal onClose={onClose} width={half ? 820 : 640} label="Print or save as PDF">
-      <div className="row between"><h2>Print or PDF</h2><button className="setup-close" style={{ position: 'static' }} aria-label="Close" onClick={onClose}><X size={16} /></button></div>
+      <h2>Print or PDF</h2>
       <div className="row between wrap">
         <div className="seg sm">
           <button className={!half ? 'on' : ''} onClick={() => setLayout('full')}>Full page</button>

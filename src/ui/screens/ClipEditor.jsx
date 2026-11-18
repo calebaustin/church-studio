@@ -43,9 +43,15 @@ function CanvasFrame({ video, mode, bg, gap, width, height }) {
         if (bg?.type === 'color') { ctx.fillStyle = bg.color || '#000'; ctx.fillRect(0, 0, W, H); } else {
           const amt = bg?.blur ?? 0.6;
           ctx.filter = `blur(${Math.max(1, 18 * amt)}px) brightness(${0.9 - 0.25 * amt})`;
-          const cw = H * ar;
-          ctx.drawImage(v, (W - cw) / 2, 0, cw, H);
+          // A little larger than the frame, so the blur doesn't fade at the edges.
+          const o = H * 0.06; const cw = (H + 2 * o) * ar;
+          ctx.drawImage(v, (W - cw) / 2, -o, cw, H + 2 * o);
           ctx.filter = 'none';
+          if (mode === 'stack3') { // same background above and below, like the export
+            ctx.save(); ctx.translate(0, H); ctx.scale(1, -1);
+            ctx.drawImage(ref.current, 0, 0, W, H / 2, 0, 0, W, H / 2);
+            ctx.restore();
+          }
         }
         const g = (gap ?? 18) * (W / 1080);
         const ph = W / ar;

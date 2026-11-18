@@ -1,11 +1,12 @@
 import { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
+import { createPortal } from 'react-dom';
 
-/** Title row with a close button, and an optional line under it. */
-export function ModalHead({ title, sub, onClose }) {
+/** Title, and an optional line under it. Every modal has its own close button in the corner. */
+export function ModalHead({ title, sub }) {
   return (
     <div className="stack" style={{ gap: 2 }}>
-      <div className="row between"><h2>{title}</h2><button className="setup-close" style={{ position: 'static' }} aria-label="Close" onClick={onClose}><X size={16} /></button></div>
+      <h2>{title}</h2>
       {sub && <p className="muted small" style={{ margin: 0 }}>{sub}</p>}
     </div>
   );
@@ -31,11 +32,14 @@ export default function Modal({ onClose, children, width, label }) {
     window.addEventListener('keydown', onKey, true);
     return () => { window.removeEventListener('keydown', onKey, true); opener?.focus?.({ preventScroll: true }); };
   }, []);
-  return (
+  // Always on top of the whole app, whatever panel opened it.
+  return createPortal(
     <div className="scrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div ref={panel} className="glass strong modal stack" role="dialog" aria-modal="true" aria-label={label} style={width ? { width: `min(${width}px, calc(100vw - 32px))` } : undefined}>
+        <button type="button" className="modal-x" aria-label="Close" title="Close (Esc)" onClick={onClose}><X size={16} /></button>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

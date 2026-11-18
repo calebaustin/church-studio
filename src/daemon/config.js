@@ -40,10 +40,8 @@ export const DEFAULTS = {
   churchInfo: { name: '', address: '', website: '', phone: '', email: '', times: '' }, // printed footers
   appLogo: '', // brand library path of the logo for the sidebar and Dock; empty means the first in Logos
   dockLogo: true, // show the church logo in the Dock
-  pcoAppId: '', // Planning Center personal access token
-  pcoSecret: '',
-  calendarIcal: '', // any calendar link (.ics), like Subsplash, Tithe.ly or Google
-  calendarPublicOnly: true, // only events shown in Church Center
+  calendarFeeds: [], // church calendar links (.ics): [{ id, name, url }] from Planning Center, Subsplash, Tithe.ly, Google...
+  calendarIcal: '', // older single link; moved into calendarFeeds by the 0.4.1 migration
   lastCalendarFetch: null,
   notify: { jobs: true, reminders: true }, // Mac notifications
   toolOrder: [], // sidebar order (tool ids); empty means the default order
@@ -53,7 +51,7 @@ export const DEFAULTS = {
 };
 
 /** Fields that hold secrets: masked on read, only overwritten when a new value is sent. */
-export const SECRET_FIELDS = ['pcoSecret', 'youtubeApiKey', 'anthropicApiKey', 'openaiApiKey', 'geminiApiKey'];
+export const SECRET_FIELDS = ['youtubeApiKey', 'anthropicApiKey', 'openaiApiKey', 'geminiApiKey'];
 
 /** Shown on the Settings screen: what each key is for and how to get it. */
 export const KEY_GUIDE = [

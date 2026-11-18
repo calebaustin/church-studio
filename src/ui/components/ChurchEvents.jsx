@@ -9,7 +9,7 @@ export function useChurchEvents() {
   const { config, toast } = useApp();
   const [data, setData] = useState({ events: [], fetched: null });
   const [busy, setBusy] = useState(false);
-  const linked = Boolean(config.pcoAppId || config.calendarIcal);
+  const linked = Boolean(config.calendarFeeds?.length || config.calendarIcal);
   useEffect(() => { if (linked) api.get('/api/calendar/events').then(setData).catch(() => {}); }, [linked]);
   const refresh = useCallback(async () => {
     setBusy(true);

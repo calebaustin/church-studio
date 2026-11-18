@@ -646,6 +646,9 @@ def main() -> None:
                     xo = (cover_w - W // 4) // 2
                     bg = cv2.GaussianBlur(small[:, xo:xo + W // 4], (0, 0), max(0.5, 14 * blur_amt))
                     bg = (cv2.resize(bg, (W, H)) * (0.9 - 0.25 * blur_amt)).astype(np.uint8)
+                    if mode == "stack3":  # same background above and below: mirror the top half down
+                        half = H // 2
+                        bg[H - half:] = bg[:half][::-1]
                 if mode == "stack3":  # the whole frame, three times, stacked
                     ph = int(W * src_h / src_w) // 2 * 2
                     pw = W

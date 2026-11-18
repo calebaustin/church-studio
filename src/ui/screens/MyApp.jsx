@@ -19,7 +19,7 @@ function ideasFor(topics, sermons) {
 }
 
 export default function MyApp() {
-  const { config, themes, go, toast } = useApp();
+  const { config, saveConfig, themes, go, toast } = useApp();
   const [ideas, setIdeas] = useState(null);
   const [ws, setWs] = useState(null);
   const [accounts, setAccounts] = useState(null);
@@ -78,6 +78,11 @@ export default function MyApp() {
               <ArrowRight size={15} className="muted" />
             </button>
           ))}
+        </section>
+
+        <section className="glass panel row between wrap" style={{ gap: 12 }}>
+          <div className="stack" style={{ gap: 2 }}><strong>Welcome walkthrough</strong><span className="muted small">See the welcome again and choose the kinds of work you do.</span></div>
+          <button className="btn sm" onClick={async () => { await saveConfig({ onboarded: false }); go({ name: 'home' }); }}><Sparkles size={14} />Start the walkthrough</button>
         </section>
 
         <section className="glass strong panel stack">

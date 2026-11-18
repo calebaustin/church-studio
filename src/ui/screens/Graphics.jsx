@@ -4,6 +4,7 @@ import {
   Scaling, Search, Smartphone, Sparkles, Trash2, Home as HomeIcon, X,
 } from 'lucide-react';
 import { useApp } from '../App.jsx';
+import { Masonry } from '../components/Masonry.jsx';
 import { api } from '../api.js';
 import Modal, { ModalHead } from '../components/Modal.jsx';
 import DesignEditor from '../design/DesignEditor.jsx';
@@ -156,7 +157,7 @@ export default function Graphics({ image, design, event }) {
               <button className="btn primary" onClick={() => setModal('sermon')}><Sparkles size={15} />Start from a sermon</button>
             </div>
           )}
-          <div className="dz-grid-cards">
+          <Masonry className="dz-grid-cards">
             {mine.map((d) => (
               <div key={d.id} className="dz-card glass">
                 <button className="dz-card-cover" onClick={() => setOpen(d.id)} style={{ aspectRatio: `${d.size.w}/${d.size.h}` }}>
@@ -174,7 +175,7 @@ export default function Graphics({ image, design, event }) {
                 </div>
               </div>
             ))}
-          </div>
+          </Masonry>
         </section>
       )}
 
@@ -192,7 +193,7 @@ export default function Graphics({ image, design, event }) {
           ))}
         </div>
         {pack && <span className="hint">{PACKS[pack].about} No stock photos: click a photo spot to add your own, or make it a solid shape.</span>}
-        <div className="dz-grid-cards">
+        <Masonry className="dz-grid-cards">
           {kind && (
             <button className="dz-card glass dz-blank" onClick={() => create(newDoc(kind, null, ctx))}>
               <span className="dz-blank-box" style={{ aspectRatio: `${KINDS[kind].w}/${KINDS[kind].h}` }}>+</span>
@@ -211,7 +212,7 @@ export default function Graphics({ image, design, event }) {
               <span className="dz-card-meta"><strong className="small truncate">{d.name}</strong></span>
             </button>
           ))}
-        </div>
+        </Masonry>
         {!tpls.length && !(ql && mine.length) && <span className="muted">Nothing matches “{q}”.</span>}
       </section>
 

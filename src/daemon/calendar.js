@@ -1,13 +1,13 @@
-// Church calendar events from Planning Center (API) or any calendar link (.ics: Subsplash,
-// Tithe.ly, Google, Outlook...). Fetched at most once a week: on the first run after Monday 6 AM,
-// or when someone presses refresh. Events are cached in data/church-events.json.
+// Church calendar events from calendar links (.ics): Planning Center, Church Center, Subsplash,
+// Tithe.ly, Google, Outlook. One or more feeds. Fetched at most once a week: on the first run after
+// Monday 6 AM, or when someone presses refresh. Events are cached in data/church-events.json.
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { DATA_DIR } from './tools.js';
 import { loadConfig, saveConfig } from './config.js';
 
 const STORE = path.join(DATA_DIR, 'church-events.json');
-const PCO = 'https://api.planningcenteronline.com/calendar/v2';
+const HORIZON = 183 * 86400000; // about six months ahead
 
 export async function cachedEvents() {
   try { return JSON.parse(await readFile(STORE, 'utf8')); } catch { return { events: [], fetched: null, source: null }; }
@@ -20,30 +20,9 @@ export function lastMondayMorning(now = new Date()) {
   if (d > now) d.setDate(d.getDate() - 7);
   return d;
 }
-export const connected = (cfg) => Boolean((cfg.pcoAppId && cfg.pcoSecret) || cfg.calendarIcal);
-
-async function fetchPco(cfg) {
-  const auth = `Basic ${Buffer.from(`${cfg.pcoAppId}:${cfg.pcoSecret}`).toString('base64')}`;
-  const out = [];
-  let url = `${PCO}/event_instances?filter=future&order=starts_at&include=event&per_page=100`;
-  for (let page = 0; url && page < 4; page++) {
-    const r = await fetch(url, { headers: { authorization: auth, 'user-agent': 'Church-Studio' }, signal: AbortSignal.timeout(20000) });
-    if (r.status === 401) throw new Error('Planning Center did not accept that Application ID and Secret.');
-    if (!r.ok) throw new Error(`Planning Center said ${r.status}.`);
-    const j = await r.json();
-    const events = new Map((j.included || []).filter((x) => x.type === 'Event').map((x) => [x.id, x.attributes]));
-    for (const it of j.data) {
-      const ev = events.get(it.relationships?.event?.data?.id) || {};
-      if (cfg.calendarPublicOnly !== false && ev.visible_in_church_center === false) continue;
-      out.push({ id: `pco-${it.id}`, title: ev.name || 'Event', start: it.attributes.starts_at, end: it.attributes.ends_at, allDay: Boolean(it.attributes.all_day_event),
-        location: it.attributes.location || '', summary: (ev.summary || ev.description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 400),
-        image: ev.image_url || null, link: it.attributes.church_center_url || null, source: 'Planning Center' });
-    }
-    url = j.links?.next || null;
-    if (out.length && new Date(out.at(-1).start) - Date.now() > 180 * 86400000) break; // six months is plenty
-  }
-  return out;
-}
+/** The calendar links, including one saved by older versions. */
+export const feedsOf = (cfg) => (cfg.calendarFeeds?.length ? cfg.calendarFeeds : cfg.calendarIcal ? [{ id: 'cal', name: 'Church calendar', url: cfg.calendarIcal }] : []).filter((f) => f?.url);
+export const connected = (cfg) => feedsOf(cfg).length > 0;
 
 // ---- iCal (.ics)
 const unfold = (t) => t.replace(/\r?\n[ \t]/g, '');
@@ -57,6 +36,30 @@ function icsDate(v, params) {
   void params; // floating or TZID times: read as this Mac's local time
   return { iso: new Date(+y, +mo - 1, +d, +h, +mi, +s).toISOString(), allDay: false };
 }
+/** Start times for an event and its repeats (daily, weekly, monthly or yearly), up to six months out. */
+export function occurrences(start, rule, now = Date.now()) {
+  if (!rule) return [start];
+  const r = Object.fromEntries(rule.split(';').map((p) => p.split('=')));
+  const step = Math.max(1, Number(r.INTERVAL) || 1);
+  const until = r.UNTIL ? new Date(icsDate(r.UNTIL)?.iso || now + HORIZON) : null;
+  const max = Number(r.COUNT) || Infinity;
+  const stop = Math.min(until ? until.getTime() : Infinity, now + HORIZON);
+  const days = r.FREQ === 'WEEKLY' && r.BYDAY ? r.BYDAY.split(',').map((d) => ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'].indexOf(d.slice(-2))).filter((d) => d >= 0) : null;
+  const out = []; let n = 0;
+  for (let i = 0; i < 2000 && n < max; i++) {
+    const t = new Date(start);
+    if (r.FREQ === 'DAILY') t.setDate(t.getDate() + i * step);
+    else if (r.FREQ === 'WEEKLY') t.setDate(t.getDate() + i * 7 * step);
+    else if (r.FREQ === 'MONTHLY') t.setMonth(t.getMonth() + i * step);
+    else if (r.FREQ === 'YEARLY') t.setFullYear(t.getFullYear() + i * step);
+    else return [start];
+    if (t.getTime() > stop) break;
+    const batch = days ? days.map((d) => { const x = new Date(t); x.setDate(t.getDate() - t.getDay() + d); return x; }).filter((x) => x >= start).sort((a, b) => a - b) : [t];
+    for (const x of batch) { if (n >= max || x.getTime() > stop) break; n++; if (x.getTime() >= now - 86400000 * 31) out.push(x); }
+  }
+  return out;
+}
+
 export function parseIcs(text) {
   const out = [];
   for (const block of unfold(text).split('BEGIN:VEVENT').slice(1)) {
@@ -70,28 +73,37 @@ export function parseIcs(text) {
     const st = f.DTSTART && icsDate(f.DTSTART.v, f.DTSTART.params);
     if (!st) continue;
     const en = f.DTEND && icsDate(f.DTEND.v, f.DTEND.params);
-    out.push({ id: `ics-${icsText(f.UID?.v) || st.iso}-${st.iso}`, title: icsText(f.SUMMARY?.v) || 'Event', start: st.iso, end: en?.iso || st.iso, allDay: st.allDay,
-      location: icsText(f.LOCATION?.v), summary: icsText(f.DESCRIPTION?.v).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 400), link: icsText(f.URL?.v) || null, image: null, source: 'Calendar' });
+    const base = { title: icsText(f.SUMMARY?.v) || 'Event', allDay: st.allDay, location: icsText(f.LOCATION?.v),
+      summary: icsText(f.DESCRIPTION?.v).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 400), link: icsText(f.URL?.v) || null, image: null, source: 'Calendar' };
+    const len = en ? new Date(en.iso) - new Date(st.iso) : 0;
+    const skip = new Set(Object.entries(f).filter(([k]) => k === 'EXDATE').flatMap(([, x]) => x.v.split(',')).map((v) => icsDate(v)?.iso).filter(Boolean));
+    for (const t of occurrences(new Date(st.iso), f.RRULE?.v)) {
+      if (skip.has(t.toISOString())) continue;
+      out.push({ ...base, id: `ics-${icsText(f.UID?.v) || st.iso}-${t.toISOString()}`, start: t.toISOString(), end: new Date(t.getTime() + len).toISOString() });
+    }
   }
   return out;
 }
-async function fetchIcs(url) {
+async function fetchIcs(url, name) {
   const r = await fetch(url.replace(/^webcal:/i, 'https:'), { headers: { 'user-agent': 'Church-Studio' }, signal: AbortSignal.timeout(20000) });
   if (!r.ok) throw new Error(`That calendar link said ${r.status}.`);
   const text = await r.text();
   if (!text.includes('BEGIN:VCALENDAR')) throw new Error("That link isn't a calendar feed. Look for an iCal or .ics link.");
   const now = Date.now() - 86400000;
-  return parseIcs(text).filter((e) => new Date(e.end).getTime() >= now);
+  return parseIcs(text).filter((e) => new Date(e.end).getTime() >= now && new Date(e.start).getTime() <= Date.now() + HORIZON).map((e) => ({ ...e, source: name || 'Calendar' }));
 }
 
 export async function refreshEvents() {
   const cfg = await loadConfig();
-  if (!connected(cfg)) throw new Error('Connect Planning Center or a calendar link first.');
-  const events = [];
-  if (cfg.pcoAppId && cfg.pcoSecret) events.push(...await fetchPco(cfg));
-  if (cfg.calendarIcal) events.push(...await fetchIcs(cfg.calendarIcal));
+  const feeds = feedsOf(cfg);
+  if (!feeds.length) throw new Error('Add a calendar link first.');
+  const events = []; const problems = [];
+  for (const f of feeds) {
+    try { events.push(...await fetchIcs(f.url, f.name)); } catch (e) { problems.push(`${f.name || 'A calendar'}: ${e.message}`); }
+  }
+  if (problems.length === feeds.length) throw new Error(problems.join(' '));
   events.sort((a, b) => a.start.localeCompare(b.start));
-  const data = { events: events.slice(0, 400), fetched: new Date().toISOString(), source: [cfg.pcoAppId && 'Planning Center', cfg.calendarIcal && 'Calendar link'].filter(Boolean).join(' and ') };
+  const data = { events: events.slice(0, 500), fetched: new Date().toISOString(), source: feeds.map((f) => f.name || 'Calendar').join(', '), problems };
   await mkdir(DATA_DIR, { recursive: true });
   await writeFile(STORE, JSON.stringify(data));
   await saveConfig({ lastCalendarFetch: data.fetched });

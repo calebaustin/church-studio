@@ -89,7 +89,22 @@ export async function downloadUpdate(ctx) {
 
 // ---------------------------------------------------------------- safe upgrades
 const MIGRATIONS = [
-  // { to: '0.4.0', run: async (home) => { ... } }  Each runs once, in order, after a backup.
+  // Each runs once, in order, after a backup.
+  {
+    // Church calendars are now a list of calendar links. Move the single link over; drop the old API token.
+    to: '0.4.1',
+    run: async (home) => {
+      const files = [path.join(home, 'config.local.json')];
+      for (const w of await readdir(path.join(home, 'workspaces')).catch(() => [])) files.push(path.join(home, 'workspaces', w, 'config.local.json'));
+      for (const f of files) {
+        if (!existsSync(f)) continue;
+        const c = JSON.parse(await readFile(f, 'utf8'));
+        if (c.calendarIcal && !c.calendarFeeds?.length) c.calendarFeeds = [{ id: 'cal', name: 'Church calendar', url: c.calendarIcal }];
+        delete c.calendarIcal; delete c.pcoAppId; delete c.pcoSecret; delete c.calendarPublicOnly;
+        await writeFile(f, JSON.stringify(c, null, 2));
+      }
+    },
+  },
 ];
 
 async function backupSmallData(from) {

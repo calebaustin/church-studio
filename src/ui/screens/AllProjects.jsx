@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Clapperboard, Clock, Info, Film, Folder, FolderOpen, FolderPlus, LayoutGrid, MoreHorizontal, PenLine, Pencil,
   RotateCcw, Search, Shapes, Star, Trash2, X,
 } from 'lucide-react';
 import { useApp } from '../App.jsx';
+import { Masonry } from '../components/Masonry.jsx';
 import { api } from '../api.js';
 import Popover from '../components/Popover.jsx';
 
@@ -227,7 +229,7 @@ export default function AllProjects() {
 
         <section className="stack" style={{ gap: 10 }}>
           {showFolders && folders.length > 0 && <h2>{type === 'all' ? 'Everything' : TYPES[type].plural}</h2>}
-          {!data && <div className="item-grid">{[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className="skeleton" style={{ height: 220 }} />)}</div>}
+          {!data && <Masonry className="item-grid">{[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className="skeleton" style={{ height: 220 }} />)}</Masonry>}
           {data && !items.length && (
             <div className="glass empty">
               {view.name === 'trash' ? <Trash2 size={36} /> : <LayoutGrid size={36} />}
@@ -235,20 +237,21 @@ export default function AllProjects() {
               <p>{view.name === 'trash' ? 'Designs and writing you delete wait here until you empty the trash.' : folder ? 'Drag sermons, clips, writing and designs here, or use Add to folder on any item.' : view.name === 'starred' ? 'Star things you come back to often.' : 'Sermons, clips, writing and designs you make show up here.'}</p>
             </div>
           )}
-          <div className="item-grid">
+          <Masonry className="item-grid">
             {items.map((i) => <ItemCard key={i.key} item={i} folders={data.folders} inFolder={folder?.id} onOpen={() => open(i)} act={act} />)}
-          </div>
+          </Masonry>
         </section>
       </div>
 
-      {naming && (
+      {naming && createPortal(
         <div className="scrim" onMouseDown={(e) => e.target === e.currentTarget && setNaming(null)}>
           <form className="glass strong modal stack" style={{ width: 'min(420px, calc(100vw - 32px))' }} onSubmit={(e) => { e.preventDefault(); saveName(); }}>
             <h2>{naming.id ? 'Rename folder' : 'New folder'}</h2>
             <input className="input" autoFocus placeholder="Easter 2026, Summer series, Youth…" value={naming.name} onChange={(e) => setNaming({ ...naming, name: e.target.value })} onKeyDown={(e) => { if (e.key === 'Escape') setNaming(null); }} />
             <div className="row"><button className="btn primary" type="submit" disabled={!naming.name.trim()}>{naming.id ? 'Rename' : 'Create folder'}</button><button className="btn ghost" type="button" onClick={() => setNaming(null)}>Cancel</button></div>
           </form>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

@@ -3,7 +3,7 @@
 Church Studio is a full communications studio built for churches, all in one Mac app. Start with Sunday's
 sermon and turn it into captioned clips, a transcript, a blog post, an email, a small group guide, social
 graphics and a slide deck you can present on a second screen. Plan and post to your social accounts on a
-calendar that sits next to your church's Planning Center events, with your logo, colors and fonts everywhere.
+calendar that sits next to your church's own events, with your logo, colors and fonts everywhere.
 It all runs on your Mac with no account, no cloud and no AI required, so a small staff or a volunteer can do
 in an afternoon what used to take a week.
 
@@ -85,8 +85,8 @@ More tools:
   still from the sermon video. Your logo and church info go in the footer.
 - **Status:** the sidebar says "Working locally", or "Working with Claude" (or another helper). If the helper
   hits a usage limit, the app quietly works locally and shows a note.
-- **Church calendar:** connect Planning Center (a personal access token) or any calendar link (.ics) from
-  Subsplash, Tithe.ly, Google or Outlook. Events show on the social calendar and the dashboard, and become
+- **Church calendar:** add one or more calendar links (.ics) from Planning Center, Church Center, Subsplash,
+  Tithe.ly, Google or Outlook. Events show on the social calendar and the dashboard, and become
   graphics in one click. Checked once a week, on Monday mornings, or when you press refresh.
 - **Your tools:** a welcome window on first run asks what kinds of work you do. Turn tools on or off and set their
   order anytime in Settings; the menu and dashboard follow.

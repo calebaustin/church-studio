@@ -125,3 +125,12 @@ test('transcript paragraphs break at pauses', async () => {
   assert.equal(out.length, 2);
   assert.equal(out[0].text, 'One. Two.');
 });
+
+test('repeating calendar events expand', async () => {
+  const { occurrences } = await import('../src/daemon/calendar.js');
+  const now = new Date(2026, 10, 18).getTime();
+  const weekly = occurrences(new Date(2026, 10, 22, 10), 'FREQ=WEEKLY;BYDAY=SU', now);
+  assert.equal(weekly[1].getDate(), 29);
+  assert.equal(occurrences(new Date(2026, 10, 22, 10), 'FREQ=DAILY;COUNT=3', now).length, 3);
+  assert.equal(occurrences(new Date(2026, 10, 22, 10), null, now).length, 1);
+});
