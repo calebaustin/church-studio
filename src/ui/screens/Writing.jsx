@@ -1,8 +1,40 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Copy, FileDown, PenLine, Sparkles, Wand2, Check } from 'lucide-react';
+import { Copy, FileDown, PenLine, Sparkles, Wand2, Check, RefreshCw, Undo2, Link2 } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { api } from '../api.js';
 import { seoChecks } from '../seo.js';
+import { mdToHtml } from '../markdown.js';
+import RichEditor from '../components/RichEditor.jsx';
+import Popover, { PopList } from '../components/Popover.jsx';
+
+const ANGLES = [
+  ['teaching', 'Main points'],
+  ['story', 'Story first'],
+  ['steps', 'Practical steps'],
+  ['questions', 'Questions answered'],
+  ['devotional', 'Short devotional'],
+  ['newcomer', 'For newcomers'],
+];
+const slugify = (t) => t.toLowerCase().replace(/['’]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+
+/** A field with a "Suggest" menu of choices taken from the sermon. */
+function SuggestField({ label, hint, value, onChange, items, onOpen, multiline, placeholder }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <label className="field" style={{ position: 'relative' }}>
+      <span className="row between" style={{ gap: 8 }}>
+        <span>{label} {hint && <span className="hint num">{hint}</span>}</span>
+        <button type="button" className="btn ghost sm" data-pop-trigger onClick={(e) => { e.preventDefault(); onOpen?.(); setOpen(!open); }}><Sparkles size={13} />Suggest</button>
+      </span>
+      {multiline
+        ? <textarea className="input" rows={3} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
+        : <input className="input" value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />}
+      <Popover open={open} onClose={() => setOpen(false)} align="right" width={420}>
+        <PopList items={items} onPick={(v) => { onChange(v); setOpen(false); }} empty="Finding ideas…" />
+      </Popover>
+    </label>
+  );
+}
 
 const KINDS = [
   ['blog', 'Blog post'],
@@ -10,30 +42,6 @@ const KINDS = [
   ['group', 'Small group guide'],
   ['social', 'Social captions'],
 ];
-
-/** Tiny Markdown to HTML for preview and copy-as-HTML (headings, quotes, lists, bold, links). */
-function mdToHtml(md) {
-  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-  const inline = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, '<a href="$2">$1</a>');
-  const out = [];
-  let list = null;
-  for (const raw of md.split('\n')) {
-    const line = raw.replace(/^>\s?/, '');
-    const quote = raw.startsWith('>');
-    let m;
-    if ((m = line.match(/^(#{1,3})\s+(.*)/))) { if (list) { out.push(`</${list}>`); list = null; } out.push(`<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`); continue; }
-    if ((m = line.match(/^(-|\d+\.)\s+(.*)/))) {
-      const tag = m[1] === '-' ? 'ul' : 'ol';
-      if (list !== tag) { if (list) out.push(`</${list}>`); out.push(`<${tag}${quote ? ' class="takeaways"' : ''}>`); list = tag; }
-      out.push(`<li>${inline(m[2])}</li>`);
-      continue;
-    }
-    if (list) { out.push(`</${list}>`); list = null; }
-    if (line.trim()) out.push(quote ? `<blockquote>${inline(line)}</blockquote>` : `<p>${inline(line)}</p>`);
-  }
-  if (list) out.push(`</${list}>`);
-  return out.join('\n');
-}
 
 function Checks({ title, score, list }) {
   return (
@@ -56,8 +64,11 @@ export default function Writing() {
   const [draft, setDraft] = useState(null);
   const [kind, setKind] = useState('blog');
   const [busy, setBusy] = useState(false);
-  const [preview, setPreview] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [ideas, setIdeas] = useState(null);
+  const [angle, setAngle] = useState('teaching');
+  const [useAi, setUseAi] = useState(false);
+  const [undoBlog, setUndoBlog] = useState(null);
 
   useEffect(() => {
     api.get('/api/projects').then(({ projects: ps }) => {
@@ -66,7 +77,18 @@ export default function Writing() {
       if (ready[0]) setPid(ready[0].id);
     });
   }, []);
-  useEffect(() => { if (pid) api.get(`/api/writing/${pid}`).then((r) => { setDraft(r.draft); setDirty(false); }); }, [pid]);
+  useEffect(() => { if (pid) api.get(`/api/writing/${pid}`).then((r) => { setDraft(r.draft); setDirty(false); setIdeas(null); setUndoBlog(null); setAngle(r.draft?.angle || 'teaching'); }); }, [pid]);
+  const loadIdeas = (kp = draft?.keyphrase) => api.post(`/api/writing/${pid}/suggest`, { keyphrase: kp }).then(setIdeas).catch(() => setIdeas({ titles: [], keyphrases: [], metas: [] }));
+  const rewrite = async () => {
+    setBusy(true);
+    try {
+      const r = await api.post(`/api/writing/${pid}/rewrite`, { title: draft.title, keyphrase: draft.keyphrase, slug: draft.slug, metaDescription: draft.metaDescription, angle, ai: useAi });
+      setUndoBlog(draft.blog);
+      set({ blog: r.text, angle });
+      toast({ text: `Rewritten as “${ANGLES.find((a) => a[0] === angle)[1]}”. Read it over, then save.` });
+    } catch (e) { toast({ kind: 'error', text: e.message }); }
+    setBusy(false);
+  };
 
   const generate = async () => {
     setBusy(true);
@@ -74,7 +96,7 @@ export default function Writing() {
     setBusy(false);
   };
   const save = async () => { await api.put(`/api/writing/${pid}`, draft); setDirty(false); toast({ text: 'Draft saved.' }); };
-  const set = (p) => { setDraft({ ...draft, ...p }); setDirty(true); };
+  const set = (p) => { setDraft((d) => ({ ...d, ...p })); setDirty(true); };
   const polish = async () => {
     setBusy(true);
     try { const r = await api.post(`/api/writing/${pid}/polish`, { kind, text: draft[kind] }); set({ [kind]: r.text }); toast({ text: 'Polished. Read it over before using it.' }); } catch (e) { toast({ kind: 'error', text: e.message }); }
@@ -125,7 +147,6 @@ export default function Writing() {
             <div className="seg">{KINDS.map(([k, l]) => <button key={k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>{l}</button>)}</div>
             <div className="row wrap">
               {placeholders > 0 && <span className="chip warn">{placeholders} spot{placeholders > 1 ? 's' : ''} to fill in</span>}
-              <button className="btn sm" onClick={() => setPreview(!preview)}>{preview ? 'Edit' : 'Preview'}</button>
               <button className="btn sm" onClick={() => copy(false)}><Copy size={13} />Copy</button>
               <button className="btn sm" onClick={() => copy(true)}><Copy size={13} />Copy formatted</button>
               <button className="btn sm" onClick={() => api.post(`/api/writing/${pid}/save-file`, { name: `${draft.title} - ${KINDS.find((k) => k[0] === kind)[1]}`, text: draft[kind] })}><FileDown size={13} />Save to library</button>
@@ -134,19 +155,45 @@ export default function Writing() {
             </div>
           </div>
           <div className="editor" style={{ gridTemplateColumns: kind === 'blog' ? 'minmax(0, 1fr) 320px' : '1fr' }}>
-            <section className="glass strong panel stack" style={{ gap: 12 }}>
+            <div className="stack" style={{ gap: 16, minWidth: 0 }}>
               {kind === 'blog' && (
-                <div className="token-grid">
-                  <label className="field">Title<input className="input" value={draft.title} onChange={(e) => set({ title: e.target.value })} /></label>
-                  <label className="field">Focus keyphrase<input className="input" value={draft.keyphrase} onChange={(e) => set({ keyphrase: e.target.value })} /></label>
-                  <label className="field">Web address (slug)<input className="input" value={draft.slug} onChange={(e) => set({ slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]+/g, '-') })} /></label>
-                  <label className="field">Meta description <span className="hint num">{draft.metaDescription.length}/156</span><input className="input" value={draft.metaDescription} onChange={(e) => set({ metaDescription: e.target.value })} /></label>
-                </div>
+                <section className="glass panel stack" style={{ gap: 14 }}>
+                  <div className="row between wrap">
+                    <h3 style={{ margin: 0 }}>Post settings</h3>
+                    <span className="muted small">Pick from the sermon or type your own. Then rewrite the post around them.</span>
+                  </div>
+                  <div className="token-grid">
+                    <SuggestField label="Title" hint={`${draft.title.length}/65`} value={draft.title} onChange={(v) => set({ title: v })} onOpen={() => loadIdeas()} items={ideas?.titles} />
+                    <SuggestField label="Focus keyphrase" value={draft.keyphrase} onChange={(v) => { set({ keyphrase: v }); }} onOpen={() => loadIdeas()} items={ideas?.keyphrases} />
+                    <label className="field">
+                      <span className="row between" style={{ gap: 8 }}>
+                        <span>Web address</span>
+                        <button type="button" className="btn ghost sm" onClick={() => set({ slug: slugify(draft.title) })}><Link2 size={13} />Match title</button>
+                      </span>
+                      <div className="input-affix"><span className="muted">/</span><input className="input" value={draft.slug} onChange={(e) => set({ slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]+/g, '-') })} /></div>
+                    </label>
+                    <SuggestField label="Meta description" hint={`${draft.metaDescription.length}/156`} multiline value={draft.metaDescription} onChange={(v) => set({ metaDescription: v })} onOpen={() => loadIdeas()} items={ideas?.metas} />
+                  </div>
+                  <hr className="hairline" />
+                  <div className="stack" style={{ gap: 10 }}>
+                    <span className="field-label">Angle</span>
+                    <div className="angle-row">
+                      {ANGLES.map(([k, l]) => <button key={k} type="button" className={`pill-choice ${angle === k ? 'on' : ''}`} onClick={() => setAngle(k)}>{l}</button>)}
+                    </div>
+                    <div className="row wrap">
+                      <button className="btn primary" disabled={busy} onClick={rewrite}><RefreshCw size={15} />Rewrite post</button>
+                      {config.llmProvider !== 'none' && (
+                        <label className="switch small"><input type="checkbox" checked={useAi} onChange={(e) => setUseAi(e.target.checked)} />Use AI helper</label>
+                      )}
+                      {undoBlog && <button className="btn ghost sm" onClick={() => { set({ blog: undoBlog }); setUndoBlog(null); }}><Undo2 size={13} />Undo rewrite</button>}
+                    </div>
+                  </div>
+                </section>
               )}
-              {preview
-                ? <div className="prose" dangerouslySetInnerHTML={{ __html: mdToHtml(draft[kind]) }} />
-                : <textarea className="input" spellCheck style={{ minHeight: '56vh', fontSize: 15, lineHeight: 1.6 }} value={draft[kind]} onChange={(e) => set({ [kind]: e.target.value })} />}
-            </section>
+              <section className="glass strong panel rt-panel">
+                <RichEditor key={kind} value={draft[kind]} onChange={(v) => set({ [kind]: v })} />
+              </section>
+            </div>
             {kind === 'blog' && checks && (
               <aside className="glass panel stack sticky-col" style={{ gap: 16 }}>
                 <Checks title="Search" score={checks.seoScore} list={checks.seo} />

@@ -42,10 +42,19 @@ and a summary of clips and posts.
 
 More tools:
 - **Writing:** blog post, email summary, small group guide and social captions written from the sermon's own
-  words, with an SEO and readability check. Optional AI polish keeps every fact from the sermon.
-- **Graphics:** quote cards, series art, announcements (with QR codes) and thumbnails in your colors.
-  Saved graphics can go into a clip as a corner logo or an end card.
-- **Brand library:** a normal folder in Documents (Photos, Logos, Graphics, Brand, Writing) that every tool uses.
+  words. You edit the formatted text with a toolbar (styles, bold, italic, links, lists, indent) or switch to
+  Markdown. Blog posts get suggested titles, keyphrases, web addresses and meta descriptions, and "Rewrite post"
+  rebuilds them around a new angle (main points, story first, practical steps, questions, devotional, newcomers).
+  SEO and readability checks run as you type. Optional AI polish keeps every fact from the sermon.
+- **Bible references:** spoken references are written the standard way in transcripts, captions and writing
+  ("First Corinthians 10 beginning in verse 16" becomes "1 Corinthians 10:16"). Whisper also gets book-name hints.
+- **Graphics:** a design home ("What will you design today?") for presentations, social posts, carousels,
+  stories, thumbnails, flyers, sermon notes and custom sizes. Multi-page designs, templates in your brand
+  colors and fonts, "From a sermon" (slides, carousels, stories and notes built from the transcript),
+  smart alignment guides and grid snapping, inline text editing, present mode, and export to PNG, PDF or
+  PowerPoint (with speaker notes). Saved graphics can go into a clip as a corner logo or an end card.
+- **Brand library:** a normal folder in Documents (Photos, Logos, Graphics, Brand, Writing) that every tool uses,
+  with a brand kit (colors, including "colors from my logo", and heading and body fonts) and a setup checklist.
 - **Workspaces:** separate brands or ministries, each with its own settings, sermons, accounts and library.
 - **My App:** your setup at a glance, plus ideas based on your sermon topics.
 

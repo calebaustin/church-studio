@@ -57,6 +57,23 @@ export async function listChannel(channel, { limit = 30 } = {}) {
     }));
 }
 
+/** The channel page as YouTube shows it: name, handle, subscribers, picture, banner and latest uploads. */
+export async function channelDetails(channel) {
+  const base = channelBase(channel);
+  const { stdout } = await ytdlp([`${base}/videos`, '--flat-playlist', '--playlist-end', '6', '-J', '--no-warnings']);
+  const j = JSON.parse(stdout);
+  const thumbs = j.thumbnails || [];
+  const pickId = (id) => thumbs.find((t) => t.id === id)?.url;
+  const square = thumbs.filter((t) => t.width && t.height && Math.abs(t.width - t.height) < 4).sort((a, b) => b.width - a.width)[0]?.url;
+  const wide = thumbs.filter((t) => t.width && t.height && t.width > t.height * 2).sort((a, b) => b.width - a.width)[0]?.url;
+  return {
+    name: j.channel || j.uploader || j.title, handle: j.uploader_id || null, url: j.uploader_url || j.channel_url || base,
+    followers: j.channel_follower_count ?? null, description: (j.description || '').slice(0, 280),
+    avatar: pickId('avatar_uncropped') || square || thumbs[0]?.url || null, banner: pickId('banner_uncropped') || wide || null,
+    videos: (j.entries || []).filter((e) => e.id).slice(0, 4).map((e) => ({ id: e.id, title: e.title, duration: e.duration ?? null, views: e.view_count ?? null, thumb: `https://i.ytimg.com/vi/${e.id}/mqdefault.jpg`, url: `https://www.youtube.com/watch?v=${e.id}` })),
+  };
+}
+
 function youtubeId(url) {
   try {
     const u = new URL(url);

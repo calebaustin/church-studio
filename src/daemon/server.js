@@ -9,7 +9,7 @@ import { ROOT, PROJECTS_DIR, toolStatus, repairTool } from './tools.js';
 import { loadConfig, saveConfig, mask, KEY_GUIDE } from './config.js';
 import * as jobs from './jobs.js';
 import { listProjects, getProject, updateProject, deleteProject, getTranscript, projectDir } from './projects.js';
-import { listChannel, downloadToProject, importLocalFile, scoutVideo } from './youtube.js';
+import { channelDetails, listChannel, downloadToProject, importLocalFile, scoutVideo } from './youtube.js';
 import { transcribeProject } from './transcribe.js';
 import { proposeClips } from './pipeline.js';
 import { exportClip, trackClip, revealInFinder, EXPORT_PRESETS, moveExport, downloadsDir, sampleFrames } from './render.js';
@@ -17,6 +17,7 @@ import * as prefs from './prefs.js';
 import * as workspaces from './workspaces.js';
 import * as library from './library.js';
 import * as writing from './writing.js';
+import * as designs from './designs.js';
 import { WORKSPACE } from './tools.js';
 import { toSentences, backgroundOf, keywords as topKeywords } from './text.js';
 import { listThemes, saveTheme, deleteTheme, refreshSystemFonts, bundledFontDir } from './themes.js';
@@ -52,7 +53,7 @@ async function body(req) {
   let size = 0;
   for await (const c of req) {
     size += c.length;
-    if (size > 5_000_000) throw new HttpError(413, 'Body too large');
+    if (size > 150_000_000) throw new HttpError(413, 'Body too large');
     chunks.push(c);
   }
   if (!chunks.length) return {};
@@ -100,6 +101,13 @@ route('GET', '/api/youtube/channel', async (_p, _b, url) => {
     channelCache = { key: channel, at: Date.now(), items: await listChannel(channel) };
   }
   return { channel, items: channelCache.items };
+});
+
+route('GET', '/api/youtube/channel-info', async (_p, _b, url) => {
+  const cfg = await loadConfig();
+  const channel = url.searchParams.get('channel') || cfg.youtubeChannel;
+  if (!channel) throw new HttpError(400, 'Add your YouTube channel first.');
+  try { return { info: await channelDetails(channel) }; } catch (e) { throw new HttpError(502, `Couldn't find that channel. Check the link or handle. ${e.message.slice(-160)}`); }
 });
 
 route('POST', '/api/youtube/scout', async (_p, b) => {
@@ -329,12 +337,25 @@ route('POST', '/api/library/import', async (_p, b) => ({ files: await library.im
 route('GET', '/api/writing/:id', async ({ id }) => ({ draft: await writing.loadDraft(id) }));
 route('POST', '/api/writing/:id/generate', async ({ id }) => { try { return { draft: await writing.saveDraft(id, await writing.generate(id)) }; } catch (e) { throw new HttpError(400, e.message); } });
 route('PUT', '/api/writing/:id', async ({ id }, b) => ({ draft: await writing.saveDraft(id, b) }));
+route('POST', '/api/writing/:id/suggest', async ({ id }, b) => { try { return await writing.suggest(id, b || {}); } catch (e) { throw new HttpError(400, e.message); } });
+route('POST', '/api/writing/:id/rewrite', async ({ id }, b) => { try { return { text: await writing.rewriteBlog(id, b || {}) }; } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/writing/:id/polish', async ({ id }, b) => { try { return { text: await writing.polish(id, b.kind, b.text) }; } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/writing/:id/save-file', async ({ id }, b) => {
   const p = await getProject(id);
   const r = await library.saveText('Writing', `${b.name || p?.title || 'Draft'}`, String(b.text || ''));
   await revealInFinder(r.file);
   return r;
+});
+
+// ---------------------------------------------------------------- designs (Graphics)
+route('GET', '/api/designs', async () => ({ designs: await designs.listDesigns() }));
+route('GET', '/api/designs/:id', async ({ id }) => { const d = await designs.getDesign(id); if (!d) throw new HttpError(404, 'Design not found'); return { design: d }; });
+route('PUT', '/api/designs/:id', async ({ id }, b) => ({ design: await designs.saveDesign(id, b) }));
+route('DELETE', '/api/designs/:id', async ({ id }) => { await designs.deleteDesign(id); return { ok: true }; });
+route('GET', '/api/outline/:id', async ({ id }) => { try { return { outline: await writing.outline(id) }; } catch (e) { throw new HttpError(400, e.message); } });
+// Export every page of a design into the brand library (Graphics/<name>/), or one file (PDF, PPTX).
+route('POST', '/api/designs/export', async (_p, b) => {
+  return library.saveExport(String(b.name || 'Design'), b.files || []);
 });
 
 // ---------------------------------------------------------------- ideas (My App)

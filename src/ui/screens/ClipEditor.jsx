@@ -10,6 +10,7 @@ import LibraryPicker from '../components/LibraryPicker.jsx';
 import { CaptionStyleFields, HookStyleFields } from '../components/VideoThemeEditor.jsx';
 import { keepSegments, keptLength } from '../captions.js';
 import { sampleTrack, cueX, clampX } from '../framing.js';
+import ColorField from '../components/ColorField.jsx';
 
 const FILLERS = new Set(['um', 'uh', 'uhm', 'umm', 'er', 'erm', 'ah']);
 const FRAME_W = 340;
@@ -557,7 +558,7 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
                     <button className={crop.bg?.type === 'color' ? 'on' : ''} onClick={() => setCrop({ bg: { ...(crop.bg || {}), type: 'color', color: crop.bg?.color || '#111111' } })}>Solid color</button>
                   </div>
                   {crop.bg?.type === 'color'
-                    ? <label className="row small"><input type="color" value={crop.bg.color || '#111111'} onChange={(e) => setCrop({ bg: { ...crop.bg, color: e.target.value } })} />Background color</label>
+                    ? <ColorField label="Background color" value={crop.bg.color || '#111111'} onChange={(c) => setCrop({ bg: { ...crop.bg, color: c } })} />
                     : <label className="field">Blur · {Math.round((crop.bg?.blur ?? 0.6) * 100)}%<input type="range" min="0.1" max="1" step="0.05" value={crop.bg?.blur ?? 0.6} onChange={(e) => setCrop({ bg: { ...(crop.bg || { type: 'blur' }), blur: Number(e.target.value) } })} /></label>}
                   {mode === 'stack3' && <label className="field">Space between · {crop.gap ?? 18}px<input type="range" min="0" max="60" value={crop.gap ?? 18} onChange={(e) => setCrop({ gap: Number(e.target.value) })} /></label>}
                 </div>

@@ -5,6 +5,7 @@ import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promise
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { PROJECTS_DIR } from './tools.js';
+import { normalizeWords } from './scripture.js';
 
 export function projectDir(id) {
   if (!/^[a-z0-9-]+$/i.test(id)) throw new Error('Bad project id');
@@ -79,5 +80,9 @@ export async function deleteProject(id) {
 export async function getTranscript(id) {
   const f = file(id, 'transcript.json');
   if (!existsSync(f)) return null;
-  return JSON.parse(await readFile(f, 'utf8'));
+  const t = JSON.parse(await readFile(f, 'utf8'));
+  // Older transcripts: tidy Bible references on the way in.
+  // Skipped when clips already cut words by position, so those cuts stay on the right words.
+  if (!t.scripture && !(await getProject(id))?.clips?.some((c) => c.cutWords?.length)) { t.words = normalizeWords(t.words); t.scripture = 1; }
+  return t;
 }

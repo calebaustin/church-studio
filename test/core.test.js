@@ -54,3 +54,19 @@ test('cue framing cuts and glides like the renderer', () => {
   assert.equal(easeInOut(0), 0);
   assert.equal(sampleTrack([0, 1], 1, 0.25), 0.25);
 });
+
+test('spoken Bible references are written the standard way', async () => {
+  const { normalizeText, normalizeWords } = await import('../src/daemon/scripture.js');
+  assert.equal(normalizeText('Turn to First Corinthians 10 beginning in verse 16.'), 'Turn to 1 Corinthians 10:16.');
+  assert.equal(normalizeText('In John chapter three, verses sixteen through eighteen, Jesus says'), 'In John 3:16-18, Jesus says');
+  assert.equal(normalizeText('Read Psalm one hundred and nineteen verse 105'), 'Read Psalm 119:105');
+  assert.equal(normalizeText('Second Timothy 3 verse 16 and 17'), '2 Timothy 3:16-17');
+  assert.equal(normalizeText('John said to me that we should go.'), 'John said to me that we should go.');
+  assert.equal(normalizeText('He made his mark three times.'), 'He made his mark three times.');
+  assert.equal(normalizeText('Romans 8:28 and 1 Corinthians 10:16'), 'Romans 8:28 and 1 Corinthians 10:16');
+  const words = ['First', 'Corinthians', '10', 'beginning', 'in', 'verse', '16.'].map((w, i) => ({ w, start: i, end: i + 0.5 }));
+  const out = normalizeWords(words);
+  assert.deepEqual(out.map((w) => w.w), ['1', 'Corinthians', '10:16.']);
+  assert.equal(out[0].start, 0);
+  assert.equal(out.at(-1).end, 6.5);
+});

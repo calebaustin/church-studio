@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Plus, AlertTriangle } from 'lucide-react';
 import { useApp, applyAppTheme, activeAppTheme } from '../App.jsx';
-import { api, desktop, openLink } from '../api.js';
+import { api, desktop, openLink, fmt } from '../api.js';
 import VideoThemeEditor from '../components/VideoThemeEditor.jsx';
+import ColorField from '../components/ColorField.jsx';
 
 const SECTIONS = [
   ['tools', 'Tools'],
@@ -76,35 +77,68 @@ function Tools() {
   );
 }
 
+function ChannelPreview({ info }) {
+  const subs = info.followers == null ? null : info.followers >= 1000 ? `${(info.followers / 1000).toFixed(info.followers >= 10000 ? 0 : 1)}K subscribers` : `${info.followers} subscribers`;
+  return (
+    <div className="yt-card">
+      <div className="yt-banner" style={info.banner ? { backgroundImage: `url(${info.banner})` } : undefined} />
+      <div className="yt-head">
+        {info.avatar ? <img className="yt-avatar" src={info.avatar} alt="" /> : <span className="yt-avatar" />}
+        <div className="stack" style={{ gap: 2, minWidth: 0 }}>
+          <strong className="yt-name truncate">{info.name}</strong>
+          <span className="muted small">{[info.handle, subs].filter(Boolean).join(' · ')}</span>
+          {info.description && <span className="muted small yt-desc">{info.description}</span>}
+        </div>
+        <a className="btn sm" href={info.url} target="_blank" rel="noreferrer">Open on YouTube</a>
+      </div>
+      {info.videos?.length > 0 && (
+        <div className="yt-videos">
+          {info.videos.map((v) => (
+            <a key={v.id} className="yt-video" href={v.url} target="_blank" rel="noreferrer">
+              <span className="yt-thumb"><img src={v.thumb} alt="" loading="lazy" />{v.duration && <span className="yt-dur num">{fmt(v.duration)}</span>}</span>
+              <span className="small truncate2">{v.title}</span>
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function YouTube() {
   const { config, saveConfig } = useApp();
   const [channel, setChannel] = useState(config.youtubeChannel);
   const [saved, setSaved] = useState(null);
-  const [test, setTest] = useState(null);
-  const save = async () => { await saveConfig({ youtubeChannel: channel.trim() }); setSaved(Date.now()); };
-  const check = async () => {
-    setTest({ busy: true });
+  const [state, setState] = useState(null); // {busy} | {info} | {error}
+  const look = async (save) => {
+    setState({ busy: true });
     try {
-      await save();
-      const r = await api.get('/api/youtube/channel?refresh=1');
-      setTest({ ok: true, n: r.items.length, first: r.items[0]?.title });
-    } catch (e) { setTest({ ok: false, error: e.message }); }
+      if (save) { await saveConfig({ youtubeChannel: channel.trim() }); setSaved(Date.now()); }
+      const r = await api.get(`/api/youtube/channel-info?channel=${encodeURIComponent(channel.trim())}`);
+      setState({ info: r.info });
+      if (save) api.get('/api/youtube/channel?refresh=1').catch(() => {});
+    } catch (e) { setState({ error: e.message }); }
   };
+  useEffect(() => { if (config.youtubeChannel) look(false); }, []);
   return (
     <section className="glass strong panel stack">
       <h2>Your YouTube channel</h2>
       <p className="muted">Paste your church's channel link or handle.</p>
       <label className="field">Channel URL or handle
-        <input className="input" value={channel} placeholder="https://www.youtube.com/@yourchurch or @yourchurch" onChange={(e) => setChannel(e.target.value)} />
+        <input className="input" value={channel} placeholder="https://www.youtube.com/@yourchurch or @yourchurch" onChange={(e) => setChannel(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && channel.trim()) look(true); }} />
       </label>
       <div className="row">
-        <button className="btn primary" onClick={check} disabled={!channel.trim() || test?.busy}>{test?.busy ? 'Checking…' : 'Save & check'}</button>
+        <button className="btn primary" onClick={() => look(true)} disabled={!channel.trim() || state?.busy}>{state?.busy ? 'Looking it up…' : 'Save & check'}</button>
         <Saved at={saved} />
       </div>
-      {test && !test.busy && (test.ok
-        ? <div className="banner info">Found {test.n} videos{test.first ? `. Latest: “${test.first}”` : ''}.</div>
-        : <div className="banner">{test.error}</div>)}
-
+      {state?.busy && <div className="yt-card"><div className="skeleton" style={{ height: 180 }} /></div>}
+      {state?.error && <div className="banner bad">{state.error}</div>}
+      {state?.info && (
+        <>
+          <span className="small muted">Is this your channel? If not, check the link or handle above.</span>
+          <ChannelPreview info={state.info} />
+        </>
+      )}
     </section>
   );
 }
@@ -379,9 +413,9 @@ function AppTheme() {
           <label className="field">Name<input className="input" value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></label>
           <div className="token-grid">
             {TOKEN_LABELS.map(([k, label]) => (
-              <label key={k} className="row small"><input type="color" value={editing.tokens[k]} onChange={(e) => setToken(k, e.target.value)} />{label}</label>
+              <ColorField key={k} label={label} value={editing.tokens[k]} onChange={(c) => setToken(k, c)} />
             ))}
-            <label className="row small"><input type="color" value={rgbToHex(editing.tokens['--glass-rgb'])} onChange={(e) => setToken('--glass-rgb', hexToRgb(e.target.value))} />Glass color</label>
+            <ColorField label="Glass color" value={rgbToHex(editing.tokens['--glass-rgb'])} onChange={(c) => setToken('--glass-rgb', hexToRgb(c))} />
           </div>
           {ratio < 4.5 && <div className="banner bad"><AlertTriangle size={16} />Text on this background is hard to read (contrast {ratio.toFixed(1)}:1, aim for 4.5:1). Make the text or background lighter/darker.</div>}
           <div className="token-grid">

@@ -34,6 +34,9 @@ export const DEFAULTS = {
   exportOptions: { preset: 'vertical', resolution: '1080', quality: 'high', fps: 30, codec: 'h264', captions: true, hook: true, after: 'reveal' },
   trackOnKeep: true,
   weeklyGoal: 5, // clips posted per week, shown on the dashboard
+  brandColors: ['#2B7F5F', '#D9A441', '#1B2440', '#F4EFE6', '#8FB8A8'], // brand kit, used by Graphics
+  brandFonts: { heading: 'Montserrat', body: 'Montserrat' },
+  dismissed: {}, // setup checklists the user closed
 };
 
 /** Fields that hold secrets: masked on read, only overwritten when a new value is sent. */

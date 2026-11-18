@@ -42,6 +42,7 @@ def main() -> None:
     parser.add_argument("--offset", type=float, default=0.0, help="seconds added to every timestamp")
     parser.add_argument("--prompt", default="")
     parser.add_argument("--language", default="en")
+    parser.add_argument("--hotwords", default="", help="words to bias spelling toward, e.g. Bible books")
     args = parser.parse_args()
 
     print("PROGRESS 1 loading model", file=sys.stderr, flush=True)
@@ -55,6 +56,7 @@ def main() -> None:
         vad_filter=True,
         vad_parameters={"min_silence_duration_ms": 700},
         initial_prompt=args.prompt or None,
+        hotwords=args.hotwords or None,
         condition_on_previous_text=False,  # avoids runaway repetition on long services
     )
     words = []

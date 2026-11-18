@@ -8,7 +8,7 @@ import { APP_NAME, WORKSPACE } from './tools.js';
 import { loadConfig } from './config.js';
 
 export const FOLDERS = ['Photos', 'Logos', 'Graphics', 'Brand', 'Writing'];
-const KINDS = { image: /\.(png|jpe?g|webp|gif|heic|svg)$/i, video: /\.(mp4|mov|m4v)$/i, doc: /\.(pdf|md|txt|docx)$/i };
+const KINDS = { image: /\.(png|jpe?g|webp|gif|heic|svg)$/i, video: /\.(mp4|mov|m4v)$/i, doc: /\.(pdf|md|txt|docx|pptx)$/i };
 
 export async function libraryRoot() {
   const cfg = await loadConfig();
@@ -82,4 +82,32 @@ export async function importFiles(paths, folder = 'Photos') {
     out.push(dest);
   }
   return out;
+}
+
+const EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'application/pdf': 'pdf', 'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx' };
+const clean = (n) => String(n || 'Design').replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 80) || 'Design';
+
+/** Save a design export into Graphics: one file as Graphics/<name>.<ext>, several pages into Graphics/<name>/. */
+export async function saveExport(name, files) {
+  const root = await ensureLibrary();
+  const decoded = files.map((f) => {
+    const m = String(f.dataUrl).match(/^data:([\w/.+-]+);base64,(.+)$/);
+    const ext = EXT[m?.[1]] || (['png', 'jpg', 'pdf', 'pptx'].includes(f.ext) ? f.ext : null);
+    if (!m || !ext) throw new Error('Unsupported file type');
+    return { name: clean(f.name), ext, data: Buffer.from(m[2], 'base64') };
+  });
+  if (!decoded.length) throw new Error('Nothing to export');
+  const base = clean(name);
+  if (decoded.length === 1) {
+    const d = decoded[0];
+    let file = path.join(root, 'Graphics', `${base}.${d.ext}`);
+    for (let n = 2; existsSync(file); n++) file = path.join(root, 'Graphics', `${base} ${n}.${d.ext}`);
+    await writeFile(file, d.data);
+    return { file, rel: `Graphics/${path.basename(file)}` };
+  }
+  let dir = path.join(root, 'Graphics', base);
+  for (let n = 2; existsSync(dir); n++) dir = path.join(root, 'Graphics', `${base} ${n}`);
+  await mkdir(dir, { recursive: true });
+  for (const d of decoded) await writeFile(path.join(dir, `${d.name}.${d.ext}`), d.data);
+  return { file: dir, rel: `Graphics/${path.basename(dir)}`, count: decoded.length };
 }

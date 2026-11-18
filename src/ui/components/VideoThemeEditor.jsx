@@ -3,6 +3,8 @@ import { Plus, RefreshCw, Trash2, Check, Heart, MessageCircle, Send, Bookmark, M
 import { useApp } from '../App.jsx';
 import { api } from '../api.js';
 import CaptionOverlay, { findFont } from './CaptionOverlay.jsx';
+import ColorField from './ColorField.jsx';
+import FontMenu from './FontMenu.jsx';
 
 const SAMPLE = 'God wants what is in our hands, yes, but He wants our hearts first.'.split(' ');
 
@@ -48,12 +50,12 @@ export function ThemePreview({ theme, font, width = 230, hook = null, app = null
   );
 }
 
-function ColorField({ label, color, opacity, onColor, onOpacity, hint }) {
+function ColorRow({ label, color, opacity, onColor, onOpacity, hint }) {
   return (
     <div className="stack" style={{ gap: 4 }}>
       <span className="small" style={{ fontWeight: 600, color: 'var(--ink)' }}>{label}</span>
       <div className="color-row">
-        <input type="color" aria-label={`${label} color`} value={color || '#ffffff'} onChange={(e) => onColor(e.target.value)} />
+        <ColorField label="" value={color || '#ffffff'} onChange={onColor} />
         {onOpacity && (
           <>
             <input type="range" aria-label={`${label} opacity`} min="0" max="1" step="0.05" value={opacity ?? 1} onChange={(e) => onOpacity(Number(e.target.value))} />
@@ -67,33 +69,14 @@ function ColorField({ label, color, opacity, onColor, onOpacity, hint }) {
 }
 
 function FontPicker({ value, onChange }) {
-  const { themes, reloadThemes } = useApp();
-  const [q, setQ] = useState('');
-  const [busy, setBusy] = useState(false);
-  const sys = (themes.systemFonts || []).filter((f) => !q || f.name.toLowerCase().includes(q.toLowerCase()));
-  const curated = themes.fonts.filter((f) => !q || f.name.toLowerCase().includes(q.toLowerCase()));
+  const { themes } = useApp();
   const current = findFont(themes, value);
-  return (
-    <div className="stack" style={{ gap: 6 }}>
-      <span className="small" style={{ fontWeight: 600, color: 'var(--ink)' }}>Font</span>
-      <div className="row">
-        <input className="input" placeholder={`Search ${themes.fonts.length + (themes.systemFonts?.length || 0)} fonts`} value={q} onChange={(e) => setQ(e.target.value)} />
-        <button className="btn icon" title="Look for newly installed fonts" aria-label="Refresh fonts" disabled={busy}
-          onClick={async () => { setBusy(true); await api.post('/api/fonts/refresh'); await reloadThemes(); setBusy(false); }}>
-          <RefreshCw size={15} />
-        </button>
-      </div>
-      <select className="input" value={value} onChange={(e) => onChange(e.target.value)} size={6} style={{ height: 'auto' }}>
-        {!curated.some((f) => f.id === value) && !sys.some((f) => f.id === value) && current && <option value={current.id}>{current.name}</option>}
-        <optgroup label="Recommended">
-          {curated.map((f) => <option key={f.id} value={f.id}>{f.name}{f.bundled ? ' (built in)' : ''}</option>)}
-        </optgroup>
-        <optgroup label="Installed on this Mac">
-          {sys.slice(0, 600).map((f) => <option key={f.id} value={f.id} style={{ fontFamily: f.css }}>{f.name}</option>)}
-        </optgroup>
-      </select>
-    </div>
-  );
+  const options = [
+    ...themes.fonts.map((f) => ({ value: f.id, label: f.bundled ? `${f.name} (built in)` : f.name, css: f.css, weight: f.weight, group: 'Recommended' })),
+    ...(themes.systemFonts || []).map((f) => ({ value: f.id, label: f.name, css: f.css, weight: f.weight, group: 'Installed on this Mac' })),
+  ];
+  if (current && !options.some((o) => o.value === value)) options.unshift({ value, label: current.name, css: current.css, group: 'Current' });
+  return <FontMenu label="Font" value={value} onChange={onChange} options={options} />;
 }
 
 /** All caption style controls. Used in Settings and live in the clip editor. */
@@ -110,18 +93,18 @@ export function CaptionStyleFields({ draft, set }) {
         </div>
       </div>
       <div className="token-grid">
-        <ColorField label="Spoken words" color={draft.color} opacity={draft.colorOpacity} onColor={(v) => set({ color: v })} onOpacity={(v) => set({ colorOpacity: v })} />
-        <ColorField label="Word being said" color={draft.active} opacity={draft.activeOpacity} onColor={(v) => set({ active: v })} onOpacity={(v) => set({ activeOpacity: v })} />
+        <ColorRow label="Spoken words" color={draft.color} opacity={draft.colorOpacity} onColor={(v) => set({ color: v })} onOpacity={(v) => set({ colorOpacity: v })} />
+        <ColorRow label="Word being said" color={draft.active} opacity={draft.activeOpacity} onColor={(v) => set({ active: v })} onOpacity={(v) => set({ activeOpacity: v })} />
         <div className="stack" style={{ gap: 4 }}>
           <label className="row small" style={{ fontWeight: 600, color: 'var(--ink)' }}>
             <input type="checkbox" checked={draft.future != null} onChange={(e) => set({ future: e.target.checked ? draft.color : null, futureOpacity: e.target.checked ? 0.45 : 1 })} />
             Different look for upcoming words
           </label>
-          {draft.future != null && <ColorField label="Upcoming words" color={draft.future} opacity={draft.futureOpacity} onColor={(v) => set({ future: v })} onOpacity={(v) => set({ futureOpacity: v })} />}
+          {draft.future != null && <ColorRow label="Upcoming words" color={draft.future} opacity={draft.futureOpacity} onColor={(v) => set({ future: v })} onOpacity={(v) => set({ futureOpacity: v })} />}
         </div>
         {draft.highlight !== 'color'
-          ? <ColorField label={draft.highlight === 'pill' ? 'Pill' : 'Box'} color={draft.boxColor} opacity={draft.boxOpacity} onColor={(v) => set({ boxColor: v })} onOpacity={(v) => set({ boxOpacity: v })} />
-          : <ColorField label="Outline" color={draft.outlineColor} opacity={draft.outlineOpacity} onColor={(v) => set({ outlineColor: v })} onOpacity={(v) => set({ outlineOpacity: v })} />}
+          ? <ColorRow label={draft.highlight === 'pill' ? 'Pill' : 'Box'} color={draft.boxColor} opacity={draft.boxOpacity} onColor={(v) => set({ boxColor: v })} onOpacity={(v) => set({ boxOpacity: v })} />
+          : <ColorRow label="Outline" color={draft.outlineColor} opacity={draft.outlineOpacity} onColor={(v) => set({ outlineColor: v })} onOpacity={(v) => set({ outlineOpacity: v })} />}
       </div>
       <div className="token-grid">
         <label className="field">Size · {draft.size}<input type="range" min="36" max="130" value={draft.size} onChange={(e) => set({ size: Number(e.target.value) })} /></label>
@@ -155,8 +138,8 @@ export function HookStyleFields({ draft, set }) {
         </div>
       </div>
       <div className="token-grid">
-        <ColorField label="Hook text" color={draft.hookColor || '#11141C'} onColor={(v) => set({ hookColor: v })} />
-        {(draft.hookShape || 'pill') !== 'none' && <ColorField label="Hook background" color={draft.hookBg || '#FFFFFF'} opacity={draft.hookBgOpacity ?? 0.94} onColor={(v) => set({ hookBg: v })} onOpacity={(v) => set({ hookBgOpacity: v })} />}
+        <ColorRow label="Hook text" color={draft.hookColor || '#11141C'} onColor={(v) => set({ hookColor: v })} />
+        {(draft.hookShape || 'pill') !== 'none' && <ColorRow label="Hook background" color={draft.hookBg || '#FFFFFF'} opacity={draft.hookBgOpacity ?? 0.94} onColor={(v) => set({ hookBg: v })} onOpacity={(v) => set({ hookBgOpacity: v })} />}
         <label className="field">Hook size · {draft.hookSize ?? 58}<input type="range" min="30" max="110" value={draft.hookSize ?? 58} onChange={(e) => set({ hookSize: Number(e.target.value) })} /></label>
         <label className="field">Shows for · {(draft.hookDuration ?? 3.5).toFixed(1)}s<input type="range" min="1" max="10" step="0.5" value={draft.hookDuration ?? 3.5} onChange={(e) => set({ hookDuration: Number(e.target.value) })} /></label>
         <label className="field">Default position · {Math.round((draft.hookY ?? 0.13) * 100)}% down<input type="range" min="0.05" max="0.9" step="0.01" value={draft.hookY ?? 0.13} onChange={(e) => set({ hookY: Number(e.target.value) })} /></label>

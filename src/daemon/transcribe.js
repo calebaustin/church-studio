@@ -7,6 +7,7 @@ import { run, tool, pyCommand } from './tools.js';
 import { file, getProject, updateProject } from './projects.js';
 import { loadConfig } from './config.js';
 import { detectSermon } from './sermon.js';
+import { normalizeWords, normalizeText, WHISPER_HINT } from './scripture.js';
 
 export async function transcribeProject(id, { start = null, end = null } = {}, ctx) {
   const project = await getProject(id);
@@ -22,7 +23,7 @@ export async function transcribeProject(id, { start = null, end = null } = {}, c
   await run(tool('ffmpeg'), ['-y', '-loglevel', 'error', ...range, '-i', source, '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', wav], { signal: ctx.signal });
 
   ctx.progress(6, `Transcribing with Whisper (${config.whisperModel})… the first run downloads the model.`);
-  const { stdout } = await run(...pyCommand('transcribe', [wav, '--model', config.whisperModel, '--offset', String(start ?? 0)]), {
+  const { stdout } = await run(...pyCommand('transcribe', [wav, '--model', config.whisperModel, '--offset', String(start ?? 0), '--hotwords', WHISPER_HINT]), {
     signal: ctx.signal,
     onStderr: (chunk) => {
       const m = [...chunk.matchAll(/PROGRESS (\d+)/g)].pop();
@@ -30,6 +31,10 @@ export async function transcribeProject(id, { start = null, end = null } = {}, c
     },
   });
   const transcript = JSON.parse(stdout);
+  // Write Bible references the way people read them: 1 Corinthians 10:16.
+  transcript.words = normalizeWords(transcript.words);
+  for (const s of transcript.segments || []) s.text = normalizeText(s.text);
+  transcript.scripture = 1;
   transcript.range = start != null || end != null ? { start: start ?? 0, end: end ?? project.media?.duration } : null;
   await writeFile(file(id, 'transcript.json'), JSON.stringify(transcript));
   await rm(wav, { force: true });

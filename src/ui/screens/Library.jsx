@@ -4,6 +4,7 @@ import { Check, MonitorPlay, FolderOpen, Link2, Clapperboard } from 'lucide-reac
 import { api, desktop, fmt, media } from '../api.js';
 import Modal from '../components/Modal.jsx';
 import AddVideo from '../components/AddVideo.jsx';
+import SetupChecklist from '../components/SetupChecklist.jsx';
 
 export default function Library({ openPicker = false }) {
   const { go, trackJob, onJobFinished, config } = useApp();
@@ -171,23 +172,8 @@ function GettingStarted({ projects, onPick }) {
     ['Export your first clip', 'Keep a suggested clip, tweak it, export.', exported, projects[0] ? () => go({ name: 'project', id: projects[0].id }) : null, 'Open'],
     ['Connect a social account', 'Post or schedule clips without leaving the app.', social > 0, () => go({ name: 'social' }), 'Connect'],
   ];
-  const done = steps.filter((s) => s[2]).length;
-  if (done === steps.length) return null;
   return (
-    <section className="glass panel stack" style={{ gap: 12 }}>
-      <div className="row between">
-        <div className="stack" style={{ gap: 2 }}><span className="eyebrow">Getting started</span><h2>{done === 0 ? 'Five quick steps to your first clip' : `${done} of ${steps.length} done`}</h2></div>
-      </div>
-      <div className="meter" aria-hidden="true"><i style={{ width: `${(done / steps.length) * 100}%` }} /></div>
-      <div className="checklist">
-        {steps.map(([label, help, ok, action, cta]) => (
-          <div key={label} className={`check-row ${ok ? 'done' : ''}`}>
-            <span className="check">{ok && <Check size={15} />}</span>
-            <div className="stack" style={{ gap: 0 }}><strong className="label">{label}</strong><span className="muted small">{help}</span></div>
-            {!ok && action && <button className="btn sm" onClick={action}>{cta}</button>}
-          </div>
-        ))}
-      </div>
-    </section>
+    <SetupChecklist id="getting-started" title={(done, total) => (done === 0 ? 'Five quick steps to your first clip' : `${done} of ${total} done`)}
+      steps={steps.map(([label, help, ok, action, cta]) => ({ label, help, ok, action, cta }))} />
   );
 }
