@@ -1,7 +1,7 @@
 // Platform catalog for the Social hub. `api` platforms upload the video directly from this Mac;
 // `manual` platforms get a guided hand-off (caption copied, file shown, upload page opened) because
 // their APIs need an approved developer app or a public video URL. Setup steps are written for this
-// app, informed by LightPost's guides (MIT). Limits are conservative so uploads succeed.
+// app. Limits are conservative so uploads succeed.
 
 const MB = 1024 * 1024;
 

@@ -5,13 +5,11 @@ Usage: render_clip.py <job.json> [--track-only]
 Pipeline (frame-accurate, no libass needed):
   1. Track: sample the clip at ~6 fps, detect faces (OpenCV Haar, frontal + profile), keep the
      speaker with a continuity bias, then turn the samples into a smooth camera path
-     (outlier rejection -> dead-zone spring -> zero-phase smoothing). Ideas from
-     AI-Youtube-Shorts-Generator (local/clipper.py), clipsmith (camera_path) and
-     Autocrop-vertical (frame pipe to ffmpeg).
+     (outlier rejection -> dead-zone spring -> zero-phase smoothing).
   2. Render: ffmpeg decodes the source -> Python crops each frame on the camera path, scales to
      1080x1920 and draws word-by-word captions with Pillow -> ffmpeg encodes with the audio.
   3. Cuts: an optional list of keep-segments (removed words / tightened pauses) drops frames and
-     audio, and captions are re-timed onto the shortened clip (clipsmith trim.remap_words).
+     audio, and captions are re-timed onto the shortened clip.
 
 Progress lines: "PROGRESS <0-100> <message>" on stderr. With --track-only, only step 1 runs and the
 camera path is written to job["trackOut"] (used by the editor preview).
@@ -252,7 +250,7 @@ def remap(t: float, keep):
 
 
 def remap_words(words, clip_start: float, keep):
-    """Words re-timed onto the shortened clip (clipsmith trim.remap_words)."""
+    """Words re-timed onto the shortened clip."""
     out = []
     for w in words:
         a, b = w["start"] - clip_start, w["end"] - clip_start

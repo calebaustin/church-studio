@@ -3,7 +3,7 @@
 Usage: transcribe.py <wav> [--model small] [--offset 0] [--prompt "names to spell right"]
 
 Progress goes to stderr as "PROGRESS <0-100>" lines. Runs on CUDA when available, otherwise
-the CPU with int8 (fine on Apple Silicon). Adapted from VGP Clips scripts/transcribe.py.
+the CPU with int8 (fine on Apple Silicon).
 """
 
 import argparse

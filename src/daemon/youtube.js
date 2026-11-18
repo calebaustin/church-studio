@@ -1,6 +1,5 @@
 // YouTube ingest with yt-dlp: list the owner's channel (uploads + past livestreams) and
 // download one video into a project. No login and no API key needed.
-// Adapted from VGP Clips src/episodes.js (recentEpisodes / addEpisodeUrl).
 import { copyFile, mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';

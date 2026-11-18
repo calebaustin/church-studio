@@ -1,9 +1,8 @@
 # Social hub
 
-Post exported clips to your accounts now, on a schedule, or save drafts. Built on LightPost's model (MIT):
-bring-your-own credentials, encrypted locally, persistent queue, per-destination results with retry.
-Postiz (AGPL-3.0) was used only as a reference for which platform endpoints exist — **no Postiz code is
-copied**, so this app isn't bound by AGPL.
+Post exported clips to your accounts now, on a schedule, or save drafts. You bring your own credentials,
+they're encrypted on this Mac, scheduled posts wait in a queue that survives restarts, and each destination
+reports its own result with a retry.
 
 ## Direct upload (from this Mac)
 

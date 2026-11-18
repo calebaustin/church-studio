@@ -1,5 +1,5 @@
 // Writing from a sermon: blog post, email summary, small group guide, social captions.
-// Offline and extractive: every sentence comes from the sermon itself (claude-blog's honesty rule:
+// Offline and extractive: every sentence comes from the sermon itself (the honesty rule:
 // never invent stories, numbers or quotes). Anything the writer must add is a [bracketed] placeholder.
 // An optional AI helper can polish a draft afterwards.
 import { existsSync } from 'node:fs';

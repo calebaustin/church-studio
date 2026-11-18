@@ -12,7 +12,7 @@ import { libraryFile } from './library.js';
 
 /**
  * Parts of the clip to keep, in seconds from its start. Removes cut words and, when asked,
- * shortens pauses between words to `maxPause` (VGP CL3 "tighten pauses").
+ * shortens pauses between words to `maxPause` ("tighten pauses").
  */
 export function keepSegments(words, clip, { maxPause = clip?.pauseMax ?? 0.45, pad = 0.08 } = {}) {
   const len = clip.end - clip.start;

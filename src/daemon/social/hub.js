@@ -1,6 +1,6 @@
 // Social hub engine: create posts, publish now or on schedule, track every destination.
 // Scheduling runs inside the daemon, so the app must be open for scheduled posts to go out;
-// overdue posts publish as soon as it starts again (LightPost "persistent queue" behaviour).
+// overdue posts publish as soon as it starts again.
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, statSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';

@@ -1,45 +1,35 @@
 # Architecture
 
 ## Shape
-Electron app (own window) → local Node daemon (HTTP on localhost) → Python venv (Whisper,
-face tracking) + ffmpeg/yt-dlp. UI is a Vite web app loaded by Electron; same code runs in
-a browser for dev.
+Electron window → local Node engine (HTTP on 127.0.0.1) → Python media engine (Whisper, OpenCV, Pillow)
+and ffmpeg / yt-dlp. The UI is a React + Vite app loaded by Electron; the same code runs in a browser for dev.
 
 ```
-ui/ (React/Vite)  --HTTP-->  daemon (Node)  --spawn-->  python scripts/*.py
-                                    \--spawn--> ffmpeg / yt-dlp
-data/  projects/  config.local.json   (local only, gitignored)
+src/ui (React/Vite)  --HTTP-->  src/daemon (Node)  --spawn-->  scripts/*.py (or the bundled sc-media)
+                                       \--spawn-->  ffmpeg / yt-dlp
+data/  projects/  config.local.json   (local only, never in git)
 ```
 
-## Modules (mirror VGP, rename domains)
-- `youtube.js` — list owner's channel videos (yt-dlp flat-playlist) + download by URL.
-- `sermon.js` — (NEW) detect sermon start/end in a full service video via transcript + Claude.
-- `analyze.js` — extractWav, transcribeWav (word timestamps), findSpeakers/fingerprints.
-- `clips.js` — propose N clip cuts from transcript (start phrase, summary, end phrase).
-- `crop.js` — (NEW) face-track the speaker → per-frame crop x → smooth → ffmpeg crop to 9:16.
-- `captions.js` — burn live captions (word-by-word) per saved theme.
-- `render.js` — final 1080x1920 export (VGP render pipeline adapted).
-- `themes.js` — (NEW) theme tokens + import-from-URL (colors/fonts extraction).
-- `settings.js` / `looks.js` / `history.js` / `library.js` — as in VGP.
+## Engine modules (`src/daemon`)
+- `youtube.js`: list the channel, read captions to find the sermon, download all or part of a video.
+- `transcribe.js` + `scripts/transcribe.py`: faster-whisper with word timestamps; Bible references tidied by `scripture.js`.
+- `sermon.js`: find the sermon inside a full service.
+- `clips.js` + `pipeline.js`: offline clip scoring; an optional AI helper can rerank.
+- `render.js` + `scripts/render_clip.py`: speaker tracking, framing, captions, export presets.
+- `writing.js`: blog post, email, small group guide and captions from the transcript; suggestions and rewrites.
+- `designs.js`, `library.js`, `finder.js`: designs, the brand library folder, and All projects.
+- `social/`: accounts, encrypted credentials, scheduler, platform uploads.
+- `updates.js`: update checks, downloads, backups and data migrations.
+- `ai.js`: optional AI helpers and the "working locally" fallback.
 
 ## Data
-- `config.local.json` — keys, channel, folders, default look/theme.
-- `data/hosts.json`, `data/looks.json`, `data/themes.json`, `data/music/`.
-- `projects/<id>/` — source, audio.wav, transcript, clips, exports.
-- `episodes/<id>/` — full service videos (VGP FS2 layout).
+- `config.local.json`: settings and optional keys.
+- `data/`: themes, writing drafts, designs, folders, social accounts (encrypted), speaker hints.
+- `projects/<id>/`: source video, transcript, clips and their exports.
+- Packaged app: all of the above lives in `~/Library/Application Support/Church Studio`.
 
-## Export
-Default `final.mp4` 1080x1920. Optional wide/square copies later (VGP CL21).
-
-## Auto-center crop (new)
-1. Run Python face detection per frame (or sampled) on the 16:9 source → (x_center, y) per frame.
-2. Smooth with a moving average / spring; clamp to valid crop window for 9:16.
-3. Generate an ffmpeg crop filter with interpolated x (or use a crop expression). Prefer
-   producing a crop-offset CSV and using ffmpeg's `crop` with `x='...'` expression, or
-   re-encode via Python/OpenCV if ffmpeg expr is too limited.
-4. Keep the speaker's face in the upper third (rule of thirds) for vertical.
-
-## Theme import from URL (new)
-Fetch the URL, parse CSS for custom properties / computed styles, extract dominant colors
-and font-family declarations; present as a candidate theme; user confirms. Use a headless
-browser (Playwright) or cheerio + css. Store as a theme in `data/themes.json`.
+## Speaker framing
+1. Look at the clip about six times a second and detect faces.
+2. Pick the speaker with a continuity bias and the user's saved "click the speaker" hints.
+3. Turn positions into a smooth camera path (Follow closely to Smooth glide), or follow timestamp cues.
+4. Crop each frame to 9:16 (or draw whole frame / three stack layouts) and pipe to ffmpeg.

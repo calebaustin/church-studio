@@ -1,5 +1,5 @@
 // Propose clip cuts from a sermon transcript. Default engine is rule-based and fully offline
-// (adapted from clipsmith `select_heuristic`, retuned for preaching). An optional LLM can
+// (tuned for preaching). An optional LLM can
 // re-rank and retitle the heuristic's candidates (ai.js); if it fails we keep the heuristic.
 import { randomUUID } from 'node:crypto';
 import { toSentences, backgroundOf, keywords, firstWords, lastWords, tokens } from './text.js';

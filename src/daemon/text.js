@@ -2,7 +2,7 @@
 
 /**
  * Group words into sentences. Whisper punctuates well, but long run-ons and pauses also
- * break lines (clipsmith `to_sentences`). Each sentence keeps word index bounds.
+ * break lines. Each sentence keeps word index bounds.
  */
 export function toSentences(words, { maxWords = 28, gap = 0.9 } = {}) {
   const out = [];

@@ -16,7 +16,7 @@ const FILLERS = new Set(['um', 'uh', 'uhm', 'umm', 'er', 'erm', 'ah']);
 const FRAME_W = 340;
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
-/** Undo/redo over a clip's editable state (VGP CL10 pattern). */
+/** Undo/redo over a clip's editable state. */
 function useHistory(initial) {
   const [state, setState] = useState({ past: [], present: initial, future: [] });
   const set = useCallback((next) => setState((s) => ({ past: [...s.past.slice(-80), s.present], present: typeof next === 'function' ? next(s.present) : next, future: [] })), []);

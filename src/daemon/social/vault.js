@@ -1,4 +1,4 @@
-// AES-256-GCM encryption for social account credentials (pattern from LightPost security.py, MIT).
+// AES-256-GCM encryption for social account credentials.
 // The key is generated once into data/social/credentials.key (mode 600). Back up the whole data/
 // folder together: without the key, saved accounts can't be unlocked and must be reconnected.
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';

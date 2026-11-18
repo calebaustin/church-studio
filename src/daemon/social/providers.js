@@ -2,8 +2,7 @@
 //   verify(creds)                       -> { name, handle?, url? }   (no test post is made)
 //   publish({ creds, file, caption, title, post, log }) -> { url, remoteId, credentials? }
 // `credentials` is returned when tokens were refreshed and must be re-saved.
-// API flows follow each platform's public docs; Postiz (AGPL) and LightPost (MIT) were used only as
-// references for which endpoints exist — no code was copied from Postiz.
+// API flows follow each platform's public docs.
 import { openAsBlob, statSync } from 'node:fs';
 import path from 'node:path';
 

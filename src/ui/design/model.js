@@ -24,7 +24,7 @@ export const SIZE_PRESETS = [
 // ---------------------------------------------------------------- colors
 const hex2rgb = (h) => { const x = String(h).replace('#', ''); return [0, 2, 4].map((i) => parseInt(x.slice(i, i + 2), 16) || 0); };
 const rgb2hex = (r) => `#${r.map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('')}`.toUpperCase();
-/** Cohesive palette: multiply each color toward one tint (the cohesive-colors idea, BSD). */
+/** Cohesive palette: multiply each color toward one tint. */
 export const cohesive = (colors, tint, amount) => colors.map((c) => {
   if (!amount) return c;
   const a = hex2rgb(c); const t = hex2rgb(tint);
