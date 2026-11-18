@@ -1,7 +1,7 @@
 // Brand library: a normal folder in Documents (Photos, Logos, Graphics, Brand) that the app reads.
 // Drop files in with Finder; every tool can use them. Graphics made in the app are saved here too.
 import { existsSync } from 'node:fs';
-import { copyFile, mkdir, readdir, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readdir, rename, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { APP_NAME, WORKSPACE } from './tools.js';
@@ -19,6 +19,9 @@ export async function libraryRoot() {
 
 export async function ensureLibrary() {
   const root = await libraryRoot();
+  // The app used to be called Sermon Clips: keep using that library by renaming it once.
+  const old = root.replace(`${APP_NAME} Library`, 'Sermon Clips Library');
+  if (old !== root && !existsSync(root) && existsSync(old)) await rename(old, root).catch(() => {});
   for (const f of FOLDERS) await mkdir(path.join(root, f), { recursive: true });
   return root;
 }

@@ -447,7 +447,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       try {
         const a = await social.finishGoogleAuth(Object.fromEntries(url.searchParams));
-        return res.end(page('YouTube connected', `“${esc(a.name)}” is ready in Sermon Clips. You can close this tab.`));
+        return res.end(page('YouTube connected', `“${esc(a.name)}” is ready in Church Studio. You can close this tab.`));
       } catch (e) {
         return res.end(page('Couldn’t connect YouTube', esc(e.message)));
       }
@@ -466,7 +466,7 @@ const server = http.createServer(async (req, res) => {
       return streamFile(req, res, file);
     }
     // Built UI (production). In dev, Vite serves the UI and proxies /api + /media here.
-    if (!existsSync(UI_DIR)) { res.writeHead(200, { 'content-type': 'text/plain' }); return res.end('Sermon Clips daemon is running. Build the UI with: npm run build'); }
+    if (!existsSync(UI_DIR)) { res.writeHead(200, { 'content-type': 'text/plain' }); return res.end('Church Studio engine is running. Build the UI with: npm run build'); }
     let file = safeJoin(UI_DIR, `.${url.pathname}`);
     if (!file || !existsSync(file) || statSync(file).isDirectory()) file = path.join(UI_DIR, 'index.html');
     return streamFile(req, res, file);
@@ -479,7 +479,7 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, HOST, () => {
   social.startScheduler().catch((e) => console.error('[social] scheduler failed to start', e));
-  console.log(`Sermon Clips daemon on http://${HOST}:${PORT}`);
+  console.log(`Church Studio engine on http://${HOST}:${PORT}`);
   process.send?.({ ready: true, port: PORT });
 });
 

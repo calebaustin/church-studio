@@ -1,4 +1,4 @@
-# Sermon Clips — Claude Code kickoff
+# Church Studio (formerly Sermon Clips) — Claude Code kickoff
 
 You are working in `/Users/caleb/Documents/AI Docs/Sermon Clips`. Read this file and the docs in `docs/` first. The app is built; see README.md for how to run and package it.
 

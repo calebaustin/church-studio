@@ -1,6 +1,7 @@
 // Electron shell: own window, starts the local daemon, loads the UI from it.
 const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const { fork } = require('node:child_process');
+const fs = require('node:fs');
 const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
@@ -15,7 +16,7 @@ function startDaemon() {
       cwd: ROOT,
       env: {
         ...process.env, ELECTRON_RUN_AS_NODE: '1', SC_PORT: String(PORT),
-        // Packaged: data in ~/Library/Application Support/Sermon Clips, bundled tools in Resources.
+        // Packaged: data in ~/Library/Application Support/Church Studio, bundled tools in Resources.
         ...(app.isPackaged ? { SC_HOME: app.getPath('userData'), SC_RESOURCES: process.resourcesPath } : {}),
       },
       stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
@@ -26,7 +27,7 @@ function startDaemon() {
       clearTimeout(timer);
       if (code === 75) {
         // Switching workspaces: start the engine again and reload the window.
-        startDaemon().then(() => mainWindow?.reload()).catch((e) => dialog.showErrorBox('Sermon Clips', e.message));
+        startDaemon().then(() => mainWindow?.reload()).catch((e) => dialog.showErrorBox('Church Studio', e.message));
         return;
       }
       if (code) reject(new Error(`Daemon exited ${code}`));
@@ -37,7 +38,7 @@ function startDaemon() {
 async function createWindow() {
   const win = new BrowserWindow({
     width: 1440, height: 920, minWidth: 1080, minHeight: 700,
-    title: 'Sermon Clips',
+    title: 'Church Studio',
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 18, y: 20 },
     backgroundColor: '#EEF2F8',
@@ -65,11 +66,31 @@ ipcMain.handle('pick-folder', async () => {
 });
 ipcMain.handle('open-external', (_e, url) => { if (/^https:\/\//.test(url)) shell.openExternal(url); });
 
+/** The app used to be called Sermon Clips. Move its data to the new folder once, keeping workspace paths valid. */
+function migrateOldData() {
+  if (!app.isPackaged) return;
+  const now = app.getPath('userData');
+  const old = path.join(path.dirname(now), 'Sermon Clips');
+  if (!fs.existsSync(old) || fs.existsSync(path.join(now, 'config.local.json'))) return;
+  try {
+    fs.mkdirSync(now, { recursive: true });
+    for (const name of fs.readdirSync(old)) {
+      const to = path.join(now, name);
+      if (!fs.existsSync(to)) fs.renameSync(path.join(old, name), to);
+    }
+    const reg = path.join(now, 'workspaces.json');
+    if (fs.existsSync(reg)) fs.writeFileSync(reg, fs.readFileSync(reg, 'utf8').split(JSON.stringify(old).slice(1, -1)).join(JSON.stringify(now).slice(1, -1)));
+  } catch (e) { console.error('Could not move old data:', e.message); }
+}
+
 app.whenReady().then(async () => {
+  const icon = path.join(ROOT, 'assets', 'build', 'icon.png');
+  if (!app.isPackaged && process.platform === 'darwin' && fs.existsSync(icon)) app.dock.setIcon(icon);
+  migrateOldData();
   try {
     await startDaemon();
   } catch (e) {
-    dialog.showErrorBox('Sermon Clips couldn’t start', app.isPackaged ? e.message : `${e.message}\n\nRun scripts/setup.sh and try again.`);
+    dialog.showErrorBox('Church Studio couldn’t start', app.isPackaged ? e.message : `${e.message}\n\nRun scripts/setup.sh and try again.`);
     app.quit();
     return;
   }

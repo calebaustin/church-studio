@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 /** Where workspaces are registered: Application Support when packaged, the project folder in dev. */
 export const BASE = process.env.SC_HOME || ROOT;
-export const APP_NAME = 'Sermon Clips';
+export const APP_NAME = 'Church Studio';
 function activeWorkspace() {
   try {
     const reg = JSON.parse(readFileSync(path.join(BASE, 'workspaces.json'), 'utf8'));
@@ -222,7 +222,7 @@ export const TOOL_INFO = {
 
 /** Try to fix one helper. Packaged builds carry everything, so a repair there means reinstalling. */
 export async function repairTool(name, ctx) {
-  if (mediaHelper()) throw new Error('This helper ships inside the app. Reinstall Sermon Clips to repair it.');
+  if (mediaHelper()) throw new Error('This helper ships inside the app. Reinstall Church Studio to repair it.');
   const pip = venvBin('pip');
   if (name === 'ffmpeg' || name === 'ffprobe') {
     ctx?.progress(10, 'Reinstalling the video engine');

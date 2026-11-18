@@ -10,9 +10,9 @@
 
 Change these first. Everything else is built on them.
 
-| Item | M to M value | Sermon Clips |
+| Item | M to M value | Church Studio |
 |---|---|---|
-| App name and how it's written | "Minister To Minister" in full first, "M to M" after; lowercase in browser tabs and emails | "Sermon Clips" everywhere |
+| App name and how it's written | "Minister To Minister" in full first, "M to M" after; lowercase in browser tabs and emails | "Church Studio" everywhere |
 | Who it's for | Tired ministers who've been marketed to too much | Church media volunteers and pastors with a few minutes a week |
 | One-sentence promise | "You have something to share. Share it here, minister to minister." | "Pick a service. Get captioned vertical clips of the best moments." |
 | Primary color | Violet `#5b3df5` | Per theme: `--accent` (Sermon Light `#3D6BFF`) |
@@ -24,7 +24,7 @@ Change these first. Everything else is built on them.
 | Code prefix for classes and tokens | `mpm-` | none (tokens are `--bg`, `--ink`, …; see `src/ui/styles.css`) |
 | Words that must never be used | "organization," "customer base," "content" (say church, ministry, resources) | "content," "leverage," "AI-powered"; no em dashes in UI copy |
 
-**Sermon Clips notes:** this is a desktop app (Electron), so phone-first rules apply to the window at its minimum
+**Church Studio notes:** this is a desktop app (Electron), so phone-first rules apply to the window at its minimum
 width (1080px) rather than 390px. Themes set only base tokens; everything else is derived in `src/ui/styles.css`,
 and dark themes set `mode: 'dark'`.
 

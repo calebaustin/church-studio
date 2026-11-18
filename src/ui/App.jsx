@@ -36,6 +36,17 @@ export function activeAppTheme(config, themes) {
   return themes.app.find((t) => t.id === id) || fallback;
 }
 
+/** Selah mark: white lines on the theme's accent (green by default in the app icon). */
+function BrandMark() {
+  return (
+    <span className="brand-mark" aria-hidden="true">
+      <svg viewBox="0 0 180 180"><g fill="none" stroke="currentColor" strokeWidth="11" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="56" y="26" width="68" height="128" rx="14" /><path d="M90 50V98M74 66H106M70 120H110M80 134H100" />
+      </g></svg>
+    </span>
+  );
+}
+
 export default function App() {
   const [route, setRoute] = useState({ name: 'home' });
   const [config, setConfig] = useState(null);
@@ -166,7 +177,7 @@ export default function App() {
           <div className="glass strong panel stack" style={{ maxWidth: 520 }}>
             <h2>The local engine isn't answering</h2>
             <p className="muted">{error}</p>
-            <p className="muted small">Quit Sermon Clips and open it again. If you run it from Terminal, use <span className="mono">npm start</span>.</p>
+            <p className="muted small">Quit Church Studio and open it again. If you run it from Terminal, use <span className="mono">npm start</span>.</p>
           </div>
         </div>
       </div>
@@ -192,7 +203,7 @@ export default function App() {
       <div className={`shell ${config?.refraction === false ? '' : 'refract'}`}>
         <aside className="sidebar glass">
           <div className="side-drag" />
-          <div className="brand"><span className="brand-mark" />Sermon Clips</div>
+          <div className="brand"><BrandMark /><span>Church Studio</span></div>
           <nav className="side-nav" aria-label="Main">
             {nav.map(([name, label, Icon, on]) => (
               <button key={name} className={on ? 'on' : ''} aria-current={on ? 'page' : undefined} onClick={() => go({ name })}>

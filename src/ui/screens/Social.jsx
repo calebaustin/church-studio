@@ -142,7 +142,7 @@ function PostRow({ post, s, plat, onEdit }) {
         {['draft', 'scheduled'].includes(post.status) && <button className="btn sm" onClick={() => onEdit(post)}>Edit</button>}
         {['draft', 'scheduled'].includes(post.status) && post.destinations.length > 0 && <button className="btn primary sm" onClick={() => act(() => api.post(`/api/social/posts/${post.id}/publish`))}>Post now</button>}
         {['failed', 'partial'].includes(post.status) && post.destinations.some((d) => d.status === 'failed') && <button className="btn primary sm" onClick={() => act(() => api.post(`/api/social/posts/${post.id}/retry`))}>Retry failed</button>}
-        {post.status !== 'publishing' && <button className="btn ghost sm danger" onClick={() => confirm(`Delete “${post.title || 'this post'}” from Sermon Clips? Anything already posted stays on the platform.`) && act(() => api.del(`/api/social/posts/${post.id}`))}>Delete</button>}
+        {post.status !== 'publishing' && <button className="btn ghost sm danger" onClick={() => confirm(`Delete “${post.title || 'this post'}” from Church Studio? Anything already posted stays on the platform.`) && act(() => api.del(`/api/social/posts/${post.id}`))}>Delete</button>}
       </div>
     </div>
   );
@@ -324,7 +324,7 @@ function ConnectForm({ platform: p, onDone }) {
             <input className="input mono" type={f.secret ? 'password' : 'text'} autoComplete="off" spellCheck={false} value={creds[f.key] || ''} onChange={(e) => setCreds({ ...creds, [f.key]: e.target.value })} />
           </label>
         ))}
-        <label className="field">Name in Sermon Clips <span className="hint">Optional, e.g. “Main church page”</span>
+        <label className="field">Name in Church Studio <span className="hint">Optional, e.g. “Main church page”</span>
           <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} />
         </label>
       </div>

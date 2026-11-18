@@ -1,4 +1,4 @@
-# Sermon Clips
+# Church Studio
 
 A Mac app that turns a sermon into short, captioned clips and helps you post them.
 No login, no cloud, no API keys required.
@@ -15,12 +15,12 @@ npm test                # engine tests (no network)
 ## Package it as one app
 
 ```sh
-scripts/build-app.sh    # -> dist/release/Sermon Clips-<version>-arm64.dmg
+scripts/build-app.sh    # -> dist/release/Church Studio-<version>-arm64.dmg
 ```
 
 The `.app` contains everything: a frozen Python media engine (`sc-media`: Whisper, OpenCV, Pillow,
 yt-dlp), static ffmpeg/ffprobe, fonts, the UI and the local daemon. Nothing else needs installing.
-Data lives in `~/Library/Application Support/Sermon Clips`. The Whisper model downloads once on first
+Data lives in `~/Library/Application Support/Church Studio`. The Whisper model downloads once on first
 transcription. The build is unsigned, so the first launch needs right-click > Open.
 
 ## How it works

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build "Sermon Clips.app" (and a .dmg) with everything inside: no Homebrew, Python or Node needed
+# Build "Church Studio.app" (and a .dmg) with everything inside: no Homebrew, Python or Node needed
 # on the computer that runs it. Run on an Apple Silicon Mac after scripts/setup.sh.
 #   1. Freeze the Python media engine (Whisper, OpenCV, Pillow, yt-dlp) into build/sc-media
 #   2. Copy static ffmpeg + ffprobe into build/bin

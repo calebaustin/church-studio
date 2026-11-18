@@ -1,5 +1,5 @@
 {
-  "name": "sermon-clips",
+  "name": "church-studio",
   "version": "0.1.0",
   "private": true,
   "description": "Local desktop app: sermon video -> captioned, auto-centered 9:16 clips. Offline, no LLM required.",
@@ -44,10 +44,10 @@
     "ffmpeg-static@5.3.0": true,
     "@ffprobe-installer/darwin-arm64@5.0.1": true
   },
-  "productName": "Sermon Clips",
+  "productName": "Church Studio",
   "build": {
-    "appId": "app.sermonclips.desktop",
-    "productName": "Sermon Clips",
+    "appId": "app.churchstudio.desktop",
+    "productName": "Church Studio",
     "directories": {
       "output": "dist/release",
       "buildResources": "assets/build"
@@ -88,7 +88,7 @@
       "darkModeSupport": true
     },
     "dmg": {
-      "title": "Sermon Clips"
+      "title": "Church Studio"
     }
   }
 }
