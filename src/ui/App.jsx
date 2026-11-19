@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { Settings as SettingsIcon, HardDrive, LayoutDashboard, MonitorPlay, UserRound } from 'lucide-react';
+import { Settings as SettingsIcon, HardDrive, LayoutDashboard, MonitorPlay, UserRound, Search } from 'lucide-react';
 import { enabledTools, isOn } from './tools.js';
 import { makeDockIcon } from './dockIcon.js';
 import SideCards from './components/SideCards.jsx';
@@ -13,7 +13,8 @@ import Writing from './screens/Writing.jsx';
 import AllProjects from './screens/AllProjects.jsx';
 import Graphics from './screens/Graphics.jsx';
 import BrandLibrary from './screens/BrandLibrary.jsx';
-import Inspiration from './screens/Inspiration.jsx';
+import CalendarScreen from './screens/CalendarScreen.jsx';
+import SearchPalette from './components/SearchPalette.jsx';
 import MyApp from './screens/MyApp.jsx';
 import Project from './screens/Project.jsx';
 import Settings from './screens/Settings.jsx';
@@ -24,7 +25,7 @@ import { Toasts } from './components/Toasts.jsx';
 import Modal from './components/Modal.jsx';
 
 // Where the background color sits on each screen. It glides between spots as you move around.
-const SCENES = { home: 0, library: 1, project: 1, projects: 2, social: 3, writing: 2, graphics: 3, assets: 1, me: 2, settings: 0, inspiration: 3 };
+const SCENES = { home: 0, library: 1, project: 1, projects: 2, social: 3, writing: 2, graphics: 3, assets: 1, me: 2, settings: 0, inspiration: 3, calendar: 3 };
 const Ctx = createContext(null);
 export const useApp = () => useContext(Ctx);
 
@@ -61,6 +62,13 @@ export function useChurchLogo(config) {
 
 export default function App() {
   const [route, setRoute] = useState({ name: 'home' });
+  const [searching, setSearching] = useState(false);
+  // ⌘K (Ctrl+K) opens search from anywhere.
+  useEffect(() => {
+    const key = (e) => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setSearching((v) => !v); } };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  }, []);
   const [config, setConfig] = useState(null);
   const [keyGuide, setKeyGuide] = useState([]);
   const [themes, setThemes] = useState({ app: [], video: [], fonts: [], systemFonts: [] });
@@ -280,7 +288,7 @@ export default function App() {
 
   const nav = [
     ['home', 'Dashboard', LayoutDashboard, route.name === 'home'],
-    ...(config ? enabledTools(config) : []).map((t) => [t.id, t.label, t.icon, route.name === t.id || (t.id === 'library' && route.name === 'project')]),
+    ...(config ? enabledTools(config) : []).map((t) => [t.id, t.label, t.icon, route.name === t.id || (t.id === 'library' && route.name === 'project') || (t.id === 'calendar' && route.name === 'inspiration')]),
   ];
   const bottomNav = [
     ['me', 'My App', UserRound, route.name === 'me'],
@@ -297,6 +305,7 @@ export default function App() {
             {logo && <img className="brand-logo" src={logo.url} alt="" />}
             <span>Church Studio</span>
           </div>
+          <button className="side-search" onClick={() => setSearching(true)} title="Search everything (⌘K)"><Search size={14} /><span className="grow" style={{ textAlign: 'left' }}>Search</span><kbd>⌘K</kbd></button>
           <nav className="side-nav" aria-label="Main">
             {nav.map(([name, label, Icon, on]) => (
               <button key={name} className={on ? 'on' : ''} aria-current={on ? 'page' : undefined} onClick={() => go({ name })}>
@@ -325,18 +334,20 @@ export default function App() {
         <main className="main">
           <div className="top-drag" />
           {!config ? null : route.name === 'settings' ? <Settings section={route.section} key={route.section || 's'} />
-            : route.name === 'social' ? <Social compose={route.compose} caption={route.caption} campaign={route.campaign} key={(route.campaign ? `camp${route.campaign.event?.id || route.campaign.projectId || ''}` : '') + (route.compose?.clipId || route.compose?.design?.id || route.compose?.projectId || route.caption || 'social')} />
+            : route.name === 'social' && route.campaign ? <CalendarScreen campaign={route.campaign} key={`camp${route.campaign.event?.id || route.campaign.projectId || ''}`} />
+            : route.name === 'social' ? <Social compose={route.compose} caption={route.caption} key={route.compose?.clipId || route.compose?.design?.id || route.compose?.projectId || route.caption || 'social'} />
               : route.name === 'project' ? <Project id={route.id} initialStep={route.clip ? 'edit' : route.step} initialClip={route.clip} key={route.id + (route.step || '') + (route.clip || '')} />
                 : route.name === 'library' ? <Library openPicker={route.pick} key={route.pick ? 'pick' : 'lib'} />
                   : route.name === 'writing' ? <Writing project={route.project} kind={route.kind} key={(route.project || 'w') + (route.kind || '')} />
                     : route.name === 'projects' ? <AllProjects />
                     : route.name === 'graphics' ? <Graphics image={route.image} design={route.design} event={route.event} eventMode={route.eventMode} quote={route.quote} make={route.make} key={route.image || route.design || (route.event && `${route.event.id}${route.eventMode || ''}`) || route.quote || (route.make && `${route.make.projectId}${route.make.template}`) || 'g'} />
                       : route.name === 'assets' ? <BrandLibrary section={route.section} key={route.section || 'b'} />
-                        : route.name === 'inspiration' ? <Inspiration />
+                        : route.name === 'calendar' || route.name === 'inspiration' ? <CalendarScreen tab={route.name === 'inspiration' ? 'inspiration' : route.tab} campaign={route.campaign} key={`cal${route.tab || ''}${route.name}${route.campaign ? JSON.stringify(route.campaign).length : ''}`} />
                         : route.name === 'me' ? <MyApp section={route.section} key={route.section || 'me'} />
                   : <Dashboard />}
         </main>
       </div>
+      {searching && <SearchPalette onClose={() => setSearching(false)} />}
       <JobsTray />
       <Toasts toasts={toasts} dismiss={dismissToast} />
       {leaveAsk && (

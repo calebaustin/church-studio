@@ -40,6 +40,11 @@ export const DEFAULTS = {
   brandColorsSet: false, // the brand checklist: colors were chosen on purpose
   brandFontsSet: false,
   socialLinks: {}, // { facebook, instagram, youtube, ... } found by Jumpstart or added by hand
+  backupAuto: false, // a weekly backup, kept four deep
+  backupLibrary: false, // include the brand library in backups
+  backupFolder: '', // empty means Documents/Church Studio Backups
+  lastBackup: null,
+  teamFolder: '', // a synced cloud folder where shared projects go
   blogFeed: '', // the church blog's RSS or Atom feed, for Inspiration
   jumpstart: null, // { at, website } when the website setup ran
   dismissed: {}, // setup checklists the user closed

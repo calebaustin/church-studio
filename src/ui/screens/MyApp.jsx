@@ -16,7 +16,7 @@ function ideasFor(topics, sermons) {
     { title: 'Three-stack reel', about: 'The full shot three times. Great for wide stage cameras.', go: { name: 'library' }, tool: 'Clips' },
     { title: 'Announcement with a QR code', about: 'Event or giving link people can scan.', go: { name: 'graphics' }, tool: 'Design' },
     { title: 'Weekly email summary', about: 'Three takeaways and a link to watch.', go: { name: 'writing' }, tool: 'Writing' },
-    { title: 'Schedule the week', about: 'Plan a clip a day on the calendar.', go: { name: 'social' }, tool: 'Social' },
+    { title: 'Schedule the week', about: 'Plan a clip a day on the calendar.', go: { name: 'calendar' }, tool: 'Calendar' },
   ].filter(Boolean);
 }
 

@@ -345,9 +345,9 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
         trackJob(job);
       }} />}
 
-      {project.blank && (
+      {(project.blank || project.needsMedia) && (
         <div className="banner info">
-          <span className="grow">Started from scratch. Add text pop-ups and color now, or bring in a video or recording to work from.</span>
+          <span className="grow">{project.needsMedia ? 'This project was shared without its video. Add the video from your computer to preview and export clips. The transcript and clips stay.' : 'Started from scratch. Add text pop-ups and color now, or bring in a video or recording to work from.'}</span>
           {window.desktop?.pickMedia && <button className="btn sm primary" onClick={async () => {
             const f = await window.desktop.pickMedia();
             if (!f) return;

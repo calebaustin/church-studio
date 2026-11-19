@@ -1,7 +1,8 @@
+import { ShareProject } from '../components/Backups.jsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../App.jsx';
 import { api, fmt, fmtEta, media } from '../api.js';
-import { ArrowLeft, ArrowRight, Check, Square, Wand2, Download, Trash2, Plus, Send, FolderOpen, Copy, ScissorsLineDashed, AudioLines, ChevronDown, FileText, PenLine, Quote } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Square, Wand2, Download, Trash2, Plus, Send, FolderOpen, Copy, ScissorsLineDashed, AudioLines, ChevronDown, FileText, PenLine, Quote, Share2 } from 'lucide-react';
 import AudioCleanup from '../components/AudioCleanup.jsx';
 import ContentPlan from '../components/ContentPlan.jsx';
 import ClipEditor from './ClipEditor.jsx';
@@ -52,6 +53,7 @@ function TimeInput({ value, onChange }) {
 export default function Project({ id, initialStep, initialClip }) {
   const { go, trackJob, onJobFinished, jobs, confirmLeave } = useApp();
   const [project, setProject] = useState(null);
+  const [sharing, setSharing] = useState(false);
   const [transcript, setTranscript] = useState(null);
   const [step, setStep] = useState(null);
   const [selected, setSelected] = useState(null);
@@ -141,6 +143,7 @@ export default function Project({ id, initialStep, initialClip }) {
           <input className="input" style={{ fontWeight: 650, fontSize: 17, background: 'transparent', border: 0, boxShadow: 'none' }}
             defaultValue={project.title} onBlur={(e) => e.target.value.trim() && e.target.value !== project.title && patch({ title: e.target.value.trim() })} />
           <StatusChip status={project.status} />
+          <button className="btn ghost sm" title="Share this project with a teammate or another Mac" onClick={() => setSharing(true)}><Share2 size={14} />Share</button>
           <button className="btn ghost sm danger" title="Delete this sermon" onClick={async () => {
             if (!confirm(`Delete “${project.title}”? Its video, transcript, clips and exports in the project folder are removed from this Mac. This can't be undone.`)) return;
             await api.del(`/api/projects/${id}`); go({ name: 'library' });
@@ -181,6 +184,7 @@ export default function Project({ id, initialStep, initialClip }) {
       {step === 'exports' && <ExportsStep project={project} />}
       {step === 'text' && transcript && <TranscriptStep project={project} />}
       {step === 'plan' && <ContentPlan project={project} setStep={setStep} onChange={load} />}
+      {sharing && <ShareProject project={project} onClose={() => setSharing(false)} />}
     </div>
   );
 }

@@ -24,7 +24,7 @@ export default function ContentPlan({ project, setStep, onChange }) {
     if (p.designId) return go({ name: 'graphics', design: p.designId });
     if (p.group === 'Design') return go({ name: 'graphics', make: { projectId: project.id, template: p.id === 'quote' ? 'post-quote' : p.id } });
     if (p.id === 'podcast') return setPodcast(true);
-    if (p.id === 'posts') return go({ name: 'social', campaign: { projectId: project.id } });
+    if (p.id === 'posts') return go({ name: 'calendar', campaign: { projectId: project.id } });
     return null;
   };
   // Pieces someone sets aside stay as ideas but leave the ring, so it only counts what they care about.

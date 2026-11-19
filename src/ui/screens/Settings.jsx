@@ -1,3 +1,4 @@
+import Backups from '../components/Backups.jsx';
 import { useEffect, useRef, useState } from 'react';
 import { Plus, AlertTriangle } from 'lucide-react';
 import { useApp, applyAppTheme, activeAppTheme } from '../App.jsx';
@@ -20,6 +21,7 @@ const SECTIONS = [
   ['video-themes', 'Caption themes'],
   ['church', 'Church info'],
   ['tools', 'Helper programs'],
+  ['backups', 'Backups and sharing'],
   ['updates', 'Updates'],
   ['feedback', 'Send feedback'],
   ['credits', 'Thank you'],
@@ -48,6 +50,7 @@ export default function Settings({ section: initial }) {
         {section === 'video-themes' && <VideoThemes />}
         {section === 'church' && <section className="glass strong panel stack"><h2>Church info</h2><p className="muted">Printed guides and notes show this in the footer, next to your logo.</p><ChurchInfoFields /></section>}
         {section === 'church' && <AppLogo />}
+        {section === 'backups' && <Backups />}
         {section === 'updates' && <Updates />}
       </div>
     </div>

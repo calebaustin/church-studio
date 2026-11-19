@@ -18,6 +18,8 @@ import * as workspaces from './workspaces.js';
 import * as jumpstart from './jumpstart.js';
 import * as inspiration from './inspiration.js';
 import * as campaigns from './campaigns.js';
+import * as search from './search.js';
+import * as backup from './backup.js';
 import * as blog from './blog.js';
 import * as photos from './photos.js';
 import * as library from './library.js';
@@ -391,6 +393,20 @@ route('GET', '/api/social/media', async () => {
   return { media: out.sort((a, b) => String(b.at).localeCompare(String(a.at))) };
 });
 
+// ---------------------------------------------------------------- backups, portable projects, cloud folders
+route('GET', '/api/backups', async () => ({ ...(await backup.listBackups()), clouds: await backup.cloudFolders() }));
+route('POST', '/api/backups', async (_p, b) => { try { return await backup.backupNow({ includeLibrary: Boolean(b.includeLibrary) }); } catch (e) { throw new HttpError(400, e.message); } });
+route('POST', '/api/backups/restore', async (_p, b) => { try { return await backup.restoreBackup(String(b.file || '')); } catch (e) { throw new HttpError(400, e.message); } });
+route('POST', '/api/backups/reveal', async (_p, b) => { const f = path.resolve(String(b.file || '')); if (!existsSync(f) || !/(Backup|\.churchstudio\.zip$|Backups$)/.test(f)) throw new HttpError(400, 'Not a backup'); await revealInFinder(f); return { ok: true }; });
+route('POST', '/api/projects/:id/share', async ({ id }, b) => { try { return await backup.exportProject(id, { includeMedia: Boolean(b.includeMedia), folder: b.team ? (await loadConfig()).teamFolder || null : null }); } catch (e) { throw new HttpError(400, e.message); } });
+route('POST', '/api/projects/import', async (_p, b) => { try { return await backup.importProject(String(b.file || '')); } catch (e) { throw new HttpError(400, e.message); } });
+route('GET', '/api/team', async () => backup.teamFolder());
+
+// ---------------------------------------------------------------- search, tags, archive
+route('GET', '/api/search', async (_p, _b, u) => search.search(u?.searchParams?.get('q') || ''));
+route('PUT', '/api/finder/tags', async (_p, b) => { const tags = await finder.setTags(String(b.key || ''), b.tags); search.invalidateSearch(); return { tags }; });
+route('POST', '/api/finder/archive', async (_p, b) => finder.archive(String(b.key || ''), Boolean(b.on)));
+
 // ---------------------------------------------------------------- campaigns
 route('GET', '/api/campaigns', async () => ({ campaigns: await campaigns.listCampaigns() }));
 route('POST', '/api/campaigns/draft', async (_p, b) => { try { return await campaigns.draftCampaign(b || {}); } catch (e) { throw new HttpError(400, e.message); } });
@@ -698,6 +714,7 @@ try { upgrade = await updates.prepareUpgrade(); if (upgrade.upgraded) console.lo
 server.listen(PORT, HOST, () => {
   social.startScheduler().catch((e) => console.error('[social] scheduler failed to start', e));
   churchCal.refreshIfDue(); setInterval(() => churchCal.refreshIfDue(), 3600_000).unref();
+  setTimeout(() => backup.backupIfDue(), 3 * 60_000).unref(); // weekly backup, once things settle
   console.log(`Church Studio engine on http://${HOST}:${PORT}`);
   process.send?.({ ready: true, port: PORT });
 });

@@ -119,7 +119,7 @@ export default function Dashboard() {
     ['Find clips', Wand2, latest ? () => go({ name: 'project', id: latest.id }) : null, 'library'],
     ['Write', PenLine, () => go({ name: 'writing' }), 'writing'],
     ['Design', Shapes, () => go({ name: 'graphics' }), 'graphics'],
-    ['Schedule', CalendarClock, () => go({ name: 'social' }), 'social'],
+    ['Plan', CalendarClock, () => go({ name: 'calendar' }), 'calendar'],
     ['Export', Download, latest ? () => go({ name: 'project', id: latest.id, step: 'edit' }) : null, 'library'],
     ['Themes', Palette, () => go({ name: 'settings', section: 'video-themes' }), 'library'],
     ['Find a file', LayoutGrid, () => go({ name: 'projects' }), 'projects'],
@@ -380,7 +380,7 @@ function Widgets({ stats, extra, cal, onEvent }) {
   const cards = [
     events.length > 0 && ['events', use.events, (
       <div key="events" className="glass dash-widget">
-        <div className="row between"><span className="eyebrow"><CalendarDays size={13} /> Coming up</span><button className="btn ghost sm" onClick={() => go({ name: 'social' })}>Calendar<ArrowRight size={13} /></button></div>
+        <div className="row between"><span className="eyebrow"><CalendarDays size={13} /> Coming up</span><button className="btn ghost sm" onClick={() => go({ name: 'calendar' })}>Calendar<ArrowRight size={13} /></button></div>
         {events.map((e) => (
           <button key={e.id} className="feed-item" onClick={() => onEvent(e)}>
             <span className="date-tile"><span>{new Date(e.start).toLocaleDateString([], { month: 'short' })}</span><strong>{new Date(e.start).getDate()}</strong></span>

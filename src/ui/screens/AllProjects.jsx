@@ -2,12 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   ArrowUpDown, ChevronDown, Clapperboard, Clock, Info, Film, Folder, FolderOpen, FolderPlus, LayoutGrid, MoreHorizontal, PenLine, Pencil,
-  RotateCcw, Search, Shapes, Star, Trash2, X,
+  RotateCcw, Search, Shapes, Star, Trash2, X, Tag, Archive, Copy,
 } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { Masonry } from '../components/Masonry.jsx';
 import { api } from '../api.js';
 import Popover from '../components/Popover.jsx';
+import Modal, { ModalHead } from '../components/Modal.jsx';
 
 export const TYPES = {
   sermon: { label: 'Video', plural: 'Videos', icon: Clapperboard },
@@ -79,7 +80,8 @@ function ItemCard({ item, folders, inFolder, onOpen, act }) {
       <div className="item-meta">
         <div className="stack" style={{ gap: 3, minWidth: 0 }}>
           <strong className="truncate small" title={item.name}>{item.name}</strong>
-          <span className="row muted" style={{ gap: 6, fontSize: 12 }}><TypeBadge type={item.type} size={18} /><span className="truncate">{item.trashed ? `Deleted ${ago(item.at)}` : `Edited ${ago(item.updated)}`}</span></span>
+          <span className="row muted" style={{ gap: 6, fontSize: 12 }}><TypeBadge type={item.type} size={18} /><span className="truncate">{item.trashed ? `Deleted ${ago(item.at)}` : `Edited ${ago(item.updated)}`}{item.used ? ` · posted ${item.used}×` : ''}</span></span>
+          {item.tags?.length > 0 && <span className="row wrap" style={{ gap: 4 }}>{item.tags.slice(0, 3).map((t) => <span key={t} className="chip tag-chip">#{t}</span>)}</span>}
         </div>
         <div className="row" style={{ gap: 0, position: 'relative' }}>
           {!item.trashed && <button className={`rt-btn ${item.starred ? 'on star' : ''}`} aria-label={item.starred ? 'Unstar' : 'Star'} title={item.starred ? 'Unstar' : 'Star'} onClick={() => act('star', item)}><Star size={15} fill={item.starred ? 'currentColor' : 'none'} /></button>}
@@ -101,6 +103,8 @@ function ItemCard({ item, folders, inFolder, onOpen, act }) {
                 <>
                   <button className="pop-item" onClick={() => { setMenu(false); onOpen(); }}><span className="row" style={{ gap: 8 }}><FolderOpen size={14} />Open</span></button>
                   <button className="pop-item" onClick={() => setSub(true)}><span className="row" style={{ gap: 8 }}><Folder size={14} />Add to folder…</span></button>
+                  <button className="pop-item" onClick={() => { setMenu(false); act('tags', item); }}><span className="row" style={{ gap: 8 }}><Tag size={14} />Tags…</span></button>
+                  <button className="pop-item" onClick={() => { setMenu(false); act('archive', item); }}><span className="row" style={{ gap: 8 }}><Archive size={14} />{item.archived ? 'Take out of archive' : 'Archive'}</span></button>
                   <button className="pop-item" onClick={() => { setMenu(false); act('reveal', item); }}><span className="row" style={{ gap: 8 }}><Search size={14} />Show in Finder</span></button>
                   {inFolder && <button className="pop-item" onClick={() => { setMenu(false); act('remove', item, inFolder); }}><span className="row" style={{ gap: 8 }}><X size={14} />Remove from this folder</span></button>}
                   {(item.type === 'design' || item.type === 'writing') && <button className="pop-item danger-item" onClick={() => { setMenu(false); act('trash', item); }}><span className="row" style={{ gap: 8 }}><Trash2 size={14} />Move to trash</span></button>}
@@ -125,6 +129,7 @@ export default function AllProjects() {
   const [q, setQ] = useState('');
   const [moreFolders, setMoreFolders] = useState(false);
   const [naming, setNaming] = useState(null); // { id?, name, then? }
+  const [tagging, setTagging] = useState(null); // the item whose tags are being edited
   const load = () => api.get('/api/finder').then(setData).catch((e) => toast({ kind: 'error', text: e.message }));
   useEffect(() => { load(); }, []);
 
@@ -139,6 +144,8 @@ export default function AllProjects() {
     try {
       if (what === 'reveal') { await api.post('/api/finder/reveal', { key: item.key }); return; }
       if (what === 'star') await api.post('/api/finder/star', { key: item.key, on: !item.starred });
+      if (what === 'tags') return setTagging(item);
+      if (what === 'archive') { await api.post('/api/finder/archive', { key: item.key, on: !item.archived }); toast({ text: item.archived ? `“${item.name}” is back.` : `“${item.name}” archived. Find it under Archive, or with search.` }); }
       if (what === 'add') { await api.post(`/api/finder/folders/${folderId}/items`, { key: item.key }); toast({ text: `Added to ${data.folders.find((f) => f.id === folderId)?.name}.` }); }
       if (what === 'remove') await api.post(`/api/finder/folders/${folderId}/remove`, { key: item.key });
       if (what === 'new-folder') return setNaming({ name: '', then: item.key });
@@ -163,9 +170,20 @@ export default function AllProjects() {
   const folder = view.name === 'folder' ? data?.folders.find((f) => f.id === view.id) : null;
   const folderKeys = useMemo(() => (folder ? new Set(data.items.filter((i) => i.folders.includes(folder.id)).map((i) => i.key)) : null), [data, folder]);
   const ql = q.trim().toLowerCase();
+  // Possible duplicates: the same kind of thing with the same name (ignoring "copy" and numbers).
+  const dupeKeys = useMemo(() => {
+    const groups = new Map();
+    for (const i of data?.items || []) {
+      const k = `${i.type}:${String(i.name).toLowerCase().replace(/\b(copy|\(\d+\)|\d+)$/g, '').replace(/[^a-z0-9]+/g, ' ').trim()}`;
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(i.key);
+    }
+    return new Set([...groups.values()].filter((g) => g.length > 1).flat());
+  }, [data]);
+  const allTags = useMemo(() => { const m = new Map(); for (const i of data?.items || []) for (const t of i.tags || []) m.set(t, (m.get(t) || 0) + 1); return [...m.entries()].sort((a, b) => b[1] - a[1]); }, [data]);
   let items = !data ? [] : view.name === 'trash' ? data.trash.map((t) => ({ ...t, trashed: true }))
-    : data.items.filter((i) => (view.name === 'starred' ? i.starred : view.name === 'recents' ? Date.now() - Date.parse(i.updated || 0) < 30 * 86400_000 : view.name === 'folder' ? folderKeys.has(i.key) : true));
-  items = items.filter((i) => (type === 'all' || i.type === type) && (!ql || i.name.toLowerCase().includes(ql)));
+    : data.items.filter((i) => (view.name === 'archive' ? i.archived : i.archived ? false : view.name === 'starred' ? i.starred : view.name === 'recents' ? Date.now() - Date.parse(i.updated || 0) < 30 * 86400_000 : view.name === 'folder' ? folderKeys.has(i.key) : view.name === 'tag' ? i.tags?.includes(view.tag) : view.name === 'dupes' ? dupeKeys.has(i.key) : true));
+  items = items.filter((i) => (type === 'all' || i.type === type) && (!ql || `${i.name} ${(i.tags || []).join(' ')}`.toLowerCase().includes(ql)));
   const KIND_ORDER = ['sermon', 'clip', 'writing', 'design'];
   const byName = (a, b) => String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base', numeric: true });
   const byRecent = (a, b) => String(b.updated || b.at || '').localeCompare(String(a.updated || a.at || ''));
@@ -175,7 +193,7 @@ export default function AllProjects() {
   const folders = (data?.folders || []).filter((f) => (view.name === 'starred' ? f.starred : true) && (!ql || f.name.toLowerCase().includes(ql)))
     .sort((a, b) => Number(b.starred) - Number(a.starred) || (sort === 'name' ? byName(a, b) : String(b.updated).localeCompare(String(a.updated))));
   const showFolders = (view.name === 'all' || view.name === 'starred') && type === 'all';
-  const title = { all: 'All projects', recents: 'Recents', starred: 'Starred', trash: 'Trash' }[view.name] || folder?.name || 'Folder';
+  const title = { all: 'All projects', recents: 'Recents', starred: 'Starred', trash: 'Trash', archive: 'Archive', dupes: 'Possible duplicates' }[view.name] || (view.name === 'tag' ? `#${view.tag}` : folder?.name || 'Folder');
   const counts = useMemo(() => Object.fromEntries(Object.keys(TYPES).map((t) => [t, (data?.items || []).filter((i) => i.type === t).length])), [data]);
 
   const NavItem = ({ v, icon: I, label, count }) => (
@@ -196,7 +214,13 @@ export default function AllProjects() {
             <Folder size={16} /><span className="grow truncate">{f.name}</span>{f.starred && <Star size={12} className="star-on" />}
           </button>
         ))}
+        {allTags.length > 0 && <span className="eyebrow" style={{ padding: '14px 10px 4px' }}>Tags</span>}
+        {allTags.slice(0, 12).map(([t, n]) => (
+          <button key={t} className={view.name === 'tag' && view.tag === t ? 'on' : ''} onClick={() => setView({ name: 'tag', tag: t })}><Tag size={15} /><span className="grow truncate">{t}</span><span className="muted small">{n}</span></button>
+        ))}
         <div className="grow" />
+        {dupeKeys.size > 0 && <NavItem v="dupes" icon={Copy} label="Possible duplicates" count={dupeKeys.size} />}
+        <NavItem v="archive" icon={Archive} label="Archive" count={(data?.items || []).filter((i) => i.archived).length || undefined} />
         <NavItem v="trash" icon={Trash2} label="Trash" count={data?.trash.length} />
       </aside>
 
@@ -263,6 +287,7 @@ export default function AllProjects() {
         </section>
       </div>
 
+      {tagging && <TagEditor item={tagging} all={allTags.map(([t]) => t)} onClose={() => setTagging(null)} onSaved={() => { setTagging(null); load(); }} />}
       {naming && createPortal(
         <div className="scrim" onMouseDown={(e) => e.target === e.currentTarget && setNaming(null)}>
           <form className="glass strong modal stack" style={{ width: 'min(420px, calc(100vw - 32px))' }} onSubmit={(e) => { e.preventDefault(); saveName(); }}>
@@ -274,5 +299,24 @@ export default function AllProjects() {
         document.body,
       )}
     </div>
+  );
+}
+
+/** Tags for one item: type and press Enter, or pick one you've used before. */
+function TagEditor({ item, all, onClose, onSaved }) {
+  const [tags, setTags] = useState(item.tags || []);
+  const [t, setT] = useState('');
+  const add = (x) => { const v = x.trim().toLowerCase().replace(/^#/, ''); if (v && !tags.includes(v)) setTags([...tags, v]); setT(''); };
+  const save = async () => { await api.put('/api/finder/tags', { key: item.key, tags: t.trim() ? [...tags, t.trim()] : tags }); onSaved(); };
+  const suggestions = all.filter((x) => !tags.includes(x) && (!t || x.includes(t.toLowerCase()))).slice(0, 10);
+  return (
+    <Modal onClose={onClose} width={480} label="Tags" footer={<><span className="hint">Tags help you find things in search and in All projects.</span><button className="btn primary" onClick={save}>Save</button></>}>
+      <ModalHead title="Tags" sub={item.name} />
+      <div className="row wrap" style={{ gap: 6 }}>
+        {tags.map((x) => <span key={x} className="chip theme-chip">#{x}<button aria-label={`Remove ${x}`} onClick={() => setTags(tags.filter((y) => y !== x))}><X size={11} /></button></span>)}
+        <input className="input" style={{ width: 200 }} value={t} autoFocus placeholder="Add a tag, like easter" onChange={(e) => setT(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add(t); } }} />
+      </div>
+      {suggestions.length > 0 && <div className="row wrap" style={{ gap: 6 }}><span className="small muted">Used before:</span>{suggestions.map((x) => <button key={x} className="pill-choice" onClick={() => add(x)}>#{x}</button>)}</div>}
+    </Modal>
   );
 }

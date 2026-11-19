@@ -8,7 +8,7 @@ const CARDS = [
   { tool: 'library', title: 'New service up?', body: "Grab this week's sermon from your channel.", cta: 'Pick a sermon', to: { name: 'library', pick: true } },
   { tool: 'writing', title: 'Turn Sunday into a blog', body: "The transcript already holds most of the post.", cta: 'Start writing', to: { name: 'writing' } },
   { tool: 'graphics', title: 'Quote of the week', body: 'One strong line from Sunday makes a great post.', cta: 'Make a quote card', to: { name: 'graphics' } },
-  { tool: 'social', title: 'Plan the week', body: 'Line up a post a day before Sunday comes back around.', cta: 'Open the calendar', to: { name: 'social' } },
+  { tool: 'calendar', title: 'Plan the week', body: 'Line up a post a day before Sunday comes back around.', cta: 'Open the calendar', to: { name: 'calendar' } },
   { tool: 'graphics', title: 'Slides for Sunday?', body: 'Start a sermon deck from a template or your notes.', cta: 'Make slides', to: { name: 'graphics' } },
   { tool: 'library', title: 'Got a class recording?', body: 'Open any audio or video file and get a transcript.', cta: 'Transcribe a file', to: { name: 'library' } },
   { tool: 'assets', title: 'Sound like you', body: 'Add your mission and a few themes to your brand voice.', cta: 'Brand voice', to: { name: 'assets', section: 'voice' } },

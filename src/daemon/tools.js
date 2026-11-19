@@ -10,6 +10,7 @@ import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -124,6 +125,9 @@ export function run(cmd, args, { cwd = ROOT, input, onStderr, onStdout, signal }
       detached: process.platform !== 'win32',
     });
     children.add(child);
+    // Helpers (transcribing, rendering, downloads) run a step below normal priority: just as fast on a
+    // quiet Mac, but the app's window and everything else the person is doing stay responsive.
+    if (child.pid) { try { os.setPriority(child.pid, 5); } catch { /* fine */ } }
     let stdout = '';
     let stderr = '';
     let settled = false;

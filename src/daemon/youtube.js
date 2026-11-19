@@ -6,7 +6,8 @@ import path from 'node:path';
 import { run, tool, probe, pyCommand } from './tools.js';
 
 const ytdlp = (args, opts) => run(...pyCommand('yt-dlp', args), opts);
-import { createProject, deleteProject, file, updateProject } from './projects.js';
+import { createProject, deleteProject, file, getProject, updateProject } from './projects.js';
+import { existsSync } from 'node:fs';
 import { makeThumbs } from './thumbs.js';
 import { detectSermon } from './sermon.js';
 
@@ -210,8 +211,13 @@ export async function replaceSource(id, filePath, ctx) {
   const ext = path.extname(filePath).toLowerCase() || '.mp4';
   const dest = file(id, `source-${Date.now().toString(36)}${ext}`);
   await copyFile(filePath, dest);
+  // A shared project arrives with its transcript but no video: keep the transcript and its clips.
+  const before = await getProject(id);
+  const keep = Boolean(before?.needsMedia && existsSync(file(id, 'transcript.json')));
   await updateProject(id, (p) => { p.status = 'ready'; p.blank = false; });
-  return finishIngest(id, dest, ctx);
+  const out = await finishIngest(id, dest, ctx);
+  if (keep) await updateProject(id, (p) => { p.status = 'transcribed'; delete p.needsMedia; });
+  return out;
 }
 
 const fmtDur = (t) => { t = Math.round(t); const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), x = t % 60; return h ? `${h}:${String(m).padStart(2, '0')}:${String(x).padStart(2, '0')}` : `${m}:${String(x).padStart(2, '0')}`; };

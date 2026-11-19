@@ -33,3 +33,15 @@ test('church seasons land on the right dates', () => {
   assert.equal(ymd(on('pentecost', 2027).date), '2027-5-16');
   assert.equal(ymd(on('thanks', 2026).date), '2026-11-26');
 });
+
+import { parseQuery } from '../src/daemon/search.js';
+test('search reads kinds, times and topics from plain words', () => {
+  const now = new Date(2026, 10, 19);
+  const a = parseQuery('sermons about prayer from last fall', now);
+  assert.deepEqual(a.kinds, ['sermon']); assert.deepEqual(a.terms, ['prayer']); assert.equal(a.label, 'fall 2025');
+  const b = parseQuery('flyers from October', now);
+  assert.deepEqual(b.kinds, ['design']); assert.equal(b.label, 'October 2026'); assert.deepEqual(b.terms, []);
+  const c = parseQuery('clips on hope this year', now);
+  assert.deepEqual(c.kinds, ['clip']); assert.deepEqual(c.terms, ['hope']); assert.equal(c.label, 'this year');
+  assert.equal(parseQuery('december photos', now).label, 'December 2025');
+});

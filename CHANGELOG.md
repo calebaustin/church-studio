@@ -5,7 +5,13 @@ Every update keeps your sermons, designs, drafts and settings. Before a new vers
 ## 0.10.0 · November 19, 2026
 
 ### New
-- **Inspiration.** A new tool in the sidebar. See what your church has been saying this month, quarter or year, across sermons, writing, posts and your blog. Find blind spots: topics most churches come back to that you haven't touched lately, with when each last came up and a button to write about it. See church seasons coming up (Advent, Lent, Easter, Pentecost and more) with ideas and a nudge to start three weeks ahead, your scripture balance, and the topics you return to most.
+- **Calendar, its own place.** Calendar moved out of Social into its own tool, with three tabs: Calendar (church events, scheduled posts and planned campaign posts), Campaigns and Inspiration. Social is now for posting, scheduling and comments.
+- **Search everything.** Press ⌘K, or Search in the sidebar, to search sermons (including what was said in them, with the moment it was said), clips, writing, designs, posts, campaigns, brand library pictures, your blog and church events. Plain phrases work without AI: "sermons about prayer from last fall", "flyers from October", "clips on hope this year". Related words count too, so "prayer" also finds "pray".
+- **Tags and archive.** Tag any sermon, clip, writing or design from All projects, browse by tag, and search by tag. Archive things you're done with: out of the way, never deleted, still searchable. All projects also shows possible duplicates, and how many times a clip or design has been posted.
+- **Backups.** Back up settings, transcripts, clips, writing, designs, posts and campaigns, with or without the brand library, in Settings › Backups and sharing. Turn on weekly backups (the newest four are kept), and save them to Documents or a cloud folder. Restoring opens a backup as a new workspace, so nothing is replaced. Keys and passwords are never in a backup, and videos are left out because of their size.
+- **Share a project.** Share any sermon with its transcript, clips, writing and designs as one file, with or without its video. A teammate brings it in as a new project and can add the video later.
+- **Team folder in Google Drive, Dropbox, OneDrive or iCloud.** Church Studio finds the cloud folders on your Mac. Pick one as your team folder, share projects there, and teammates see them in Settings to bring in. No accounts needed.
+- **Inspiration.** Now a tab in Calendar. See what your church has been saying this month, quarter or year, across sermons, writing, posts and your blog. Find blind spots: topics most churches come back to that you haven't touched lately, with when each last came up and a button to write about it. See church seasons coming up (Advent, Lent, Easter, Pentecost and more) with ideas and a nudge to start three weeks ahead, your scripture balance, and the topics you return to most.
 - **Your blog.** Connect your blog and Church Studio reads its public feed (WordPress, Squarespace, Wix and most others), keeping a growing history on your Mac. See how often you post, days since the last post, and ideas for the next one: sermons without a blog post yet, quiet topics, and older posts worth sharing again. Jumpstart finds your blog automatically.
 - **Year in review.** One click makes a story set of your year: messages preached, the books you spent the most time in, the topics you kept coming back to, what you made and shared, your busiest month and longest streak. It opens in Design, in your brand, ready to edit and post.
 - **Background eraser.** Clear a white or plain background off a logo or picture, around the outside or inside letters too, with a strength slider and a light, dark and see-through preview. Saves a new copy and keeps the original. Find it in a logo's ⋯ menu, on brand files, and on pictures in a design.
@@ -21,7 +27,9 @@ Every update keeps your sermons, designs, drafts and settings. Before a new vers
 - The brand kit says which logo files work best: SVG, or PNG with a see-through background.
 - SVG logos work as your primary logo in the menu and Dock.
 - Jumpstart finds a church's mission statement more reliably, skipping welcome text, headings and buttons.
-- Planned campaign posts show on the Social calendar with a dashed outline.
+- Planned campaign posts show on the calendar with a dashed outline.
+- Moving between screens uses about 40% less CPU: the background glide is quicker, since every frame of it redraws the glass.
+- Transcribing, exporting and downloads run a step below normal priority, so the app and your Mac stay responsive while they work. They're just as fast when nothing else is running.
 
 ### Fixed
 - Bringing in a file with the same name as one already in your brand library no longer replaces it.

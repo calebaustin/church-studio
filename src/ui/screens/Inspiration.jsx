@@ -11,7 +11,7 @@ const PERIODS = [['month', 'Month'], ['quarter', 'Quarter'], ['year', 'Year'], [
 const KIND = { sermon: 'sermon', writing: 'writing', post: 'post', blog: 'blog post' };
 const day = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: new Date(d).getFullYear() === new Date().getFullYear() ? undefined : 'numeric' });
 
-export default function Inspiration() {
+export default function Inspiration({ embedded = false }) {
   const { go, toast, config } = useApp();
   const [period, setPeriod] = useState('quarter');
   const [data, setData] = useState(null);
@@ -47,10 +47,10 @@ export default function Inspiration() {
   const c = data?.counts;
   const empty = data && !c.total;
   return (
-    <div className="page">
+    <div className={embedded ? 'stack' : 'page'} style={embedded ? { gap: 18 } : undefined}>
       <div className="row between wrap" style={{ gap: 12 }}>
         <div className="stack" style={{ gap: 2 }}>
-          <h1>Inspiration</h1>
+          {!embedded && <h1>Inspiration</h1>}
           <span className="muted">What your church has been saying, what it hasn’t said in a while, and what’s coming up.</span>
         </div>
         <div className="row wrap" style={{ gap: 8 }}>
@@ -106,7 +106,7 @@ export default function Inspiration() {
                     <div className="row wrap" style={{ gap: 6, marginTop: 4 }}>
                       <button className="btn sm" onClick={() => go({ name: 'graphics' })}><Shapes size={13} />Design</button>
                       <button className="btn sm" onClick={() => writeAbout(s.name)}><PenLine size={13} />Write</button>
-                      <button className="btn sm" onClick={() => go({ name: 'social' })}><CalendarDays size={13} />Plan posts</button>
+                      <button className="btn sm" onClick={() => go({ name: 'calendar', campaign: { kind: 'custom' } })}><CalendarDays size={13} />Plan posts</button>
                     </div>
                   </div>
                 </div>

@@ -93,7 +93,7 @@ function CampaignCard({ c, onEdit, onRepeat, reload }) {
 function NewCampaign({ start, accounts, onClose, onMade }) {
   const { toast } = useApp();
   const cal = useChurchEvents();
-  const [kind, setKind] = useState(start.event ? 'event' : start.projectId ? 'sermon' : 'event');
+  const [kind, setKind] = useState(start.event ? 'event' : start.projectId ? 'sermon' : start.kind || 'event');
   const [event, setEvent] = useState(start.event || null);
   const [projectId, setProjectId] = useState(start.projectId || '');
   const [projects, setProjects] = useState([]);

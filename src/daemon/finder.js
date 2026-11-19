@@ -8,12 +8,13 @@ import { randomUUID } from 'node:crypto';
 import { DATA_DIR } from './tools.js';
 import { getProject, listProjects, projectDir } from './projects.js';
 import { deleteDesign, getDesign, listDesigns, saveDesign } from './designs.js';
+import * as socialStore from './social/store.js';
 
 const STORE = path.join(DATA_DIR, 'finder.json');
 const WRITING = path.join(DATA_DIR, 'writing');
 
 async function load() {
-  try { return JSON.parse(await readFile(STORE, 'utf8')); } catch { return { folders: [], starred: [], trash: [] }; }
+  try { return { tags: {}, archived: [], ...JSON.parse(await readFile(STORE, 'utf8')) }; } catch { return { folders: [], starred: [], trash: [], tags: {}, archived: [] }; }
 }
 async function save(s) {
   await mkdir(DATA_DIR, { recursive: true });
@@ -51,7 +52,14 @@ async function allItems(state) {
     items.push({ key: `design:${d.id}`, type: 'design', id: d.id, name: d.name, thumb: d.thumb, updated: d.updated, kind: d.kind, meta: d.pages > 1 ? `${d.pages} pages` : null, size: d.size });
   }
   const starred = new Set(state.starred);
-  return items.filter((i) => !trashed.has(i.key)).map((i) => ({ ...i, starred: starred.has(i.key), folders: state.folders.filter((f) => f.items.includes(i.key)).map((f) => f.id) }))
+  const archived = new Set(state.archived || []);
+  // Usage: how many posts used each clip or design.
+  const used = new Map();
+  for (const p of await socialStore.listPosts().catch(() => [])) {
+    const k = p.media?.clipId ? `clip:${p.media.projectId}/${p.media.clipId}` : p.media?.designId ? `design:${p.media.designId}` : null;
+    if (k) used.set(k, (used.get(k) || 0) + 1);
+  }
+  return items.filter((i) => !trashed.has(i.key)).map((i) => ({ ...i, starred: starred.has(i.key), tags: state.tags?.[i.key] || [], archived: archived.has(i.key), used: used.get(i.key) || 0, folders: state.folders.filter((f) => f.items.includes(i.key)).map((f) => f.id) }))
     .sort((a, b) => String(b.updated || '').localeCompare(String(a.updated || '')));
 }
 
@@ -156,5 +164,25 @@ export async function locate(key) {
   if (type === 'design') return path.join(DATA_DIR, 'designs', `${id}.json`);
   throw new Error('Not found');
 }
+/** Tags on any item, by key. Used by All projects and search. */
+export async function loadTags() { return (await load()).tags || {}; }
+export async function setTags(key, tags) {
+  const s = await load();
+  const clean = [...new Set((tags || []).map((t) => String(t).trim().toLowerCase().replace(/^#/, '')).filter(Boolean))].slice(0, 12);
+  s.tags = { ...(s.tags || {}) };
+  if (clean.length) s.tags[key] = clean; else delete s.tags[key];
+  await save(s);
+  return clean;
+}
+/** Archive: out of the way in lists, but kept and searchable. Not the trash. */
+export async function archive(key, on) {
+  const s = await load();
+  const set = new Set(s.archived || []);
+  if (on) set.add(key); else set.delete(key);
+  s.archived = [...set];
+  await save(s);
+  return { ok: true };
+}
+
 export async function isTrashed(key) { return (await load()).trash.some((t) => t.key === key); }
 export { saveDesign };

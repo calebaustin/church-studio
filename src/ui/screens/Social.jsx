@@ -4,7 +4,6 @@ import { api, desktop, fmt, openLink } from '../api.js';
 import { usePoll } from '../poll.js';
 import { Laptop, MessageSquare, Repeat2 } from 'lucide-react';
 import { exportDesign } from '../design/exporters.js';
-import Campaigns from '../components/Campaigns.jsx';
 import { checkCaption } from '../captionCheck.js';
 import Modal from '../components/Modal.jsx';
 import { EventCard, RefreshEvents, eventTime, useChurchEvents } from '../components/ChurchEvents.jsx';
@@ -18,7 +17,7 @@ const DEST = {
   ready: ['chip warn', 'Ready for you'], done: ['chip ok', 'Posted'],
 };
 
-function useSocial() {
+export function useSocial() {
   const [state, setState] = useState({ platforms: [], accounts: [], posts: [], media: [] });
   const load = useCallback(async () => {
     const [pl, ac, po, me] = await Promise.all([
@@ -32,9 +31,9 @@ function useSocial() {
   return { ...state, load };
 }
 
-export default function Social({ compose: initialCompose, caption: initialCaption, campaign }) {
+export default function Social({ compose: initialCompose, caption: initialCaption }) {
   const s = useSocial();
-  const [tab, setTab] = useState(campaign ? 'campaigns' : 'calendar');
+  const [tab, setTab] = useState('posts');
   const [composer, setComposer] = useState(initialCompose?.design ? { design: initialCompose.design } : initialCompose?.clipId ? { media: initialCompose } : initialCompose?.projectId ? { projectId: initialCompose.projectId } : initialCaption ? { caption: initialCaption } : null);
   const needsYou = s.posts.filter((p) => p.status === 'needs-you').length;
   const plat = (id) => s.platforms.find((p) => p.id === id);
@@ -43,14 +42,12 @@ export default function Social({ compose: initialCompose, caption: initialCaptio
       <div className="row between">
         <div className="stack" style={{ gap: 2 }}>
           <h1>Social</h1>
-          <span className="muted">Post, schedule, and plan your clips.</span>
+          <span className="muted">Post and schedule to your accounts, and answer comments. Plan ahead in Calendar.</span>
         </div>
         <button className="btn primary" onClick={() => setComposer({})}>+ New post</button>
       </div>
       <div className="row between">
         <div className="seg">
-          <button className={tab === 'calendar' ? 'on' : ''} onClick={() => setTab('calendar')}>Calendar</button>
-          <button className={tab === 'campaigns' ? 'on' : ''} onClick={() => setTab('campaigns')}>Campaigns</button>
           <button className={tab === 'posts' ? 'on' : ''} onClick={() => setTab('posts')}>Posts{needsYou ? ` · ${needsYou} need you` : ''}</button>
           <button className={tab === 'messages' ? 'on' : ''} onClick={() => setTab('messages')}>Messages</button>
           <button className={tab === 'accounts' ? 'on' : ''} onClick={() => setTab('accounts')}>Accounts ({s.accounts.length})</button>
@@ -58,8 +55,6 @@ export default function Social({ compose: initialCompose, caption: initialCaptio
         <span className="muted small">Scheduled posts go out while the app is open.</span>
       </div>
       {tab === 'posts' && <Posts s={s} plat={plat} onEdit={(p) => setComposer({ post: p })} onConnect={() => setTab('accounts')} onShareAgain={(p) => setComposer({ caption: p.caption, media: p.media, title: p.title, hashtags: p.hashtags })} />}
-      {tab === 'calendar' && <Calendar s={s} plat={plat} onEdit={(p) => setComposer({ post: p })} onNew={(d) => setComposer({ when: d })} />}
-      {tab === 'campaigns' && <Campaigns s={s} start={campaign} onEdit={(p) => setComposer({ post: p })} />}
       {tab === 'accounts' && <Accounts s={s} />}
       {tab === 'messages' && <Messages s={s} />}
       {composer && <Composer s={s} plat={plat} init={composer} onClose={() => { setComposer(null); s.load(); }} onConnect={() => { setComposer(null); setTab('accounts'); }} />}
@@ -170,7 +165,7 @@ function PostRow({ post, s, plat, onEdit }) {
 }
 
 // ------------------------------------------------------------------ calendar (full month)
-function Calendar({ s, plat, onEdit, onNew }) {
+export function Calendar({ s, plat, onEdit, onNew }) {
   const [offset, setOffset] = useState(0);
   const [view, setView] = useState('month'); // 'month' | 'weeks' (this week and next)
   const cal = useChurchEvents();
@@ -402,7 +397,7 @@ function CaptionNotes({ text, platforms }) {
 const pad = (n) => String(n).padStart(2, '0');
 const localInput = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
-function Composer({ s, plat, init, onClose, onConnect }) {
+export function Composer({ s, plat, init, onClose, onConnect }) {
   const editing = init.post || null;
   const initialMedia = editing?.media || (init.media && s.media.find((m) => m.clipId === init.media.clipId)) || init.media || null;
   const [media, setMedia] = useState(initialMedia);
