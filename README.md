@@ -7,6 +7,13 @@ calendar that sits next to your church's own events, with your logo, colors and 
 It all runs on your Mac with no account, no cloud and no AI required, so a small staff or a volunteer can do
 in an afternoon what used to take a week.
 
+<p align="center">
+  <a href="https://buymeacoffee.com/calebaustinm"><img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-Support%20Church%20Studio-FF5F5F?style=for-the-badge&logo=buymeacoffee&logoColor=white" alt="Buy me a coffee"></a>
+</p>
+
+<p align="center"><b>Church Studio is free to use, forever.</b> If it's been helpful to your church, consider
+<a href="https://buymeacoffee.com/calebaustinm">buying me a coffee</a> to support future development.</p>
+
 > **For Macs with Apple chips (M1 and newer).** There is no Windows or Intel Mac release. If you'd like
 > to build one, the working pieces are all here: the engine (`src/daemon`), the screens (`src/ui`) and the
 > media scripts (`scripts/`) are plain Node, React and Python. See [Intel Macs](docs/INTEL.md) (mostly

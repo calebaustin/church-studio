@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CalendarDays, Check, ExternalLink, Heart, MessageSquareHeart, RefreshCw, Send, Star } from 'lucide-react';
+import { CalendarDays, Check, Coffee, ExternalLink, Heart, MessageSquareHeart, RefreshCw, Send, Star } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { api, openLink } from '../api.js';
 import ToolPicker from '../components/ToolPicker.jsx';
@@ -221,10 +221,17 @@ const IDEAS = [
 export function Credits() {
   return (
     <>
-      <section className="glass strong panel stack" style={{ gap: 6 }}>
-        <span className="welcome-mark" aria-hidden="true">Thank you</span>
-        <p className="muted" style={{ margin: 0 }}>Church Studio stands on the work of generous open-source communities. These projects ask to be credited, and we're glad to.</p>
-      </section>
+      <div className="thanks-top">
+        <section className="glass strong panel stack" style={{ gap: 6 }}>
+          <span className="welcome-mark" aria-hidden="true">Thank you</span>
+          <p className="muted" style={{ margin: 0 }}>Church Studio stands on the work of generous open-source communities. These projects ask to be credited, and we're glad to.</p>
+        </section>
+        <section className="glass panel stack support-card">
+          <strong>Has this tool been helpful to you?</strong>
+          <span className="small muted">Consider supporting future development. Church Studio is free to use, forever.</span>
+          <button className="btn coffee" onClick={() => openLink('https://buymeacoffee.com/calebaustinm')}><Coffee size={15} />Buy me a coffee</button>
+        </section>
+      </div>
       <div className="credit-grid">
         {CREDITS.map(([name, what, license, url], k) => (
           <button key={name} className="glass credit" onClick={() => openLink(url)}>

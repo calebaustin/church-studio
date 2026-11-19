@@ -46,6 +46,7 @@
   --toast-bg: color-mix(in srgb, var(--ink) 94%, black);
   --toast-text: #ffffff;
   --stage-bg: #0E1014;         /* presenter console, always dark */
+  --coffee: #FF5F5F;           /* Buy Me a Coffee button */
   --scrim: color-mix(in srgb, var(--ink) 40%, transparent);
   --blob-opacity: 0.55;
   --radius-sm: calc(var(--radius) * 0.6);
@@ -1132,3 +1133,9 @@ button.side-foot.ai-on { opacity: .92; }
 .theme-cloud { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: baseline; }
 .theme-word { font-weight: 700; color: var(--ink); font-size: calc(13px + var(--w) * 4px); opacity: calc(0.55 + var(--w) * 0.09); }
 .theme-word sup { font-size: 10px; color: var(--muted); margin-left: 2px; }
+
+.thanks-top { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 14px; align-items: stretch; }
+@media (max-width: 900px) { .thanks-top { grid-template-columns: 1fr; } }
+.support-card { gap: 6px; align-content: center; }
+.btn.coffee { background: var(--coffee); color: #fff; box-shadow: 0 6px 16px -8px var(--coffee); }
+.btn.coffee:hover { background: color-mix(in srgb, var(--coffee) 88%, black); }

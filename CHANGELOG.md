@@ -2,6 +2,11 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## Unreleased
+
+### New
+- **Support Church Studio.** The Thank you page has a Buy me a coffee button. Church Studio stays free to use, forever.
+
 ## 0.7.0 · November 19, 2026
 
 ### New
