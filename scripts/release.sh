@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Publish an update: scripts/release.sh 0.3.1
 # 1. Add a "## 0.3.1 · Month Day, Year" section to CHANGELOG.md first.
-# 2. This bumps package.json, builds the app for Apple Silicon and (when scripts/setup-intel.sh has
-#    been run) for Intel, commits, tags, pushes, and creates a GitHub release with both .dmg files
+# The .dmg files keep the same names every release, so these links always get the newest one:
+#   https://github.com/<repo>/releases/latest/download/Church-Studio-Mac-arm64.dmg
+# 2. This bumps package.json, builds the app for Apple Silicon (and for Intel with WITH_INTEL=1,
+#    see docs/INTEL.md), commits, tags, pushes, and creates a GitHub release with the .dmg file(s)
 #    and that changelog section. Installed copies see it under Settings > Updates.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -13,12 +15,11 @@ grep -q "^## $V " CHANGELOG.md || { echo "Add a '## $V · <date>' section to CHA
 NOTES=$(awk -v v="$V" '$0 ~ "^## "v" " {on=1; next} /^## / && on {exit} on' CHANGELOG.md)
 node -e "const f='package.json',p=require('./'+f);p.version='$V';require('fs').writeFileSync(f,JSON.stringify(p,null,2)+'\n')"
 ARCH=arm64 scripts/build-app.sh
-FILES=("dist/release/Church Studio-$V-arm64.dmg")
-if [ -x "$HOME/.church-studio-build/venv-x64/bin/python" ]; then
+FILES=("dist/release/Church-Studio-Mac-arm64.dmg")
+# Official releases are Apple Silicon only. To also ship an Intel build, see docs/INTEL.md.
+if [ "${WITH_INTEL:-}" = "1" ]; then
   ARCH=x64 scripts/build-app.sh
-  FILES+=("dist/release/Church Studio-$V-x64.dmg")
-else
-  echo "Skipping the Intel build (run scripts/setup-intel.sh to include it)."
+  FILES+=("dist/release/Church-Studio-Mac-x64.dmg")
 fi
 git add package.json && git commit -m "Release $V"
 git tag "v$V"

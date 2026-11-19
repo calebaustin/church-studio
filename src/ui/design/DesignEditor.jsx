@@ -312,7 +312,7 @@ export default function DesignEditor({ id, onClose }) {
     setBusy('Exporting…');
     try {
       const r = await exportDesign(doc, format, { pageIndex: pi, onProgress: (i, n) => setBusy(n > 1 ? `Exporting page ${i + 1} of ${n}…` : 'Exporting…') });
-      toast({ text: r.count ? `Saved ${r.count} pages to Graphics in your brand library.` : 'Saved to Graphics in your brand library.', action: { label: 'Show', run: () => api.post('/api/library/reveal', { rel: r.rel }) } });
+      toast({ celebrate: true, text: r.count ? `Saved ${r.count} pages to Graphics in your brand library.` : 'Saved to Graphics in your brand library.', action: { label: 'Show', run: () => api.post('/api/library/reveal', { rel: r.rel }) } });
     } catch (e) { toast({ kind: 'error', text: e.message }); }
     setBusy(null);
   };

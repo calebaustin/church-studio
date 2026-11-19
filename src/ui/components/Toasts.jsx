@@ -71,6 +71,7 @@ function Toast({ t, dismiss }) {
             </div>
             <span className="truncate" style={{ opacity: 0.85 }}>{r.title}</span>
             <span className="small num" style={{ opacity: 0.7 }}>{[r.width && `${r.width}×${r.height}`, r.length && `${Math.round(r.length)}s`, mb].filter(Boolean).join(' · ')}</span>
+            {t.note && <span className="toast-note">{t.note}</span>}
             <span className="small" style={{ opacity: 0.85 }}>{moved ? `Moved to ${file?.split('/').slice(-2, -1)[0]}.` : `Saved to ${file?.split('/').slice(-2, -1)[0] || 'Downloads'}. Where do you want it?`}</span>
             <div className="row wrap" style={{ marginTop: 2 }}>
               <button className="btn sm" onClick={() => { api.post('/api/reveal', { path: file }); dismiss(t.id); }}><FolderOpen size={14} />{moved ? 'Show it' : 'Keep it here'}</button>
@@ -89,7 +90,7 @@ function Toast({ t, dismiss }) {
       ) : (
         <div className="ink-toast" role="status" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
           {t.kind === 'error' ? <AlertCircle size={18} aria-hidden="true" /> : <CheckCircle2 size={18} aria-hidden="true" />}
-          <span>{t.text}</span>
+          <span className="stack" style={{ gap: 2 }}><span>{t.text}</span>{t.note && <span className="toast-note">{t.note}</span>}</span>
           {t.action ? <button className="btn accent sm" onClick={() => { t.action.run(); dismiss(t.id); }}>{t.action.label}</button>
             : <button className="btn icon sm" aria-label="Close" onClick={() => dismiss(t.id)}><X size={14} /></button>}
         </div>

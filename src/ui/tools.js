@@ -7,7 +7,7 @@ export const TOOLS = [
   { id: 'library', label: 'Videos', icon: Clapperboard, work: 'Videos, clips and transcripts', about: 'Download or open a recording, transcribe it and make captioned clips.' },
   { id: 'social', label: 'Social', icon: Send, work: 'Social media', about: 'Plan, schedule and post to your accounts, with a calendar.' },
   { id: 'writing', label: 'Writing', icon: PenLine, work: 'Writing', about: 'Blog posts, emails and small group guides from a sermon.' },
-  { id: 'graphics', label: 'Graphics', icon: Shapes, work: 'Graphics and slides', about: 'Posts, stories, flyers and slide decks you can present.' },
+  { id: 'graphics', label: 'Design', icon: Shapes, work: 'Design and slides', about: 'Posts, stories, flyers and slide decks you can present.' },
   { id: 'assets', label: 'Brand library', icon: FolderHeart, work: 'Brand library', about: 'Logos, photos, colors and fonts that every tool uses.' },
 ];
 

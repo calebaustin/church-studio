@@ -126,7 +126,7 @@ function WritingEditor({ pid, onBack }) {
     try { await api.post('/api/brand-voice/samples', { title: draft.title, text: draft.blog, source: 'writing' }); toast({ text: 'Saved to your brand voice. Future drafts learn from it.' }); }
     catch (e) { toast({ kind: 'error', text: e.message }); }
   };
-  const save = async () => { await api.put(`/api/writing/${pid}`, draft); setDirty(false); toast({ text: 'Draft saved.' }); };
+  const save = async () => { await api.put(`/api/writing/${pid}`, draft); setDirty(false); toast({ text: 'Draft saved.', celebrate: true }); };
   const set = (p) => { setDraft((d) => ({ ...d, ...p })); setDirty(true); };
   const polish = async () => {
     setBusy(true);

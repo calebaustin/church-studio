@@ -475,7 +475,7 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
                 <div className="row between"><strong>End card</strong>
                   {clip.endCard?.rel ? <button className="btn ghost sm danger" onClick={() => set({ endCard: null })}>Remove</button> : <button className="btn sm" onClick={() => setLibPick('endCard')}>Pick a graphic</button>}
                 </div>
-                <span className="hint">A full-screen graphic for the last few seconds, like “Join us Sunday”. Make one in Graphics.</span>
+                <span className="hint">A full-screen graphic for the last few seconds, like “Join us Sunday”. Make one in Design.</span>
                 {clip.endCard?.rel && (
                   <label className="field">Shows for the last · {(clip.endCard.seconds ?? 3).toFixed(1)}s
                     <input type="range" min="1" max="8" step="0.5" value={clip.endCard.seconds ?? 3} onChange={(e) => set({ endCard: { ...clip.endCard, seconds: Number(e.target.value) } })} />

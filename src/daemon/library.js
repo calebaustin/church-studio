@@ -112,3 +112,28 @@ export async function saveExport(name, files, folder = 'Graphics') {
   for (const d of decoded) await writeFile(path.join(dir, `${d.name}.${d.ext}`), d.data);
   return { file: dir, rel: `${folder}/${path.basename(dir)}`, count: decoded.length };
 }
+
+/** Move a library file to the Mac's Trash (it can be put back from there). */
+export async function trashFile(rel) {
+  const f = await libraryFile(rel);
+  if (!f) throw new Error('File not found.');
+  const trash = path.join(os.homedir(), '.Trash');
+  await mkdir(trash, { recursive: true });
+  const ext = path.extname(f); const base = path.basename(f, ext);
+  let dest = path.join(trash, path.basename(f));
+  for (let i = 2; existsSync(dest); i++) dest = path.join(trash, `${base} ${i}${ext}`);
+  await rename(f, dest);
+  return { trashed: path.basename(dest) };
+}
+
+/** Replace a library file with another one, keeping its place. Returns the new file's path in the library. */
+export async function replaceFile(rel, source) {
+  const f = await libraryFile(rel);
+  if (!f) throw new Error('File not found.');
+  if (!existsSync(source)) throw new Error('Pick a file to use instead.');
+  const dest = path.join(path.dirname(f), path.basename(source));
+  if (path.resolve(dest) !== path.resolve(f)) await trashFile(rel);
+  await copyFile(source, dest);
+  const root = await libraryRoot();
+  return { rel: path.relative(root, dest).split(path.sep).join('/') };
+}

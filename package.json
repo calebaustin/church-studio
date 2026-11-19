@@ -94,7 +94,7 @@
     },
     "dmg": {
       "title": "Church Studio",
-      "artifactName": "${productName}-${version}-${arch}.${ext}"
+      "artifactName": "Church-Studio-Mac-${arch}.${ext}"
     }
   }
 }

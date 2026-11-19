@@ -2,6 +2,24 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## 0.5.0 · November 19, 2026
+
+### New
+- **Your dashboard, more personal.** Streaks replace the weekly goal: see how many weeks in a row you've shared clips, posted, written or designed. New widgets show upcoming church events, scheduled posts, work to jump back into and ideas for what to make next, ordered by the work you do most.
+- **Fresh ideas in the sidebar.** The card above My App rotates through ideas for the tools you use.
+- **Logos.** Mark a primary logo, label light, dark and icon versions, replace a logo, show it in Finder or move it to the Trash.
+- **Brand kit.** Colors are labeled Primary, Secondary, Text, Background and Accent. Drag them to reorder, and see them on a website card, a social post and a video caption.
+- **A little encouragement.** Now and then, a short word of encouragement after an export or a save, and at the foot of the dashboard.
+
+### Changed
+- Graphics is now **Design**.
+- The Church Studio name in the menu uses the Caveat font.
+- The Dock badge is a rounded square with enough contrast to stand out on any logo, including white ones.
+- Setup checklists show just the next step, with a button to see them all.
+- Updating is clearer: **drag Church Studio into Applications and choose Replace.**
+- Downloads keep the same name every release, so one link always gets the newest version.
+- Official releases are for Macs with Apple chips. Intel Mac downloads are no longer included; instructions for building one are in docs/INTEL.md. Intel copies already installed keep working.
+
 ## 0.4.4 · November 18, 2026
 
 ### Fixed

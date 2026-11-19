@@ -41,6 +41,7 @@ export const DEFAULTS = {
   churchInfo: { name: '', address: '', website: '', phone: '', email: '', times: '' }, // printed footers
   appLogo: '', // brand library path of the logo for the sidebar and Dock; empty means the first in Logos
   dockLogo: true, // show the church logo in the Dock
+  logoKinds: {}, // { 'Logos/file.png': 'full' | 'light' | 'dark' | 'icon' | 'wordmark' }
   calendarFeeds: [], // church calendar links (.ics): [{ id, name, url }] from Planning Center, Subsplash, Tithe.ly, Google...
   calendarIcal: '', // older single link; moved into calendarFeeds by the 0.4.1 migration
   lastCalendarFetch: null,

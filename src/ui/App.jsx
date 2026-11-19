@@ -2,6 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { Settings as SettingsIcon, HardDrive, LayoutDashboard, MonitorPlay, UserRound } from 'lucide-react';
 import { enabledTools, isOn } from './tools.js';
 import { makeDockIcon } from './dockIcon.js';
+import SideCards from './components/SideCards.jsx';
+import { maybeNote } from './encourage.js';
 import { api, fmt as fmtClock } from './api.js';
 import Library from './screens/Library.jsx';
 import Dashboard from './screens/Dashboard.jsx';
@@ -103,7 +105,9 @@ export default function App() {
 
   const toast = useCallback((t) => {
     const id = Math.random().toString(36).slice(2);
-    setToasts((ts) => [...ts.slice(-3), { id, ...t }]);
+    // Good moments (an export, a post, a finished draft) sometimes carry a word of encouragement.
+    const note = t.celebrate ? maybeNote(t.kind === 'export' ? 0.6 : 0.34) : null;
+    setToasts((ts) => [...ts.slice(-3), { id, ...t, ...(note ? { note } : {}) }]);
     return id;
   }, []);
   const dismissToast = useCallback((id) => setToasts((ts) => ts.filter((t) => t.id !== id)), []);
@@ -207,7 +211,7 @@ export default function App() {
   // Celebrate finished exports; report failures plainly.
   useEffect(() => onJobFinished((j) => {
     if (j.kind === 'export' && j.status === 'done') {
-      toast({ kind: 'export', result: j.result, sticky: true });
+      toast({ kind: 'export', result: j.result, sticky: true, celebrate: true });
     }
     if (j.status === 'done' && (j.kind === 'download' || j.kind === 'import') && j.result?.projectId) {
       const r = j.result;
@@ -284,11 +288,7 @@ export default function App() {
             ))}
           </nav>
           <div className="grow" />
-          {isOn(config, 'library') && <div className="side-card">
-            <strong>New service up?</strong>
-            <span className="small" style={{ opacity: 0.75 }}>Grab this week's sermon from your channel.</span>
-            <button className="btn accent sm" onClick={() => go({ name: 'library', pick: true })}><MonitorPlay size={14} />Pick a sermon</button>
-          </div>}
+          {config && <SideCards />}
           <nav className="side-nav side-bottom" aria-label="You">
             {bottomNav.map(([name, label, Icon, on]) => (
               <button key={name} className={on ? 'on' : ''} aria-current={on ? 'page' : undefined} onClick={() => go({ name })}>

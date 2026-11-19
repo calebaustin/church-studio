@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { FolderOpen, Plus, Image as ImageIcon, Film, FileText, Shapes, Eye, X, Wand2, Palette, Heart, Trash2 } from 'lucide-react';
+import { FolderOpen, Plus, Image as ImageIcon, Film, FileText, Shapes, Eye, X, Wand2, Palette, Heart, Trash2, MoreHorizontal, Star, RefreshCw, Search } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { api, desktop } from '../api.js';
 import ColorField from '../components/ColorField.jsx';
 import FontMenu, { useFamilies } from '../components/FontMenu.jsx';
 import SetupChecklist from '../components/SetupChecklist.jsx';
+import Popover from '../components/Popover.jsx';
 
 /** Main colors in an image (a logo): bucket pixels, skip transparent ones, keep distinct colors. */
 async function colorsFrom(url, n = 4) {
@@ -29,12 +30,90 @@ async function colorsFrom(url, n = 4) {
   return out.map((v) => `#${v.map((x) => Math.round(x).toString(16).padStart(2, '0')).join('')}`.toUpperCase());
 }
 
-function BrandKit({ lib }) {
+// ---------------------------------------------------------------- logos
+const LOGO_KINDS = [['full', 'Full logo'], ['light', 'Light version'], ['dark', 'Dark version'], ['icon', 'Icon or mark'], ['wordmark', 'Wordmark']];
+
+/** Every logo in the library: which one is primary, what each is for, and replace or remove. */
+function LogoManager({ lib, reload }) {
+  const { config, saveConfig, toast, refreshLogo } = useApp();
+  const [menu, setMenu] = useState(null);
+  const logos = (lib?.items || []).filter((i) => i.folder === 'Logos' && i.kind === 'image');
+  const primary = logos.find((l) => l.rel === config.appLogo) || logos[0];
+  const kinds = config.logoKinds || {};
+  const kindOf = (l) => kinds[l.rel] || (l === primary ? 'full' : null);
+  const setKind = (l, k) => saveConfig({ logoKinds: { ...kinds, [l.rel]: k } });
+  const makePrimary = async (l) => { await saveConfig({ appLogo: l.rel }); refreshLogo?.(); toast({ text: `${l.name} is now your primary logo. The menu and Dock use it.` }); };
+  const add = async () => {
+    if (!desktop?.pickFiles) return api.post('/api/library/open', { folder: 'Logos' });
+    const paths = await desktop.pickFiles();
+    if (paths.length) { await api.post('/api/library/import', { paths, folder: 'Logos' }); reload(); }
+  };
+  const replace = async (l) => {
+    const paths = await desktop?.pickFiles?.();
+    if (!paths?.length) return;
+    const r = await api.post('/api/library/replace', { rel: l.rel, file: paths[0] });
+    const patch = { logoKinds: { ...kinds, [r.rel]: kinds[l.rel] || null } };
+    if (config.appLogo === l.rel || l === primary) patch.appLogo = r.rel;
+    await saveConfig(patch); reload(); refreshLogo?.();
+    toast({ text: 'Logo replaced. The old one is in the Trash.' });
+  };
+  const remove = async (l) => {
+    await api.post('/api/library/trash', { rel: l.rel });
+    if (config.appLogo === l.rel) await saveConfig({ appLogo: '' });
+    reload(); refreshLogo?.();
+    toast({ text: `${l.name} moved to the Trash.` });
+  };
+  return (
+    <div className="stack" style={{ gap: 8 }}>
+      <span className="field-label">Logos <span className="hint">The primary logo shows in the menu, the Dock and printed pages. Add light, dark and icon versions for other backgrounds.</span></span>
+      <div className="logo-row">
+        {logos.map((l) => {
+          const k = kindOf(l);
+          return (
+            <div key={l.rel} className={`logo-tile ${l === primary ? 'primary' : ''}`}>
+              <div className={`logo-thumb ${k === 'light' ? 'on-dark' : ''}`}><img src={l.url} alt={l.name} /></div>
+              <div className="row between" style={{ gap: 4, minWidth: 0 }}>
+                <div className="stack" style={{ gap: 0, minWidth: 0 }}>
+                  <strong className="small truncate" title={l.name}>{l.name.replace(/\.[a-z0-9]+$/i, '')}</strong>
+                  <span className="muted" style={{ fontSize: 11 }}>{l === primary ? 'Primary' : LOGO_KINDS.find(([x]) => x === k)?.[1] || 'Version'}</span>
+                </div>
+                <div style={{ position: 'relative' }}>
+                  <button className="rt-btn" data-pop-trigger aria-label={`Options for ${l.name}`} onClick={() => setMenu(menu === l.rel ? null : l.rel)}><MoreHorizontal size={15} /></button>
+                  <Popover open={menu === l.rel} onClose={() => setMenu(null)} align="right" width={220}>
+                    <div className="pop-list">
+                      {l !== primary && <button className="pop-item" onClick={() => { setMenu(null); makePrimary(l); }}><span className="row" style={{ gap: 8 }}><Star size={14} />Make primary</span></button>}
+                      <span className="cp-group-name" style={{ padding: '6px 10px 2px' }}>This version is</span>
+                      {LOGO_KINDS.map(([x, lbl]) => <button key={x} className={`pop-item ${k === x ? 'on' : ''}`} onClick={() => { setMenu(null); setKind(l, x); }}>{lbl}</button>)}
+                      <hr className="hairline" />
+                      {desktop?.pickFiles && <button className="pop-item" onClick={() => { setMenu(null); replace(l); }}><span className="row" style={{ gap: 8 }}><RefreshCw size={14} />Replace…</span></button>}
+                      <button className="pop-item" onClick={() => { setMenu(null); api.post('/api/library/reveal', { rel: l.rel }); }}><span className="row" style={{ gap: 8 }}><Search size={14} />Show in Finder</span></button>
+                      <button className="pop-item danger-item" onClick={() => { setMenu(null); remove(l); }}><span className="row" style={{ gap: 8 }}><Trash2 size={14} />Move to Trash</span></button>
+                    </div>
+                  </Popover>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        <button className="logo-add" onClick={add}><Plus size={18} /><span className="small">{logos.length ? 'Add a version' : 'Add your logo'}</span></button>
+      </div>
+    </div>
+  );
+}
+
+// What each brand color is for, by position. Designs, captions and printed pages use them this way.
+const ROLES = ['Primary', 'Secondary', 'Text', 'Background', 'Accent'];
+const on = (hex) => { const n = parseInt(String(hex).replace('#', '').slice(0, 6), 16); return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255 > 0.6 ? '#111418' : '#FFFFFF'; };
+
+function BrandKit({ lib, reload }) {
   const { config, saveConfig, toast } = useApp();
   const families = useFamilies();
   const colors = config.brandColors || [];
   const fonts = config.brandFonts || { heading: 'Montserrat', body: 'Montserrat' };
   const setColors = (list) => saveConfig({ brandColors: list, brandColorsSet: true });
+  const [drag, setDrag] = useState(null);
+  const primary = colors[0] || '#2B7F5F'; const secondary = colors[1] || '#D9A441'; const text = colors[2] || '#1B2440';
+  const bg = colors[3] || '#F4EFE6'; const accent = colors[4] || primary;
   const logo = (lib?.items || []).find((i) => i.folder === 'Logos' && i.kind === 'image');
   return (
     <section id="brand-kit" className="glass panel stack" style={{ gap: 16 }}>
@@ -43,13 +122,17 @@ function BrandKit({ lib }) {
         {logo && <button className="btn sm" onClick={async () => { const c = await colorsFrom(logo.url).catch(() => []); if (c.length) { setColors([...new Set([...c, ...colors])].slice(0, 8)); toast({ text: `Added ${c.length} colors from ${logo.name}.` }); } }}><Wand2 size={13} />Colors from my logo</button>}
       </div>
       <div className="brand-kit">
+        <LogoManager lib={lib} reload={reload} />
         <div className="stack" style={{ gap: 8 }}>
-          <span className="field-label">Colors</span>
-          <div className="row wrap" style={{ gap: 10 }}>
+          <span className="field-label">Colors <span className="hint">Drag to reorder. The order sets each color's job.</span></span>
+          <div className="row wrap" style={{ gap: 12 }}>
             {colors.map((c, i) => (
-              <span key={`${i}-${c}`} className="kit-color">
+              <span key={`${i}-${c}`} className={`kit-color ${drag === i ? 'dragging' : ''}`} draggable
+                onDragStart={(e) => { setDrag(i); e.dataTransfer.effectAllowed = 'move'; }} onDragEnd={() => setDrag(null)}
+                onDragOver={(e) => { e.preventDefault(); if (drag != null && drag !== i) { const next = [...colors]; const [x] = next.splice(drag, 1); next.splice(i, 0, x); setColors(next); setDrag(i); } }}>
                 <ColorField value={c} size={46} onChange={(v) => setColors(colors.map((x, j) => (j === i ? v : x)))} />
                 <button className="kit-x" aria-label={`Remove ${c}`} onClick={() => setColors(colors.filter((_, j) => j !== i))}><X size={11} /></button>
+                <span className="kit-role">{ROLES[i] || 'Extra'}</span>
                 <span className="mono muted" style={{ fontSize: 11 }}>{c}</span>
               </span>
             ))}
@@ -60,10 +143,27 @@ function BrandKit({ lib }) {
           <FontMenu label="Heading font" value={fonts.heading} options={families} onChange={(v) => saveConfig({ brandFonts: { ...fonts, heading: v }, brandFontsSet: true })} />
           <FontMenu label="Body font" value={fonts.body} options={families} onChange={(v) => saveConfig({ brandFonts: { ...fonts, body: v }, brandFontsSet: true })} />
         </div>
-        <div className="kit-sample" style={{ background: colors[0] || 'var(--accent)' }}>
-          <strong style={{ fontFamily: `'${fonts.heading}'`, color: colors[3] || '#fff' }}>Sunday is coming</strong>
-          <span style={{ fontFamily: `'${fonts.body}'`, color: colors[3] || '#fff', opacity: 0.9 }}>Join us at 10am. Everyone is welcome.</span>
-          <span className="kit-chip" style={{ background: colors[1] || '#fff', color: colors[2] || '#111' }}>Plan a visit</span>
+        <div className="kit-previews">
+          <div className="kit-sample" style={{ background: primary }}>
+            <span className="kit-tag" style={{ color: on(primary) }}>Website</span>
+            <strong style={{ fontFamily: `'${fonts.heading}'`, color: on(primary) }}>Sunday is coming</strong>
+            <span style={{ fontFamily: `'${fonts.body}'`, color: on(primary), opacity: 0.9 }}>Join us at 10am. Everyone is welcome.</span>
+            <span className="kit-chip" style={{ background: secondary, color: on(secondary) }}>Plan a visit</span>
+          </div>
+          <div className="kit-post" style={{ background: bg }}>
+            <span className="kit-tag" style={{ color: text }}>Social post</span>
+            <span className="kit-bar" style={{ background: secondary }} />
+            <strong style={{ fontFamily: `'${fonts.heading}'`, color: text }}>“Grace is a gift, not a grade.”</strong>
+            <span style={{ fontFamily: `'${fonts.body}'`, color: primary, fontWeight: 700, fontSize: 12 }}>Romans 3:24</span>
+          </div>
+          <div className="kit-video">
+            <span className="kit-tag" style={{ color: '#fff' }}>Video caption</span>
+            <div className="kit-video-frame" style={{ background: `linear-gradient(160deg, ${accent}, ${text})` }}>
+              <span className="kit-cap" style={{ fontFamily: `'${fonts.heading}'` }}>
+                you are <span style={{ background: secondary, color: on(secondary) }}>loved</span> more
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -110,7 +210,7 @@ export default function BrandLibrary({ section }) {
       {lib && (
         <SetupChecklist id="brand-setup" eyebrow="Set up your brand" title={(done, total) => (done === 0 ? 'A few building blocks' : `${done} of ${total} done`)} steps={[
           { label: 'Add your logo', help: 'A PNG with a clear background works best.', ok: (counts.Logos || 0) >= 1, action: () => addTo('Logos'), cta: 'Add logo' },
-          { label: 'Add a light version', help: 'A white or one-color logo for dark backgrounds and video.', ok: (counts.Logos || 0) >= 2, action: () => addTo('Logos'), cta: 'Add' },
+          { label: 'Add a light version', help: 'A white or one-color logo for dark backgrounds and video.', ok: Object.values(config.logoKinds || {}).includes('light') || (counts.Logos || 0) >= 2, action: () => addTo('Logos'), cta: 'Add' },
           { label: 'Set your brand colors', help: 'Pull them from your logo or pick your own.', ok: Boolean(config.brandColorsSet), action: kit, cta: 'Set colors' },
           { label: 'Pick your fonts', help: 'One for headings, one for body text.', ok: Boolean(config.brandFontsSet), action: kit, cta: 'Pick fonts' },
           { label: 'Add your church info', help: 'Name, service times and address for printed guides.', ok: Boolean(config.churchInfo?.name), action: () => go({ name: 'settings', section: 'church' }), cta: 'Add info' },
@@ -118,7 +218,7 @@ export default function BrandLibrary({ section }) {
           { label: 'Make your first graphic', help: 'A quote card from Sunday is a good start.', ok: (counts.Graphics || 0) >= 1, action: () => go({ name: 'graphics' }), cta: 'Make one' },
         ]} />
       )}
-      {lib && <BrandKit lib={lib} />}
+      {lib && <BrandKit lib={lib} reload={load} />}
       <BrandVoice />
       {lib && <span className="muted small truncate" title={lib.root}>{lib.root.replace(/^\/Users\/[^/]+/, '~')}</span>}
       {!lib && <div className="lib-grid big">{[0, 1, 2, 3, 4, 5, 6, 7].map((i) => <div key={i} className="skeleton" style={{ aspectRatio: '1' }} />)}</div>}

@@ -537,10 +537,18 @@ function Updates() {
               <div className="stack" style={{ gap: 2 }}><span className="eyebrow">Update available</span><h3 style={{ margin: 0 }}>Church Studio {check.latest}</h3></div>
               <button className="btn primary" disabled={!check.asset} onClick={download}><Download size={15} />Download update</button>
             </div>
+            <div className="update-steps">
+              <strong>How to update</strong>
+              <ol>
+                <li>Press <b>Download update</b>. It opens when it's done.</li>
+                <li><b>Drag Church Studio into Applications and choose Replace.</b></li>
+                <li>Open Church Studio again.</li>
+              </ol>
+              <span className="small muted">Your videos, designs, writing and settings stay as they are.</span>
+            </div>
             {check.notes?.map((n) => (
               <div key={n.version} className="prose" dangerouslySetInnerHTML={{ __html: mdToHtml(n.notes) }} />
             ))}
-            <span className="muted small">The download opens when it's done. Drag Church Studio into Applications and choose Replace. Your sermons, designs and settings stay as they are.</span>
           </div>
         )}
         <label className="switch"><input type="checkbox" checked={config.autoUpdateCheck !== false} onChange={(e) => saveConfig({ autoUpdateCheck: e.target.checked })} />Check once a day when the app opens</label>

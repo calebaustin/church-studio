@@ -7,12 +7,29 @@ calendar that sits next to your church's own events, with your logo, colors and 
 It all runs on your Mac with no account, no cloud and no AI required, so a small staff or a volunteer can do
 in an afternoon what used to take a week.
 
+> **For Macs with Apple chips (M1 and newer).** There is no Windows or Intel Mac release. If you'd like
+> to build one, the working pieces are all here: the engine (`src/daemon`), the screens (`src/ui`) and the
+> media scripts (`scripts/`) are plain Node, React and Python. See [Intel Macs](docs/INTEL.md) (mostly
+> wired already) and [Windows port](#windows-port).
+
+## Download
+
+**[Download Church Studio](https://github.com/calebaustin/church-studio/releases/latest/download/Church-Studio-Mac-arm64.dmg)** for Macs with an Apple chip (M1, M2, M3, M4 and newer).
+
+Not sure which Mac you have? Click the Apple menu, then About This Mac. If it says "Chip: Apple M…", you're set.
+
+**Install:** open the download, drag Church Studio into Applications, and open it. The first time, macOS
+asks you to confirm: click Done, then open System Settings › Privacy & Security and choose Open Anyway.
+
+**Update:** in the app, go to Settings › Updates and press Download update. Then
+**drag Church Studio into Applications and choose Replace.** Your work stays where it is.
+
 <details>
 <summary><strong>Screenshots</strong></summary>
 
 | | |
 |---|---|
-| ![Dashboard](docs/images/dashboard.png) **Dashboard** shows what's next and only the tools you use. | ![Graphics](docs/images/graphics.png) **Graphics** with five template packs, photo frames and device mockups. |
+| ![Dashboard](docs/images/dashboard.png) **Dashboard** shows what's next and only the tools you use. | ![Design](docs/images/graphics.png) **Design** with five template packs, photo frames and device mockups. |
 | ![Transcribe](docs/images/transcribe.png) **Transcribe** any recording, with one-tap audio cleanup. | ![Presenter](docs/images/presenter.png) **Present** to a second screen with notes, next slide and live edits. |
 | ![Calendar](docs/images/calendar.png) **Calendar** with your church events beside your posts. | ![Settings](docs/images/settings.png) **Your tools**: turn tools on or off and set their order. |
 
@@ -30,13 +47,10 @@ npm test                # engine tests (no network)
 ## Package it as one app
 
 ```sh
-scripts/build-app.sh            # Apple Silicon -> dist/release/Church Studio-<version>-arm64.dmg
-scripts/setup-intel.sh          # once: Intel Python, packages and ffmpeg (runs through Rosetta)
-ARCH=x64 scripts/build-app.sh   # Intel -> dist/release/Church Studio-<version>-x64.dmg
+scripts/build-app.sh            # -> dist/release/Church-Studio-Mac-arm64.dmg
 ```
 
-Releases include both when the Intel setup has been run. Each copy's update check downloads the file for its
-own kind of Mac. Intel Macs start on the faster Base transcription model.
+To build for Intel Macs, see [docs/INTEL.md](docs/INTEL.md).
 
 The `.app` contains everything: a frozen Python media engine (`sc-media`: Whisper, OpenCV, Pillow,
 yt-dlp), static ffmpeg/ffprobe, fonts, the UI and the local daemon. Nothing else needs installing.
@@ -76,7 +90,7 @@ More tools:
   drafts lean toward the themes, and finished posts can be saved back as samples.
 - **Bible references:** spoken references are written the standard way in transcripts, captions and writing
   ("First Corinthians 10 beginning in verse 16" becomes "1 Corinthians 10:16"). Whisper also gets book-name hints.
-- **Graphics:** a design home ("What will you design today?") for presentations, social posts, carousels,
+- **Design:** a design home ("What will you design today?") for presentations, social posts, carousels,
   stories, thumbnails, flyers, sermon notes and custom sizes. Multi-page designs, templates in your brand
   colors and fonts, "From a sermon" (slides, carousels, stories and notes built from the transcript),
   smart alignment guides and grid snapping, inline text editing, and export to PNG, PDF or PowerPoint (with
@@ -114,6 +128,14 @@ Open-source credits: `CREDITS.md`, also shown in Settings › Thank you.
 Settings › Updates checks GitHub releases (`updateRepo` in package.json), shows the notes, and downloads the
 new .dmg. Data lives outside the app, and the first launch of a new version backs up settings and data files
 to `backups/` (last five kept) before running any migrations. See `docs/RELEASING.md`.
+
+## Windows port
+
+Not built yet, and contributions are welcome. What would need a Windows version:
+- Packaging: `scripts/build-app.sh` and the electron-builder `mac` settings in package.json (Windows uses NSIS).
+- The media engine: PyInstaller has to be run on Windows to make `sc-media.exe`; ffmpeg and ffprobe have Windows builds on npm.
+- Mac-only calls: Show in Finder (`open -R`), opening files (`open`), the Dock icon, and the update download (it fetches a .dmg).
+- Folder locations: Application Support and the Trash, in `src/daemon/tools.js`, `library.js` and `electron/main.cjs`.
 
 ## Layout
 

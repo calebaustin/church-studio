@@ -1,7 +1,6 @@
-// The Dock icon: the church's logo on a rounded square, with a white circle tucked into the
-// bottom-right corner and "CS" cut out of it, so the logo's color shows through. When the area
-// behind the circle is light (a white logo or a white background), "CS" is drawn in a dark color
-// instead, so it never disappears.
+// The Dock icon: the church's logo on a rounded square, with a small rounded-square badge in the
+// bottom-right corner and "CS" in the logo's background color, so it looks cut out. The badge is white
+// over dark logos and a dark brand color over light ones (at least 3:1 contrast), so it always stands out.
 const S = 1024; const B = 824; const O = (S - B) / 2; const R = B * 0.225;
 
 const load = (src) => new Promise((res, rej) => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = rej; i.src = src; });
@@ -50,24 +49,32 @@ export async function makeDockIcon({ logoUrl, brandColor = '#2B7F5F', ink = '#1B
   }
   ctx.restore();
 
-  // The corner circle: centered past the corner so it grows out of it.
-  const cx = O + B - B * 0.1; const cy = O + B - B * 0.1; const cr = B * 0.27;
-  const under = ctx.getImageData(cx - cr * 0.5, cy - cr * 0.5, cr, cr).data;
+  // The corner badge: a rounded square tucked into the bottom-right corner, with "CS" cut out of it.
+  // Its color is picked to stand out from whatever is behind it (at least 3:1 contrast): white over
+  // dark or colorful logos, and a dark brand color over white or light ones.
+  const bs = B * 0.34; const pad = B * 0.045;
+  const bx0 = O + B - bs - pad; const by0 = O + B - bs - pad;
+  const under = ctx.getImageData(bx0 - bs * 0.2, by0 - bs * 0.2, bs * 1.4, bs * 1.4).data;
   let r = 0; let g = 0; let b = 0; let n = 0;
   for (let i = 0; i < under.length; i += 4) if (under[i + 3] > 0) { r += under[i]; g += under[i + 1]; b += under[i + 2]; n++; }
-  const lightBehind = n ? lum([r / n, g / n, b / n]) > 0.78 : false;
+  const behind = n ? [r / n, g / n, b / n] : [255, 255, 255];
+  const relLum = (rgb) => { const [R2, G2, B2] = rgb.map((v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; }); return 0.2126 * R2 + 0.7152 * G2 + 0.0722 * B2; };
+  const contrast = (a1, a2) => { const [hi, lo] = [relLum(a1), relLum(a2)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05); };
+  const candidates = [[255, 255, 255], hex(ink), hex(brandColor), [17, 20, 24]];
+  const fill = candidates.find((c) => contrast(c, behind) >= 3) || (relLum(behind) > 0.4 ? [17, 20, 24] : [255, 255, 255]);
 
   const badge = document.createElement('canvas'); badge.width = S; badge.height = S;
   const bx = badge.getContext('2d');
-  bx.save(); bx.beginPath(); bx.roundRect(O, O, B, B, R); bx.clip();
-  bx.shadowColor = 'rgba(0,0,0,.18)'; bx.shadowBlur = 24;
-  bx.beginPath(); bx.arc(cx, cy, cr, 0, Math.PI * 2); bx.fillStyle = '#FFFFFF'; bx.fill();
+  bx.save();
+  bx.shadowColor = 'rgba(0,0,0,.22)'; bx.shadowBlur = 20; bx.shadowOffsetY = 4;
+  bx.beginPath(); bx.roundRect(bx0, by0, bs, bs, bs * 0.26); bx.fillStyle = `rgb(${fill.join(',')})`; bx.fill();
   bx.restore();
-  bx.font = `700 ${Math.round(cr * 0.82)}px 'Caveat', cursive`;
+  bx.font = `700 ${Math.round(bs * 0.62)}px 'Caveat', cursive`;
   bx.textAlign = 'center'; bx.textBaseline = 'middle';
-  const tx = cx - cr * 0.24; const ty = cy - cr * 0.2;
-  if (lightBehind) { bx.fillStyle = ink; bx.fillText('CS', tx, ty); }
-  else { bx.globalCompositeOperation = 'destination-out'; bx.fillText('CS', tx, ty); }
+  // "CS" in the color behind the badge, so it reads as cut out without showing busy logo details.
+  const whiteBadge = fill[0] === 255 && fill[1] === 255 && fill[2] === 255;
+  bx.fillStyle = whiteBadge ? `rgb(${behind.map((v) => Math.round(v)).join(',')})` : '#FFFFFF';
+  bx.fillText('CS', bx0 + bs / 2, by0 + bs / 2 + bs * 0.02);
   ctx.drawImage(badge, 0, 0);
   return c.toDataURL('image/png');
 }

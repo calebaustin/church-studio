@@ -75,7 +75,7 @@ export const lastUpdateCheck = () => lastCheck;
 export async function downloadUpdate(ctx) {
   const info = lastCheck?.available ? lastCheck : await checkForUpdate();
   if (!info.available) throw new Error('You already have the latest version.');
-  if (!info.asset) throw new Error(process.arch === 'arm64' ? 'This release has no Mac download yet.' : 'This release has no Intel Mac download yet. Check back soon.');
+  if (!info.asset) throw new Error(process.arch === 'arm64' ? 'This release has no Mac download yet.' : 'Official releases are for Macs with Apple chips now, so there is no Intel download. This copy keeps working as it is.');
   const dest = path.join(downloadsDir(), info.asset.name);
   const r = await fetch(info.asset.url, { headers: { 'user-agent': 'Church-Studio-Updater' }, signal: ctx.signal });
   if (!r.ok || !r.body) throw new Error(`Download failed (${r.status}).`);

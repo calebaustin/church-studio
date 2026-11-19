@@ -17,7 +17,7 @@ export default function PrintDialog({ pid, kind, kindLabel, draft, header, onClo
   const [busy, setBusy] = useState(null);
   useEffect(() => {
     if (kind === 'group') api.get(`/api/outline/${pid}`).then((r) => setOutline(r.outline)).catch(() => setOutline(null));
-    api.get('/api/library').then((l) => setLogo(l.items.find((i) => i.folder === 'Logos' && i.kind === 'image')?.url || null)).catch(() => setLogo(null));
+    api.get('/api/library').then((l) => { const logos = l.items.filter((i) => i.folder === 'Logos' && i.kind === 'image'); setLogo((logos.find((i) => i.rel === config.appLogo) || logos[0])?.url || null); }).catch(() => setLogo(null));
   }, [pid, kind]);
   const origin = window.location.origin;
   const html = useMemo(() => buildPrintHtml({

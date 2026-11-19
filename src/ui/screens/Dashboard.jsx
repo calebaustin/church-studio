@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus, Wand2, Download, CalendarClock, CalendarDays, Palette, ArrowRight, Zap, Link2, CheckCircle2, Clock, Hand, Clapperboard, Target, MonitorPlay, Check, Radio, PenLine, Shapes, LayoutGrid } from 'lucide-react';
+import { Plus, Wand2, Download, CalendarClock, CalendarDays, Palette, ArrowRight, Zap, Link2, CheckCircle2, Clock, Hand, Clapperboard, Target, MonitorPlay, Check, Radio, PenLine, Shapes, LayoutGrid, Flame, RotateCcw, Lightbulb, Send } from 'lucide-react';
 import { isOn } from '../tools.js';
+import { nextNote } from '../encourage.js';
 import { EventCard, useChurchEvents } from '../components/ChurchEvents.jsx';
 import { useApp } from '../App.jsx';
 import { api, fmt, media } from '../api.js';
@@ -52,8 +53,14 @@ export default function Dashboard() {
   const [link, setLink] = useState('');
   const [adding, setAdding] = useState(null);
   const cal = useChurchEvents();
+  const [extra, setExtra] = useState({ drafts: [], designs: [] });
+  useEffect(() => {
+    Promise.all([api.get('/api/writing').catch(() => ({ drafts: [] })), api.get('/api/designs').catch(() => ({ designs: [] }))])
+      .then(([w, d]) => setExtra({ drafts: w.drafts || [], designs: d.designs || [] }));
+  }, []);
   const [ev, setEv] = useState(null);
   const on = (id) => isOn(config, id);
+  const [note] = useState(() => nextNote());
 
   const load = useCallback(() => api.get('/api/stats').then(setStats).catch(() => {}), []);
   useEffect(() => { load(); const id = setInterval(load, 20000); return () => clearInterval(id); }, [load]);
@@ -87,13 +94,6 @@ export default function Dashboard() {
     }
     for (const p of stats.posts.filter((x) => x.status === 'needs-you').slice(0, 2)) {
       items.push({ key: p.id, icon: Hand, tone: 'warn', title: `Ready for you to post`, sub: p.title || p.caption?.slice(0, 50), go: () => go({ name: 'social' }) });
-    }
-    const soon = stats.posts.filter((x) => x.status === 'scheduled').sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt)).slice(0, 2);
-    for (const p of soon) {
-      items.push({ key: `s${p.id}`, icon: CalendarClock, tone: 'ok', title: p.title || 'Scheduled post', sub: new Date(p.scheduledAt).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }), go: () => go({ name: 'social' }) });
-    }
-    for (const e of cal.events.filter((x) => new Date(x.start) >= new Date(new Date().toDateString()) && new Date(x.start) - Date.now() < 7 * DAY).slice(0, 2)) {
-      items.push({ key: e.id, icon: CalendarDays, tone: 'warn', title: e.title, sub: `${new Date(e.start).toLocaleDateString([], { weekday: 'short' })} ${e.allDay ? '' : new Date(e.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · Make a graphic or post`, go: () => setEv(e) });
     }
     const waiting = stats.projects.find((p) => p.status === 'ready');
     if (waiting) items.push({ key: `t${waiting.id}`, icon: Wand2, tone: 'accent', title: 'Ready to transcribe', sub: waiting.title, go: () => go({ name: 'project', id: waiting.id }) });
@@ -129,21 +129,7 @@ export default function Dashboard() {
       <section className="glass strong dash-top">
         <div className="stack" style={{ gap: 18 }}>
           <h1 className="dash-hello">{greeting()}<br />Let's make Sunday count.</h1>
-          {on('library') && (
-          <div className="goal-card">
-            <div className="row between">
-              <div className="stack" style={{ gap: 2 }}>
-                <strong>{madeThisWeek >= goal ? 'Weekly goal met. Nice work.' : `${madeThisWeek} of ${goal} clips this week`}</strong>
-                <span className="muted small">Weekly goal</span>
-              </div>
-              <button className="goal-icon" title="Change weekly goal" aria-label="Change weekly goal" onClick={() => {
-                const v = Number(prompt('How many clips a week?', String(goal)));
-                if (v > 0) saveConfig({ weeklyGoal: v });
-              }}><Target size={18} /></button>
-            </div>
-            <div className="meter" style={{ height: 10, marginTop: 10 }}><i style={{ width: `${Math.min(100, (madeThisWeek / goal) * 100)}%`, background: 'var(--accent-2)' }} /></div>
-          </div>
-          )}
+          <Streaks stats={stats} extra={extra} />
           <div className="quick">
             {actions.map(([label, Icon, fn]) => (
               <button key={label} className="quick-btn" disabled={!fn} onClick={fn || undefined}>
@@ -184,6 +170,8 @@ export default function Dashboard() {
           )}
         </div>
       </section>
+
+      <Widgets stats={stats} extra={extra} cal={cal} onEvent={setEv} />
 
       {on('library') && <ChannelFeed onAdd={(v) => setAdding({ url: v.url, title: v.title })} projects={stats?.projects || []} />}
 
@@ -257,6 +245,7 @@ export default function Dashboard() {
         </>
       )}
       {adding && <AddVideo url={adding.url} onClose={() => setAdding(null)} onAdd={add} />}
+      <p className="dash-note">{note}</p>
       {ev && <EventCard event={ev} onClose={() => setEv(null)} onPlanPost={on('social') ? () => go({ name: 'social' }) : null} />}
     </div>
   );
@@ -309,4 +298,129 @@ function ChannelFeed({ onAdd, projects }) {
       </div>
     </>
   );
+}
+
+// ---------------------------------------------------------------- streaks
+const weekStart = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - x.getDay()); return x.getTime(); };
+/** Weeks in a row (ending this week or last week) with at least one of these dates. */
+function streak(dates) {
+  const weeks = new Set(dates.filter(Boolean).map((d) => weekStart(d)));
+  let w = weekStart(new Date());
+  if (!weeks.has(w)) w -= 7 * DAY; // this week isn't over yet
+  let n = 0;
+  while (weeks.has(w)) { n++; w -= 7 * DAY; }
+  return n;
+}
+
+function Streaks({ stats, extra }) {
+  const { config } = useApp();
+  if (!stats) return <div className="goal-card"><div className="skeleton" style={{ height: 44 }} /></div>;
+  const kinds = [
+    isOn(config, 'library') && ['clips', 'shared clips', streak(stats.exports.map((e) => e.at))],
+    isOn(config, 'social') && ['posts', 'posted on social', streak(stats.posts.filter((p) => p.publishedAt).map((p) => p.publishedAt))],
+    isOn(config, 'writing') && ['blogs', 'written', streak(extra.drafts.map((d) => d.updated))],
+    isOn(config, 'graphics') && ['designs', 'designed', streak(extra.designs.map((d) => d.updated))],
+  ].filter(Boolean);
+  const best = [...kinds].sort((a, b) => b[2] - a[2])[0];
+  const msg = !best || best[2] === 0 ? 'Make one thing this week to start a streak.'
+    : best[2] === 1 ? `You ${best[1]} last week. Keep it going.`
+      : `You've ${best[1]} ${best[2]} weeks in a row!`;
+  return (
+    <div className="goal-card">
+      <div className="row between" style={{ gap: 10 }}>
+        <div className="stack" style={{ gap: 2 }}>
+          <strong>{msg}</strong>
+          <span className="muted small">Your streaks</span>
+        </div>
+        <span className="goal-icon" aria-hidden="true"><Flame size={18} /></span>
+      </div>
+      <div className="row wrap" style={{ gap: 6, marginTop: 10 }}>
+        {kinds.map(([k, , n]) => <span key={k} className={`chip ${n ? 'accent' : ''}`}><span className="num">{n}</span> wk {k}</span>)}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- widgets
+const ago = (iso) => { const m = Math.round((Date.now() - Date.parse(iso)) / 60000); return m < 60 ? `${Math.max(1, m)} min ago` : m < 1440 ? `${Math.round(m / 60)} hr ago` : `${Math.round(m / 1440)} days ago`; };
+
+/**
+ * Personal widgets: upcoming events, scheduled posts, work to jump back into, and ideas.
+ * They're ordered by what this church makes most, so the dashboard leans toward its real work.
+ */
+function Widgets({ stats, extra, cal, onEvent }) {
+  const { config, go } = useApp();
+  if (!stats) return null;
+  const month = Date.now() - 30 * DAY;
+  const use = {
+    events: 2 + (cal.linked ? 3 : -9),
+    scheduled: stats.posts.filter((p) => Date.parse(p.created || 0) > month).length + (isOn(config, 'social') ? 1 : -9),
+    jump: extra.drafts.filter((d) => Date.parse(d.updated || 0) > month).length + extra.designs.filter((d) => Date.parse(d.updated || 0) > month).length + stats.exports.filter((e) => Date.parse(e.at) > month).length,
+    ideas: 1.5,
+  };
+  const events = cal.events.filter((e) => new Date(e.end || e.start) >= new Date()).slice(0, 4);
+  const scheduled = stats.posts.filter((p) => p.status === 'scheduled').sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt)).slice(0, 4);
+  const jump = [
+    ...extra.drafts.map((d) => ({ key: `w${d.id}`, icon: PenLine, title: d.title, sub: `Writing · ${ago(d.updated)}`, at: d.updated, go: { name: 'writing', project: d.id } })),
+    ...extra.designs.map((d) => ({ key: `d${d.id}`, icon: Shapes, title: d.name, sub: `Design · ${ago(d.updated)}`, at: d.updated, go: { name: 'graphics', design: d.id } })),
+    ...stats.projects.filter((p) => p.status !== 'transcribed' || p.proposed > 0).map((p) => ({ key: `p${p.id}`, icon: Clapperboard, title: p.title, sub: p.proposed ? `${p.proposed} clips to review` : 'Not transcribed yet', at: p.updated || p.created, go: { name: 'project', id: p.id } })),
+  ].filter((x) => x.at).sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 4);
+  const written = new Set(extra.drafts.map((d) => d.id));
+  const postedThisWeek = stats.posts.some((p) => p.publishedAt && Date.parse(p.publishedAt) > startOfWeek().getTime());
+  const ideas = [
+    ...stats.projects.filter((p) => p.status === 'transcribed' && !written.has(p.id) && isOn(config, 'writing')).slice(0, 1).map((p) => ({ key: `iw${p.id}`, icon: PenLine, title: 'Turn a video into a blog', sub: `“${p.title}” has a transcript ready.`, go: { name: 'writing', project: p.id } })),
+    ...(!postedThisWeek && isOn(config, 'social') && isOn(config, 'graphics') ? [{ key: 'ic', icon: Shapes, title: "You haven't posted this week", sub: 'Make a carousel from a template.', go: { name: 'graphics' } }] : []),
+    ...(events[0] && isOn(config, 'graphics') ? [{ key: 'ie', icon: CalendarDays, title: `Promote ${events[0].title}`, sub: 'Make an event graphic in one click.', go: { name: 'graphics', event: events[0] } }] : []),
+    ...(stats.exports[0] && isOn(config, 'social') ? [{ key: 'ip', icon: Send, title: 'Share your latest clip', sub: stats.exports[0].title, go: { name: 'social', compose: { projectId: stats.exports[0].projectId, clipId: stats.exports[0].clipId } } }] : []),
+  ].slice(0, 3);
+  const cards = [
+    events.length > 0 && ['events', use.events, (
+      <div key="events" className="glass dash-widget">
+        <div className="row between"><span className="eyebrow"><CalendarDays size={13} /> Coming up</span><button className="btn ghost sm" onClick={() => go({ name: 'social' })}>Calendar<ArrowRight size={13} /></button></div>
+        {events.map((e) => (
+          <button key={e.id} className="feed-item" onClick={() => onEvent(e)}>
+            <span className="date-tile"><span>{new Date(e.start).toLocaleDateString([], { month: 'short' })}</span><strong>{new Date(e.start).getDate()}</strong></span>
+            <div className="stack grow" style={{ gap: 0, minWidth: 0 }}><strong className="truncate">{e.title}</strong><span className="muted small truncate">{e.allDay ? 'All day' : new Date(e.start).toLocaleTimeString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })}</span></div>
+          </button>
+        ))}
+      </div>
+    )],
+    scheduled.length > 0 && ['scheduled', use.scheduled, (
+      <div key="scheduled" className="glass dash-widget">
+        <div className="row between"><span className="eyebrow"><CalendarClock size={13} /> Scheduled</span><button className="btn ghost sm" onClick={() => go({ name: 'social' })}>Social<ArrowRight size={13} /></button></div>
+        {scheduled.map((p) => (
+          <button key={p.id} className="feed-item" onClick={() => go({ name: 'social' })}>
+            <span className="feed-icon ok"><Send size={15} /></span>
+            <div className="stack grow" style={{ gap: 0, minWidth: 0 }}><strong className="truncate">{p.title || p.caption || 'Post'}</strong><span className="muted small">{new Date(p.scheduledAt).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })}</span></div>
+          </button>
+        ))}
+      </div>
+    )],
+    jump.length > 0 && ['jump', use.jump, (
+      <div key="jump" className="glass dash-widget">
+        <span className="eyebrow"><RotateCcw size={13} /> Jump back in</span>
+        {jump.map((j) => (
+          <button key={j.key} className="feed-item" onClick={() => go(j.go)}>
+            <span className="feed-icon"><j.icon size={15} /></span>
+            <div className="stack grow" style={{ gap: 0, minWidth: 0 }}><strong className="truncate">{j.title}</strong><span className="muted small truncate">{j.sub}</span></div>
+            <ArrowRight size={14} className="muted" />
+          </button>
+        ))}
+      </div>
+    )],
+    ideas.length > 0 && ['ideas', use.ideas, (
+      <div key="ideas" className="glass dash-widget idea-widget">
+        <span className="eyebrow"><Lightbulb size={13} /> Ideas for you</span>
+        {ideas.map((x) => (
+          <button key={x.key} className="feed-item" onClick={() => go(x.go)}>
+            <span className="feed-icon accent"><x.icon size={15} /></span>
+            <div className="stack grow" style={{ gap: 0, minWidth: 0 }}><strong className="truncate">{x.title}</strong><span className="muted small truncate">{x.sub}</span></div>
+            <ArrowRight size={14} className="muted" />
+          </button>
+        ))}
+      </div>
+    )],
+  ].filter(Boolean).sort((a, b) => b[1] - a[1]);
+  if (!cards.length) return null;
+  return <div className="dash-widgets">{cards.map((c) => c[2])}</div>;
 }

@@ -8,11 +8,11 @@ function ideasFor(topics, sermons) {
   const t = topics[0] || 'grace';
   const s = sermons[0];
   return [
-    { title: `Quote card about “${t}”`, about: 'A strong line from Sunday on a branded background.', go: { name: 'graphics' }, tool: 'Graphics' },
+    { title: `Quote card about “${t}”`, about: 'A strong line from Sunday on a branded background.', go: { name: 'graphics' }, tool: 'Design' },
     s && { title: `Recap blog for “${s.title.slice(0, 40)}”`, about: 'Written from the sermon, with an SEO check.', go: { name: 'writing' }, tool: 'Writing' },
     s && { title: 'Small group questions', about: 'Discussion guide from this week’s message.', go: { name: 'writing' }, tool: 'Writing' },
     { title: 'Three-stack reel', about: 'The full shot three times. Great for wide stage cameras.', go: { name: 'library' }, tool: 'Clips' },
-    { title: 'Announcement with a QR code', about: 'Event or giving link people can scan.', go: { name: 'graphics' }, tool: 'Graphics' },
+    { title: 'Announcement with a QR code', about: 'Event or giving link people can scan.', go: { name: 'graphics' }, tool: 'Design' },
     { title: 'Weekly email summary', about: 'Three takeaways and a link to watch.', go: { name: 'writing' }, tool: 'Writing' },
     { title: 'Schedule the week', about: 'Plan a clip a day on the calendar.', go: { name: 'social' }, tool: 'Social' },
   ].filter(Boolean);
