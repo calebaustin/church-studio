@@ -40,6 +40,7 @@ export const DEFAULTS = {
   brandColorsSet: false, // the brand checklist: colors were chosen on purpose
   brandFontsSet: false,
   socialLinks: {}, // { facebook, instagram, youtube, ... } found by Jumpstart or added by hand
+  blogFeed: '', // the church blog's RSS or Atom feed, for Inspiration
   jumpstart: null, // { at, website } when the website setup ran
   dismissed: {}, // setup checklists the user closed
   churchInfo: { name: '', address: '', website: '', phone: '', email: '', times: '' }, // printed footers

@@ -16,6 +16,7 @@ import { ensureLibrary } from './library.js';
 import { addSample, loadVoice, updateVoice } from './voice.js';
 import { createWorkspace, listWorkspaces } from './workspaces.js';
 import { downloadsDir } from './render.js';
+import { syncBlog } from './blog.js';
 
 const run = promisify(execFile);
 const FORMAT = 1;
@@ -358,6 +359,8 @@ export async function applyScan(found, keep) {
     }
   }
   await saveConfig(patch);
+  // Their blog, for Inspiration. Quietly skipped when the site has no feed.
+  if (found.website && !(await loadConfig()).blogFeed) syncBlog({ url: found.website }).catch(() => {});
   if (keep.voice && found.voice) {
     const v = await loadVoice();
     await updateVoice({ mission: v.mission || found.voice.mission, website: v.website || found.voice.website, themes: [...new Set([...(v.themes || []), ...(found.voice.themes || [])])].slice(0, 12) });

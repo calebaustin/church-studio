@@ -2,6 +2,19 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## 0.10.0 · November 19, 2026
+
+### New
+- **Inspiration.** A new tool in the sidebar. See what your church has been saying this month, quarter or year, across sermons, writing, posts and your blog. Find blind spots: topics most churches come back to that you haven't touched lately, with when each last came up and a button to write about it. See church seasons coming up (Advent, Lent, Easter, Pentecost and more) with ideas and a nudge to start three weeks ahead, your scripture balance, and the topics you return to most.
+- **Your blog.** Connect your blog and Church Studio reads its public feed (WordPress, Squarespace, Wix and most others), keeping a growing history on your Mac. See how often you post, days since the last post, and ideas for the next one: sermons without a blog post yet, quiet topics, and older posts worth sharing again. Jumpstart finds your blog automatically.
+- **Year in review.** One click makes a story set of your year: messages preached, the books you spent the most time in, the topics you kept coming back to, what you made and shared, your busiest month and longest streak. It opens in Design, in your brand, ready to edit and post.
+- **Background eraser.** Clear a white or plain background off a logo or picture, around the outside or inside letters too, with a strength slider and a light, dark and see-through preview. Saves a new copy and keeps the original. Find it in a logo's ⋯ menu, on brand files, and on pictures in a design.
+- **Alt text for photos.** Add alt text and tags to any picture in your brand library, copy it when you post, and search by it. With an AI helper turned on, Suggest writes a first draft.
+
+### Changed
+- The brand kit says which logo files work best: SVG, or PNG with a see-through background.
+- SVG logos work as your primary logo in the menu and Dock.
+
 ## 0.9.0 · November 19, 2026
 
 ### New

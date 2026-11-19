@@ -7,6 +7,7 @@ import ColorField from '../components/ColorField.jsx';
 import FontMenu, { useFamilies } from '../components/FontMenu.jsx';
 import { WebsiteSetup } from '../components/Jumpstart.jsx';
 import BackgroundEraser from '../components/BackgroundEraser.jsx';
+import PhotoNotes from '../components/PhotoNotes.jsx';
 import SetupChecklist from '../components/SetupChecklist.jsx';
 import Popover from '../components/Popover.jsx';
 
@@ -201,13 +202,18 @@ export default function BrandLibrary({ section }) {
   useEffect(() => { load(); }, []);
   usePoll(load, 30000); // files added in Finder show up; focus also refreshes
   useEffect(() => onJobFinished(() => load()), [onJobFinished]);
-  const items = (lib?.items || []).filter((i) => (folder === 'All' || i.folder === folder) && (!q || i.name.toLowerCase().includes(q.toLowerCase())));
+  // Search matches the file name, its alt text and its tags.
+  const hay = (i) => `${i.name} ${notes[i.rel]?.alt || ''} ${(notes[i.rel]?.tags || []).join(' ')}`.toLowerCase();
+  const items = (lib?.items || []).filter((i) => (folder === 'All' || i.folder === folder) && (!q || q.toLowerCase().split(/\s+/).every((w) => hay(i).includes(w))));
   const counts = Object.fromEntries((lib?.folders || []).map((f) => [f, (lib?.items || []).filter((i) => i.folder === f).length]));
   const { config, saveConfig } = useApp();
   const addTo = async (target) => { if (!desktop?.pickFiles) return api.post('/api/library/open', { folder: target }); const paths = await desktop.pickFiles(); if (paths.length) { await api.post('/api/library/import', { paths, folder: target }); load(); } };
   const kit = () => document.getElementById('brand-kit')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   const [webSetup, setWebSetup] = useState(false);
   const [erasingFile, setErasingFile] = useState(null);
+  const [notes, setNotes] = useState({});
+  const [noting, setNoting] = useState(null);
+  useEffect(() => { api.get('/api/library/notes').then((r) => setNotes(r.notes || {})).catch(() => {}); }, []);
   return (
     <div className="page">
       <div className="row between wrap">
@@ -229,6 +235,7 @@ export default function BrandLibrary({ section }) {
         </div>
       )}
       {webSetup && <WebsiteSetup onClose={() => setWebSetup(false)} />}
+      {noting && <PhotoNotes item={noting} note={notes[noting.rel]} onClose={() => setNoting(null)} onSaved={(n) => { setNotes((x) => { const y = { ...x }; if (n) y[noting.rel] = n; else delete y[noting.rel]; return y; }); setNoting(null); }} />}
       {erasingFile && <BackgroundEraser rel={erasingFile} onClose={() => setErasingFile(null)} onSaved={() => { setErasingFile(null); load(); }} />}
       {lib && (
         <SetupChecklist id="brand-setup" eyebrow="Set up your brand" title={(done, total) => (done === 0 ? 'A few building blocks' : `${done} of ${total} done`)} steps={[
@@ -249,7 +256,7 @@ export default function BrandLibrary({ section }) {
             <h2>Brand files</h2>
             {lib && <span className="muted small truncate" title={lib.root}>{lib.root.replace(/^\/Users\/[^/]+/, '~')}</span>}
           </div>
-          <input className="input" style={{ maxWidth: 260 }} placeholder="Search files" value={q} onChange={(e) => setQ(e.target.value)} />
+          <input className="input" style={{ maxWidth: 260 }} placeholder="Search names, alt text and tags" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         <div className="seg" style={{ justifySelf: 'start', flexWrap: 'wrap' }}>{['All', ...(lib?.folders || [])].map((f) => <button key={f} className={folder === f ? 'on' : ''} onClick={() => setFolder(f)}>{f}{f !== 'All' && counts[f] ? ` · ${counts[f]}` : ''}</button>)}</div>
       </div>
@@ -271,9 +278,11 @@ export default function BrandLibrary({ section }) {
               <div className="stack" style={{ gap: 4, padding: '8px 10px 10px' }}>
                 <strong className="truncate small" title={i.name}>{i.name}</strong>
                 <span className="muted small">{i.folder} · {sizeLabel(i.bytes)}</span>
+                {notes[i.rel]?.alt && <span className="small lib-alt" title={notes[i.rel].alt}>{notes[i.rel].alt}</span>}
                 <div className="row" style={{ gap: 4 }}>
                   <button className="btn icon sm" title="Show in Finder" aria-label="Show in Finder" onClick={() => api.post('/api/library/reveal', { rel: i.rel })}><Eye size={14} /></button>
                   {i.kind === 'image' && <button className="btn sm" onClick={() => go({ name: 'graphics', image: i.rel })}><Shapes size={13} />Use in a graphic</button>}
+                  {i.kind === 'image' && <button className={`btn sm ${notes[i.rel]?.alt ? '' : 'ghost'}`} title="Alt text and tags" onClick={() => setNoting(i)}>Alt</button>}
                   {i.kind === 'image' && !/\.svg$/i.test(i.rel) && <button className="btn icon sm" title="Erase background" aria-label="Erase background" onClick={() => setErasingFile(i.rel)}><Eraser size={14} /></button>}
                 </div>
               </div>

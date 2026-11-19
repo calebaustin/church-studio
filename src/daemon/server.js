@@ -16,6 +16,9 @@ import { exportClip, exportJoined, trackClip, revealInFinder, EXPORT_PRESETS, mo
 import * as prefs from './prefs.js';
 import * as workspaces from './workspaces.js';
 import * as jumpstart from './jumpstart.js';
+import * as inspiration from './inspiration.js';
+import * as blog from './blog.js';
+import * as photos from './photos.js';
 import * as library from './library.js';
 import * as writing from './writing.js';
 import * as voice from './voice.js';
@@ -386,6 +389,15 @@ route('GET', '/api/social/media', async () => {
   }
   return { media: out.sort((a, b) => String(b.at).localeCompare(String(a.at))) };
 });
+
+// ---------------------------------------------------------------- inspiration, blog, photo notes
+route('GET', '/api/inspiration', async (_p, _b, q) => inspiration.inspiration({ period: q?.searchParams?.get('period') || 'quarter' }));
+route('GET', '/api/inspiration/year', async (_p, _b, q) => inspiration.yearInReview(Number(q?.searchParams?.get('year')) || new Date().getFullYear()));
+route('POST', '/api/blog/sync', async (_p, b) => { try { return await blog.syncBlog({ url: b.url || null }); } catch (e) { throw new HttpError(400, e.message); } });
+route('POST', '/api/blog/forget', async () => blog.forgetBlog());
+route('GET', '/api/library/notes', async () => ({ notes: await photos.loadNotes() }));
+route('PUT', '/api/library/notes', async (_p, b) => ({ note: await photos.setNote(String(b.rel || ''), b) }));
+route('POST', '/api/library/notes/suggest', async (_p, b) => { try { return await photos.suggestNote(String(b.rel || '')); } catch (e) { throw new HttpError(400, e.message); } });
 
 // ---------------------------------------------------------------- jumpstart (settings file, website setup)
 route('GET', '/api/jumpstart/parts', () => ({ parts: Object.entries(jumpstart.PARTS).map(([id, p]) => ({ id, label: p.label, about: p.about })) }));

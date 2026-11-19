@@ -13,6 +13,7 @@ import Writing from './screens/Writing.jsx';
 import AllProjects from './screens/AllProjects.jsx';
 import Graphics from './screens/Graphics.jsx';
 import BrandLibrary from './screens/BrandLibrary.jsx';
+import Inspiration from './screens/Inspiration.jsx';
 import MyApp from './screens/MyApp.jsx';
 import Project from './screens/Project.jsx';
 import Settings from './screens/Settings.jsx';
@@ -23,7 +24,7 @@ import { Toasts } from './components/Toasts.jsx';
 import Modal from './components/Modal.jsx';
 
 // Where the background color sits on each screen. It glides between spots as you move around.
-const SCENES = { home: 0, library: 1, project: 1, projects: 2, social: 3, writing: 2, graphics: 3, assets: 1, me: 2, settings: 0 };
+const SCENES = { home: 0, library: 1, project: 1, projects: 2, social: 3, writing: 2, graphics: 3, assets: 1, me: 2, settings: 0, inspiration: 3 };
 const Ctx = createContext(null);
 export const useApp = () => useContext(Ctx);
 
@@ -331,6 +332,7 @@ export default function App() {
                     : route.name === 'projects' ? <AllProjects />
                     : route.name === 'graphics' ? <Graphics image={route.image} design={route.design} event={route.event} eventMode={route.eventMode} quote={route.quote} make={route.make} key={route.image || route.design || (route.event && `${route.event.id}${route.eventMode || ''}`) || route.quote || (route.make && `${route.make.projectId}${route.make.template}`) || 'g'} />
                       : route.name === 'assets' ? <BrandLibrary section={route.section} key={route.section || 'b'} />
+                        : route.name === 'inspiration' ? <Inspiration />
                         : route.name === 'me' ? <MyApp section={route.section} key={route.section || 'me'} />
                   : <Dashboard />}
         </main>

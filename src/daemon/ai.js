@@ -208,3 +208,47 @@ export async function complete(cfg, system, user) {
   }
   throw new Error('Pick an AI helper in Settings first.');
 }
+
+/**
+ * Describe a picture in one or two sentences for alt text. image: { data (base64), mediaType }.
+ * Works with Claude, OpenAI, Gemini, and Ollama models that can see pictures.
+ */
+export async function describeImage(cfg, image, prompt) {
+  const p = cfg.llmProvider;
+  const ask = prompt || 'Write alt text for this picture from a church: one or two plain sentences that say what is shown, for someone who can’t see it. No "image of" or "picture of". Then, on a new line starting with "Tags:", give up to six short comma-separated tags.';
+  if (p === 'anthropic') {
+    const client = new Anthropic({ apiKey: cfg.anthropicApiKey });
+    const res = await client.messages.create({
+      model: cfg.anthropicModel, max_tokens: 1000,
+      messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: image.mediaType, data: image.data } }, { type: 'text', text: ask }] }],
+    });
+    if (res.stop_reason === 'refusal') throw new Error('Claude declined this request.');
+    return res.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
+  }
+  if (p === 'openai') {
+    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${cfg.openaiApiKey}` },
+      body: JSON.stringify({ model: cfg.openaiModel, messages: [{ role: 'user', content: [{ type: 'text', text: ask }, { type: 'image_url', image_url: { url: `data:${image.mediaType};base64,${image.data}` } }] }] }),
+    });
+    if (!r.ok) throw new Error(`OpenAI ${r.status}: ${(await r.text()).slice(0, 200)}`);
+    return (await r.json()).choices[0].message.content.trim();
+  }
+  if (p === 'gemini') {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(cfg.geminiModel)}:generateContent`;
+    const r = await fetch(url, {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': cfg.geminiApiKey },
+      body: JSON.stringify({ contents: [{ role: 'user', parts: [{ inline_data: { mime_type: image.mediaType, data: image.data } }, { text: ask }] }] }),
+    });
+    if (!r.ok) throw new Error(`Gemini ${r.status}: ${(await r.text()).slice(0, 200)}`);
+    return (await r.json()).candidates[0].content.parts.map((x) => x.text).join('').trim();
+  }
+  if (p === 'ollama') {
+    const r = await fetch(`${cfg.ollamaUrl.replace(/\/$/, '')}/api/chat`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: cfg.ollamaModel, stream: false, messages: [{ role: 'user', content: ask, images: [image.data] }] }),
+    });
+    if (!r.ok) throw new Error(`Ollama ${r.status}. Pick a model that can see pictures, like llava or qwen2.5vl.`);
+    return (await r.json()).message.content.trim();
+  }
+  throw new Error('Turn on an AI helper in Settings to suggest alt text.');
+}
