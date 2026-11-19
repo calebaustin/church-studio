@@ -276,12 +276,28 @@ function logoCandidates(html, base) {
 function voiceFrom(texts) {
   const paras = texts.flatMap((t) => t.split(/\n+/)).map((p) => p.trim()).filter((p) => p.split(' ').length >= 14 && p.split(' ').length <= 140 && !/cookie|copyright|©|privacy|javascript/i.test(p));
   const uniq = [...new Set(paras)];
-  const mission = uniq.find((p) => /\b(our mission|we exist to|our vision|we are a church|we believe)\b/i.test(p) && !p.includes('?')) || '';
-  const website = uniq.filter((p) => p !== mission).slice(0, 4).join('\n\n').slice(0, 1800);
+  // A mission statement is usually one short line that says why the church exists. Score each line
+  // and skip welcome and contact text, which also says "our mission" but isn't one.
+  const lines = [...new Set(texts.flatMap((t) => t.split(/\n+|(?<=[.!])\s+(?=[A-Z])/)).map((x) => x.trim()))];
+  const score = (l) => {
+    const w = l.split(/\s+/).length;
+    if (w < 6 || w > 45 || l.includes('?')) return -9;
+    let n = 0;
+    if (/\b(mission|vision|purpose|exists? to|so that|so lost|eternal life|abundant life|make disciples|love god|love people|glorify|follow(ing)? jesus|lead people)\b/i.test(l)) n += 3;
+    if (/\b(we|our|so|to)\b/i.test(l)) n += 1;
+    if (w <= 30) n += 1;
+    if (!/[.!]$/.test(l)) n -= 2; // a heading, not a statement
+    if (/^(participate|join|serve|give|sign|register|learn|watch|visit|click|find|get|discover|explore|check)\b/i.test(l)) n -= 3; // a button, not a belief
+    if (/(you'll find|you will find|contact|inquir|form below|click|let us know|interested in learning|can't wait|sign up|subscribe|honored that)/i.test(l)) n -= 5;
+    return n;
+  };
+  const best = lines.map((l) => [l, score(l)]).sort((a, b) => b[1] - a[1])[0];
+  const mission = best && best[1] >= 4 ? best[0] : '';
+  const website = uniq.filter((p) => !p.includes(mission) || !mission).slice(0, 4).join('\n\n').slice(0, 1800);
   const words = uniq.join(' ').toLowerCase();
   const themes = ['grace', 'community', 'family', 'hope', 'love', 'jesus', 'gospel', 'neighbors', 'belong', 'serve', 'worship', 'generosity', 'mission', 'prayer', 'next generation']
     .filter((w) => (words.match(new RegExp(`\\b${w}`, 'g')) || []).length >= 2).slice(0, 5);
-  return { mission: mission.slice(0, 600), website, themes };
+  return { mission: mission.replace(/\s*Learn more\s*$/i, '').slice(0, 600), website, themes };
 }
 
 /** Read the site and return best guesses. Nothing is saved until the person says so. */

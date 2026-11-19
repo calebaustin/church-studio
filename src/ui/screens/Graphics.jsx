@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Clapperboard, Copy, GalleryHorizontalEnd, Heart, LayoutGrid, MonitorPlay, NotebookPen, Presentation, Printer,
-  Scaling, Search, Smartphone, Sparkles, Trash2, Home as HomeIcon, Wand2, X, BookOpen, Plus, PenTool, Film,
+  Scaling, Search, Smartphone, Sparkles, Trash2, Home as HomeIcon, Wand2, X, BookOpen, Plus, PenTool, Film, Laptop,
 } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { Masonry } from '../components/Masonry.jsx';
 import { api } from '../api.js';
 import Modal, { ModalHead } from '../components/Modal.jsx';
 import DesignEditor from '../design/DesignEditor.jsx';
+import LibraryPicker from '../components/LibraryPicker.jsx';
 import { KINDS, SIZE_PRESETS, TEMPLATES as BASE_TEMPLATES, blankPage, countdownPages, loadAssets, page as newPage, renderPage, scripturePage, uid } from '../design/model.js';
 import { PACKS, PACK_TEMPLATES } from '../design/packs.js';
 import { buildDeck, parseNotes } from '../design/deckBuilder.js';
@@ -262,6 +263,19 @@ export default function Graphics({ image, design, event, eventMode, quote, make 
           onMaker={(m) => setModal(m)}
           onSize={(size) => { setModal(null); const d = newDoc('custom', null, ctx, size); d.name = `Untitled ${size.w}×${size.h}`; create(d); }} />
       )}
+      {modal === 'import' && (
+        <LibraryPicker title="Bring in your own design" folder="Graphics" onClose={() => setModal(null)} onPick={async (i) => {
+          setModal(null);
+          // Keep the picture's own shape: the design is the same size, with the picture filling it.
+          const im = await new Promise((res) => { const x = new Image(); x.onload = () => res(x); x.onerror = () => res(null); x.src = i.url; });
+          const k = im ? Math.min(1, 4000 / Math.max(im.naturalWidth, im.naturalHeight)) : 1;
+          const size = im?.naturalWidth ? { w: Math.round(im.naturalWidth * k), h: Math.round(im.naturalHeight * k) } : { w: 1080, h: 1080 };
+          const d = newDoc('custom', null, ctx, size);
+          d.name = i.name.replace(/\.[a-z0-9]+$/i, '');
+          d.pages = [newPage({ bg: { type: 'image', image: i.rel, darken: 0 }, items: [] })];
+          create(d);
+        }} />
+      )}
       {modal === 'custom' && <CustomSize onClose={() => setModal(null)} onCreate={(size) => { setModal(null); const d = newDoc('custom', null, ctx, size); d.name = `Untitled ${size.w}×${size.h}`; create(d); }} />}
     </div>
   );
@@ -323,7 +337,7 @@ function CreateNew({ ctx, onClose, onBlank, onTemplate, onBrowse, onMaker, onSiz
       <div className="stack" style={{ gap: 8 }}>
         <span className="eyebrow">Guided makers</span>
         <div className="cn-grid">
-          {[['deck', Wand2, 'Slide deck maker', 'Answer a few questions, get a full deck', 3], ['scripture', BookOpen, 'Scripture graphic', 'A verse in your brand look', 2], ['sermon', Sparkles, 'From a sermon', 'Slides, carousels and stories from its words', 1]].map(([m, Icon, t, d, tone]) => (
+          {[['deck', Wand2, 'Slide deck maker', 'Answer a few questions, get a full deck', 3], ['scripture', BookOpen, 'Scripture graphic', 'A verse in your brand look', 2], ['sermon', Sparkles, 'From a sermon', 'Slides, carousels and stories from its words', 1], ['import', Laptop, 'Bring in your own', 'A design from Canva, Photoshop or anywhere, ready to resize, add to or post', 4]].map(([m, Icon, t, d, tone]) => (
             <button key={m} className="cn-card" onClick={() => onMaker(m)}>
               <span className={`cn-icon tone tone-${tone}`}><Icon size={18} /></span>
               <span className="stack" style={{ gap: 0, minWidth: 0 }}><strong className="small">{t}</strong><span className="muted" style={{ fontSize: 12 }}>{d}</span></span>

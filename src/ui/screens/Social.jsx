@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useApp } from '../App.jsx';
-import { api, fmt, openLink } from '../api.js';
+import { api, desktop, fmt, openLink } from '../api.js';
 import { usePoll } from '../poll.js';
-import { MessageSquare } from 'lucide-react';
+import { Laptop, MessageSquare } from 'lucide-react';
 import { exportDesign } from '../design/exporters.js';
 import { checkCaption } from '../captionCheck.js';
 import Modal from '../components/Modal.jsx';
@@ -412,6 +412,25 @@ function Composer({ s, plat, init, onClose, onConnect }) {
     setPreparing(null);
   };
   useEffect(() => { if (init.design && !media) chooseDesign(init.design); }, []);
+  // A video or picture made somewhere else. Pictures are copied into the brand library so they show here.
+  const fromComputer = async () => {
+    setError(null);
+    if (!desktop?.pickFiles) { setError('Open Church Studio on your Mac to attach files from your computer.'); return; }
+    const [f] = await desktop.pickFiles({ name: 'Videos and pictures', extensions: ['mp4', 'mov', 'm4v', 'png', 'jpg', 'jpeg'], multi: false });
+    if (!f) return;
+    const name = f.split('/').pop();
+    if (/\.(png|jpe?g)$/i.test(f)) {
+      setPreparing('file');
+      try {
+        const r = await api.post('/api/library/import', { paths: [f], folder: 'Graphics' });
+        const rel = r.rels?.[0];
+        choose({ kind: 'image', file: r.files[0], pages: 1, thumb: rel ? `/library/${rel.split('/').map(encodeURIComponent).join('/')}` : null, title: name.replace(/\.[a-z0-9]+$/i, ''), summary: '' });
+      } catch (e) { setError(e.message); }
+      setPreparing(null);
+    } else {
+      choose({ file: f, title: name.replace(/\.[a-z0-9]+$/i, ''), sermon: 'From your computer', length: null, summary: '' });
+    }
+  };
   const projects = [...new Map(s.media.map((m) => [m.projectId, m.sermon])).entries()];
   const clipList = s.media.filter((m) => !fromProject || m.projectId === fromProject);
   const designList = (designs || []).filter((d) => !fromProject || d.source?.projectId === fromProject);
@@ -449,18 +468,21 @@ function Composer({ s, plat, init, onClose, onConnect }) {
         <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: 20, alignItems: 'start' }}>
           <div className="stack">
             <div className="vframe" style={{ width: 200, display: 'grid', placeItems: 'center', color: '#aab', cursor: 'pointer' }} onClick={() => setPickMedia(true)}>
-              {media?.thumb ? <img src={media.thumb} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: media.kind === 'image' ? 'contain' : 'cover' }} /> : <span className="small">{preparing ? 'Preparing…' : 'Nothing attached'}</span>}
+              {media?.thumb ? <img src={media.thumb} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: media.kind === 'image' ? 'contain' : 'cover' }} /> : <span className="small" style={{ padding: 10, textAlign: 'center', wordBreak: 'break-word' }}>{preparing ? 'Preparing…' : media ? media.title : 'Nothing attached'}</span>}
             </div>
             <button className="btn sm" onClick={() => setPickMedia(!pickMedia)}>{media ? 'Change' : 'Attach a clip or design'}</button>
-            {media && <span className="muted small">{media.kind === 'image' ? `${media.pages > 1 ? `${media.pages} pages` : 'Image'} · ${media.title || 'Design'}` : `${fmt(media.length)} · ${media.sermon}`}</span>}
+            {media && <span className="muted small">{media.kind === 'image' ? `${media.pages > 1 ? `${media.pages} pages` : 'Image'} · ${media.title || 'Design'}` : `${media.length ? `${fmt(media.length)} · ` : ''}${media.sermon || media.title}`}</span>}
           </div>
           <div className="stack">
             {pickMedia && (
               <div className="keycard stack" style={{ gap: 10 }}>
                 <div className="row between wrap" style={{ gap: 8 }}>
-                  <div className="seg sm">
-                    <button className={pickKind === 'clips' ? 'on' : ''} onClick={() => setPickKind('clips')}>Clips</button>
-                    <button className={pickKind === 'designs' ? 'on' : ''} onClick={() => setPickKind('designs')}>Designs</button>
+                  <div className="row" style={{ gap: 6 }}>
+                    <div className="seg sm">
+                      <button className={pickKind === 'clips' ? 'on' : ''} onClick={() => setPickKind('clips')}>Clips</button>
+                      <button className={pickKind === 'designs' ? 'on' : ''} onClick={() => setPickKind('designs')}>Designs</button>
+                    </div>
+                    <button className="btn sm" disabled={Boolean(preparing)} onClick={fromComputer}><Laptop size={13} />From your computer</button>
                   </div>
                   {projects.length > 1 && (
                     <select className="input" style={{ width: 'auto', maxWidth: 260 }} value={fromProject} onChange={(e) => setFromProject(e.target.value)} aria-label="From project">

@@ -441,7 +441,11 @@ route('POST', '/api/library/reveal', async (_p, b) => {
 route('POST', '/api/library/save', async (_p, b) => { try { return await library.saveDataUrl(b.folder || 'Graphics', b.name, b.dataUrl); } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/library/trash', async (_p, b) => { try { return await library.trashFile(String(b.rel || '')); } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/library/replace', async (_p, b) => { try { return await library.replaceFile(String(b.rel || ''), String(b.file || '')); } catch (e) { throw new HttpError(400, e.message); } });
-route('POST', '/api/library/import', async (_p, b) => ({ files: await library.importFiles(Array.isArray(b.paths) ? b.paths : [], b.folder) }));
+route('POST', '/api/library/import', async (_p, b) => {
+  const files = await library.importFiles(Array.isArray(b.paths) ? b.paths : [], b.folder);
+  const root = await library.libraryRoot();
+  return { files, rels: files.map((f) => path.relative(root, f).split(path.sep).join('/')) };
+});
 
 // ---------------------------------------------------------------- writing
 route('GET', '/api/writing', async () => ({ drafts: await writing.listDrafts() }));

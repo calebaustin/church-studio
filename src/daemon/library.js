@@ -77,7 +77,11 @@ export async function importFiles(paths, folder = 'Photos') {
   const out = [];
   for (const p of paths) {
     if (!existsSync(p)) continue;
-    const dest = path.join(root, FOLDERS.includes(folder) ? folder : 'Photos', path.basename(p));
+    const dir = path.join(root, FOLDERS.includes(folder) ? folder : 'Photos');
+    // Never overwrite a file already in the library: add a number instead.
+    const ext = path.extname(p); const base = path.basename(p, ext);
+    let dest = path.join(dir, `${base}${ext}`);
+    for (let n = 2; existsSync(dest); n++) dest = path.join(dir, `${base} ${n}${ext}`);
     await copyFile(p, dest);
     out.push(dest);
   }
