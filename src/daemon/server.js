@@ -270,6 +270,12 @@ route('GET', '/api/edit-templates', () => prefs.listTemplates());
 route('POST', '/api/edit-templates', async (_p, b) => ({ template: await prefs.saveTemplate(b.name, b.settings) }));
 route('DELETE', '/api/edit-templates/:tid', async ({ tid }) => { await prefs.deleteTemplate(tid); return { ok: true }; });
 
+// Scripture references written the standard way: "first corinthians ten sixteen" -> "1 Corinthians 10:16".
+route('POST', '/api/scripture/normalize', async (_p, b) => {
+  const { normalizeText, extractRefs } = await import('./scripture.js');
+  const text = normalizeText(String(b.text || ''));
+  return { text, refs: extractRefs(text, 4) };
+});
 route('GET', '/api/index', () => insights.sermonIndex());
 route('GET', '/api/gaps', () => insights.gapReport());
 route('POST', '/api/gaps/save', async () => {

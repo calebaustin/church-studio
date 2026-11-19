@@ -709,17 +709,34 @@ def main() -> None:
         ox = m if corner in ("tl", "bl") else W - arr.shape[1] - m
         oy = m + int(H * 0.02) if corner in ("tl", "tr") else H - arr.shape[0] - m - int(H * 0.06)
         overlay = (arr, ox, oy, float(ov.get("opacity", 1.0)))
-    end_card = None
-    ec = job.get("endCard") or {}
-    if ec.get("file") and os.path.exists(ec["file"]):
+    def load_card(cfg):
+        if not (cfg.get("file") and os.path.exists(cfg["file"])):
+            return None
         from PIL import ImageOps
-        src_card = Image.open(ec["file"]).convert("RGBA")
+        src_card = Image.open(cfg["file"]).convert("RGBA")
         if abs(src_card.width / src_card.height - W / H) < 0.08:
             card = ImageOps.fit(src_card, (W, H), Image.LANCZOS)
         else:  # different shape: show all of it, filling the rest with the graphic's own edge color
             edge = src_card.getpixel((2, 2))
             card = ImageOps.pad(src_card, (W, H), Image.LANCZOS, color=(edge[0], edge[1], edge[2], 255))
-        end_card = (np.array(card), max(0.5, float(ec.get("seconds", 3))))
+        return (np.array(card), max(0.5, float(cfg.get("seconds", 3))), cfg.get("motion", "fade"))
+
+    end_card = load_card(job.get("endCard") or {})
+    intro_card = load_card(job.get("introCard") or {})
+
+    def card_at(card, local, entering):
+        """A full-screen card mid-transition: fade, slide or a gentle zoom. local runs 0..1 over the move."""
+        arr, _, motion = card
+        r = max(0.0, min(1.0, local))
+        if motion == "slide":
+            dy = int((1 - r) * H * 0.12) if entering else int(-(1 - r) * H * 0.12)
+            return arr, 0, dy, r
+        if motion == "zoom":
+            sc = 1.0 + (1 - r) * 0.06
+            big = cv2.resize(arr, (int(W * sc), int(H * sc)), interpolation=cv2.INTER_LINEAR)
+            ox, oy = (big.shape[1] - W) // 2, (big.shape[0] - H) // 2
+            return big[oy:oy + H, ox:ox + W], 0, 0, r
+        return arr, 0, 0, r
 
     out = job["out"]
     enc = subprocess.Popen(
@@ -806,9 +823,13 @@ def main() -> None:
                 blend(img, arr, x, y, op)
             if overlay:
                 blend(img, overlay[0], overlay[1], overlay[2], overlay[3])
+            if intro_card and t_out < intro_card[1]:
+                # Shows from the start, then moves out over its last 0.4 seconds.
+                arr, x, y, op = card_at(intro_card, (intro_card[1] - t_out) / 0.4, False)
+                blend(img, arr, x, y, op)
             if end_card and t_out >= out_len - end_card[1]:
-                fade = min(1.0, (t_out - (out_len - end_card[1])) / 0.3)
-                blend(img, end_card[0], 0, 0, fade)
+                arr, x, y, op = card_at(end_card, (t_out - (out_len - end_card[1])) / 0.4, True)
+                blend(img, arr, x, y, op)
             enc.stdin.write(img.tobytes())
             written += 1
             if thumb is None and written >= int(min(1.5, out_len / 2) * fps):

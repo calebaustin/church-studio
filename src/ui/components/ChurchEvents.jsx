@@ -46,6 +46,8 @@ export function EventCard({ event, onClose, onPlanPost }) {
       </div>
       <div className="row wrap" style={{ gap: 8 }}>
         <button className="btn primary sm" onClick={() => { onClose(); go({ name: 'graphics', event }); }}><Shapes size={14} />Make a graphic</button>
+        <button className="btn sm" onClick={() => { onClose(); go({ name: 'graphics', event, eventMode: 'flyer' }); }}>Flyer</button>
+        <button className="btn sm" onClick={() => { onClose(); go({ name: 'graphics', event, eventMode: 'countdown' }); }}>Countdown</button>
         {onPlanPost && <button className="btn sm" onClick={() => { onClose(); onPlanPost(event); }}><Send size={14} />Plan a post</button>}
         {event.link && <button className="btn ghost sm" onClick={() => openLink(event.link)}><ExternalLink size={14} />Open event page</button>}
       </div>

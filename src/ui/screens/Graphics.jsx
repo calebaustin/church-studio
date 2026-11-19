@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Clapperboard, Copy, GalleryHorizontalEnd, Heart, LayoutGrid, MonitorPlay, NotebookPen, Presentation, Printer,
-  Scaling, Search, Smartphone, Sparkles, Trash2, Home as HomeIcon, X,
+  Scaling, Search, Smartphone, Sparkles, Trash2, Home as HomeIcon, Wand2, X, BookOpen,
 } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { Masonry } from '../components/Masonry.jsx';
 import { api } from '../api.js';
 import Modal, { ModalHead } from '../components/Modal.jsx';
 import DesignEditor from '../design/DesignEditor.jsx';
-import { KINDS, SIZE_PRESETS, TEMPLATES as BASE_TEMPLATES, blankPage, loadAssets, page as newPage, renderPage, uid } from '../design/model.js';
+import { KINDS, SIZE_PRESETS, TEMPLATES as BASE_TEMPLATES, blankPage, countdownPages, loadAssets, page as newPage, renderPage, scripturePage, uid } from '../design/model.js';
 import { PACKS, PACK_TEMPLATES } from '../design/packs.js';
+import { buildDeck, parseNotes } from '../design/deckBuilder.js';
 
 const TEMPLATES = [...BASE_TEMPLATES, ...PACK_TEMPLATES];
 
@@ -17,6 +18,8 @@ export { cohesive } from '../design/model.js';
 
 // Tile colors come from the app theme (tone-1 to tone-6 in styles.css), so they follow the user's colors.
 const TILES = [
+  ['deck', Wand2, 3],
+  ['scripture', BookOpen, 2],
   ['presentation', Presentation, 1],
   ['post', Heart, 2],
   ['carousel', GalleryHorizontalEnd, 3],
@@ -80,7 +83,7 @@ export function eventForDesign(e) {
     countdown: days > 1 ? `${days} DAYS TO GO` : days === 1 ? 'TOMORROW' : 'TODAY' };
 }
 
-export default function Graphics({ image, design, event, quote, make }) {
+export default function Graphics({ image, design, event, eventMode, quote, make }) {
   const { toast } = useApp();
   const ctx = useBrandCtx();
   const [open, setOpen] = useState(design || null);
@@ -106,8 +109,11 @@ export default function Graphics({ image, design, event, quote, make }) {
   // From a church calendar event: an event post with its name, time and place filled in.
   useEffect(() => {
     if (!event) return;
-    const d = newDoc('post', TEMPLATES.find((t) => t.id === 'post-event'), { ...ctx, ev: eventForDesign(event) });
-    d.name = event.title;
+    const ev = eventForDesign(event);
+    let d;
+    if (eventMode === 'flyer') { d = newDoc('flyer', TEMPLATES.find((t) => t.id === 'flyer-event'), { ...ctx, ev }); d.name = `${event.title} · Flyer`; }
+    else if (eventMode === 'countdown') { d = newDoc('story', null, ctx); d.pages = countdownPages(ctx, ev); d.name = `${event.title} · Countdown`; }
+    else { d = newDoc('post', TEMPLATES.find((t) => t.id === 'post-event'), { ...ctx, ev }); d.name = event.title; }
     create(d);
   }, [event]);
 
@@ -138,6 +144,8 @@ export default function Graphics({ image, design, event, quote, make }) {
   const mine = (designs || []).filter((d) => !ql || d.name.toLowerCase().includes(ql));
   const pick = (k) => {
     if (k === 'sermon') return setModal('sermon');
+    if (k === 'deck') return setModal('deck');
+    if (k === 'scripture') return setModal('scripture');
     if (k === 'custom') return setModal('custom');
     setKind(kind === k ? null : k); setTab('templates');
   };
@@ -161,7 +169,7 @@ export default function Graphics({ image, design, event, quote, make }) {
         {TILES.map(([k, Icon, grad]) => (
           <button key={k} className={`dz-tile ${kind === k ? 'on' : ''}`} onClick={() => pick(k)}>
             <span className={`dz-tile-icon ${grad ? `tone tone-${grad}` : 'plain'}`}><Icon size={24} /></span>
-            <span>{k === 'sermon' ? 'From a sermon' : KINDS[k].label}</span>
+            <span>{k === 'sermon' ? 'From a sermon' : k === 'deck' ? 'Slide deck maker' : k === 'scripture' ? 'Scripture graphic' : KINDS[k].label}</span>
           </button>
         ))}
       </div>
@@ -236,6 +244,8 @@ export default function Graphics({ image, design, event, quote, make }) {
         {!tpls.length && !(ql && mine.length) && <span className="muted">Nothing matches “{q}”.</span>}
       </section>
 
+      {modal === 'scripture' && <ScriptureMaker ctx={ctx} onClose={() => setModal(null)} onCreate={(doc) => { setModal(null); create(doc); }} />}
+      {modal === 'deck' && <DeckMaker ctx={ctx} onClose={() => setModal(null)} onCreate={(doc) => { setModal(null); create(doc); }} />}
       {modal === 'sermon' && <FromSermon ctx={ctx} onClose={() => setModal(null)} onCreate={(doc) => { setModal(null); create(doc); }} />}
       {modal === 'custom' && <CustomSize onClose={() => setModal(null)} onCreate={(size) => { setModal(null); const d = newDoc('custom', null, ctx, size); d.name = `Untitled ${size.w}×${size.h}`; create(d); }} />}
     </div>
@@ -296,6 +306,112 @@ function CustomSize({ onClose, onCreate }) {
           <label className="field">Height (px)<input className="input num" type="number" value={h} onChange={(e) => setH(Number(e.target.value))} /></label>
         </div>
         <button className="btn primary" disabled={!ok} onClick={() => onCreate({ w, h })}>Create design</button>
+      </div>
+    </Modal>
+  );
+}
+
+/** Slide deck maker: a few questions, then a full deck from your notes or a sermon. */
+function DeckMaker({ ctx, onClose, onCreate }) {
+  const [sermons, setSermons] = useState([]);
+  const [a, setA] = useState({ kind: 'sermon', projectId: '', title: '', subtitle: '', passages: '', format: 'hybrid', questions: true, notes: '', start: 'notes' });
+  const [busy, setBusy] = useState(false);
+  const set = (p) => setA((x) => ({ ...x, ...p }));
+  useEffect(() => { api.get('/api/projects').then(({ projects }) => setSermons(projects.filter((p) => p.status === 'transcribed'))).catch(() => {}); }, []);
+  const readFile = async (f) => { if (f) set({ notes: await f.text(), start: 'notes' }); };
+  const make = async () => {
+    setBusy(true);
+    let outline = null;
+    if (a.projectId && a.start === 'sermon') outline = await api.get(`/api/outline/${a.projectId}`).then((r) => r.outline).catch(() => null);
+    const passages = a.passages.split(/[,;\n]+/).map((x) => x.trim()).filter(Boolean);
+    const d = newDoc('presentation', null, ctx);
+    d.pages = buildDeck({ ...a, notes: a.start === 'notes' ? a.notes : '', passages, outline, title: a.title || outline?.title || (a.kind === 'class' ? 'Class title' : 'Sermon title') }, ctx);
+    d.name = a.title || outline?.title || 'New slide deck';
+    if (a.projectId && a.start === 'sermon') d.source = { projectId: a.projectId, template: 'deck-sermon' };
+    onCreate(d);
+  };
+  const found = a.notes ? parseNotes(a.notes) : null;
+  return (
+    <Modal label="Slide deck maker" onClose={onClose} width={660}>
+      <ModalHead title="Slide deck maker" sub="Answer a few questions and get a full deck to polish." />
+      <div className="seg">{[['sermon', 'Sermon'], ['class', 'Class or study']].map(([k, l]) => <button key={k} className={a.kind === k ? 'on' : ''} onClick={() => set({ kind: k })}>{l}</button>)}</div>
+      <div className="token-grid">
+        <label className="field">Title<input className="input" value={a.title} placeholder={a.kind === 'class' ? 'Romans, week 3' : 'Rooted'} onChange={(e) => set({ title: e.target.value })} /></label>
+        <label className="field">Speaker or date <span className="hint">Optional</span><input className="input" value={a.subtitle} placeholder="Pastor Name · Nov 23" onChange={(e) => set({ subtitle: e.target.value })} /></label>
+      </div>
+      <label className="field">Key passages <span className="hint">Separate with commas</span><input className="input" value={a.passages} placeholder="Colossians 2:6-7, Psalm 1:3" onChange={(e) => set({ passages: e.target.value })} /></label>
+      <div className="stack" style={{ gap: 6 }}>
+        <span className="field-label">How much on each slide?</span>
+        <div className="choices">
+          {[['headlines', 'Headlines only', 'Big, simple. You say the rest.'], ['hybrid', 'Hybrid', 'A headline and one key line.'], ['bullets', 'Full bullets', 'Every point on screen.']].map(([k, t, d]) => (
+            <button key={k} className={`choice ${a.format === k ? 'on' : ''}`} onClick={() => set({ format: k })}><span className="t"><span className="radio" />{t}</span><span className="d">{d}</span></button>
+          ))}
+        </div>
+        <label className="switch small"><input type="checkbox" checked={a.questions} onChange={(e) => set({ questions: e.target.checked })} />Include discussion questions on screen</label>
+      </div>
+      <div className="stack" style={{ gap: 6 }}>
+        <span className="field-label">Build it from</span>
+        <div className="seg sm">
+          <button className={a.start === 'notes' ? 'on' : ''} onClick={() => set({ start: 'notes' })}>My notes</button>
+          {sermons.length > 0 && <button className={a.start === 'sermon' ? 'on' : ''} onClick={() => set({ start: 'sermon', projectId: a.projectId || sermons[0].id })}>A transcribed sermon</button>}
+          <button className={a.start === 'blank' ? 'on' : ''} onClick={() => set({ start: 'blank' })}>One slide at a time</button>
+        </div>
+        {a.start === 'notes' && (
+          <>
+            <textarea className="input" rows={7} value={a.notes} onChange={(e) => set({ notes: e.target.value })}
+              placeholder={'Paste your notes. Headings become slides, lines under them become points.\n\n1. Roots grow in hidden places\n- What happens in private shapes what we carry in public\n2. You cannot rush a root\nWhat would change if you trusted the slow work?'} />
+            <div className="row between wrap" style={{ gap: 8 }}>
+              <label className="btn sm ghost" style={{ cursor: 'pointer' }}><input type="file" accept=".txt,.md,text/plain,text/markdown" hidden onChange={(e) => readFile(e.target.files?.[0])} />Open a notes file</label>
+              {found && <span className="hint">{found.sections.length} slides, {found.questions.length} questions, {found.refs.length} passages found</span>}
+            </div>
+          </>
+        )}
+        {a.start === 'sermon' && (
+          <select className="input" value={a.projectId} onChange={(e) => set({ projectId: e.target.value })}>{sermons.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}</select>
+        )}
+        {a.start === 'blank' && <span className="hint">You'll get a title slide, your passages and three point slides to fill in.</span>}
+      </div>
+      <div className="row between" style={{ marginTop: 6 }}>
+        <button className="btn ghost" onClick={onClose}>Cancel</button>
+        <button className="btn primary" disabled={busy} onClick={make}><Wand2 size={15} />{busy ? 'Building…' : 'Build the deck'}</button>
+      </div>
+    </Modal>
+  );
+}
+
+/** Scripture graphic: the reference is written the standard way, and the verse is laid out to fit. */
+function ScriptureMaker({ ctx, onClose, onCreate }) {
+  const [ref, setRef] = useState('');
+  const [verse, setVerse] = useState('');
+  const [tr, setTr] = useState('');
+  const [look, setLook] = useState('calm');
+  const [size, setSize] = useState('post');
+  const [clean, setClean] = useState(null);
+  const tidy = async () => { if (!ref.trim()) return; const r = await api.post('/api/scripture/normalize', { text: ref }).catch(() => null); if (r?.refs?.[0]) { setClean(r.refs[0]); setRef(r.refs[0]); } };
+  const make = () => {
+    const kind = size === 'story' ? 'story' : size === 'slide' ? 'presentation' : 'post';
+    const d = newDoc(kind, null, ctx);
+    if (size === 'square') d.size = { w: 1080, h: 1080 };
+    d.pages = [scripturePage(ctx, { ref, verse, translation: tr }, look)];
+    d.name = ref ? `${ref} · Scripture` : 'Scripture graphic';
+    onCreate(d);
+  };
+  return (
+    <Modal label="Scripture graphic" onClose={onClose} width={560}>
+      <ModalHead title="Scripture graphic" sub="Type the reference any way you like. It's written the standard way for you." />
+      <div className="token-grid" style={{ gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)' }}>
+        <label className="field">Reference<input className="input" value={ref} placeholder="first corinthians 10 16" onChange={(e) => { setRef(e.target.value); setClean(null); }} onBlur={tidy} /></label>
+        <label className="field">Translation <span className="hint">Optional</span><input className="input" value={tr} placeholder="ESV" onChange={(e) => setTr(e.target.value)} /></label>
+      </div>
+      {clean && <span className="hint">Written as {clean}</span>}
+      <label className="field">Verse<textarea className="input" rows={4} value={verse} placeholder="Paste the verse from your Bible app" onChange={(e) => setVerse(e.target.value)} /></label>
+      <div className="row wrap" style={{ gap: 10 }}>
+        <div className="seg sm">{[['calm', 'Light'], ['bold', 'Bold']].map(([k, l]) => <button key={k} className={look === k ? 'on' : ''} onClick={() => setLook(k)}>{l}</button>)}</div>
+        <div className="seg sm">{[['post', 'Post'], ['square', 'Square'], ['story', 'Story'], ['slide', 'Slide']].map(([k, l]) => <button key={k} className={size === k ? 'on' : ''} onClick={() => setSize(k)}>{l}</button>)}</div>
+      </div>
+      <div className="row between" style={{ marginTop: 6 }}>
+        <span className="hint">Uses your brand colors and fonts.</span>
+        <button className="btn primary" disabled={!ref.trim()} onClick={make}><BookOpen size={14} />Make it</button>
       </div>
     </Modal>
   );

@@ -327,7 +327,7 @@ export default function App() {
                 : route.name === 'library' ? <Library openPicker={route.pick} key={route.pick ? 'pick' : 'lib'} />
                   : route.name === 'writing' ? <Writing project={route.project} kind={route.kind} key={(route.project || 'w') + (route.kind || '')} />
                     : route.name === 'projects' ? <AllProjects />
-                    : route.name === 'graphics' ? <Graphics image={route.image} design={route.design} event={route.event} quote={route.quote} make={route.make} key={route.image || route.design || route.event?.id || route.quote || (route.make && `${route.make.projectId}${route.make.template}`) || 'g'} />
+                    : route.name === 'graphics' ? <Graphics image={route.image} design={route.design} event={route.event} eventMode={route.eventMode} quote={route.quote} make={route.make} key={route.image || route.design || (route.event && `${route.event.id}${route.eventMode || ''}`) || route.quote || (route.make && `${route.make.projectId}${route.make.template}`) || 'g'} />
                       : route.name === 'assets' ? <BrandLibrary section={route.section} key={route.section || 'b'} />
                         : route.name === 'me' ? <MyApp section={route.section} key={route.section || 'me'} />
                   : <Dashboard />}

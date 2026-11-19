@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import {
   AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical,
   ArrowLeft, BringToFront, Check, ChevronDown, ChevronLeft, ChevronRight, Circle, Copy, Download, Grid3x3, Image as ImageIcon,
-  Magnet, Minus, MonitorUp, Hexagon, Smartphone, Laptop, Eraser, ImageOff, Play, RefreshCw, Plus, QrCode, Redo2, SendToBack, Shapes, Square, Trash2, Type, Undo2, Shuffle, X,
+  Magnet, Minus, MonitorUp, Hexagon, Scaling, Smartphone, Laptop, Eraser, ImageOff, Play, RefreshCw, Plus, QrCode, Redo2, SendToBack, Shapes, Square, Trash2, Type, Undo2, Shuffle, X,
 } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { api } from '../api.js';
@@ -10,7 +10,7 @@ import ColorField from '../components/ColorField.jsx';
 import FontMenu, { useFamilies } from '../components/FontMenu.jsx';
 import LibraryPicker from '../components/LibraryPicker.jsx';
 import Popover, { PopList } from '../components/Popover.jsx';
-import { DEVICE_ASPECT, KINDS, SHAPES, blankPage, cohesive, loadAssets, onColor, page as newPage, renderPage, shape as newShape, svgColors, text as newText, uid } from './model.js';
+import { DEVICE_ASPECT, KINDS, RESIZE_TARGETS, SHAPES, resizeDesign, blankPage, cohesive, loadAssets, onColor, page as newPage, renderPage, shape as newShape, svgColors, text as newText, uid } from './model.js';
 import { snapMove } from './snap.js';
 import { exportDesign } from './exporters.js';
 import { BLACK_KEYS, NEXT_KEYS, PREV_KEYS, PresentHere, PresenterConsole, openChannel } from './Presenter.jsx';
@@ -51,6 +51,8 @@ export default function DesignEditor({ id, onClose }) {
   const [busy, setBusy] = useState(null);
   const [presenting, setPresenting] = useState(null);
   const [presentOpen, setPresentOpen] = useState(false);
+  const [resizeOpen, setResizeOpen] = useState(false);
+  const [sizes, setSizes] = useState([]);
   const [displays, setDisplays] = useState([]);
   const [show, setShow] = useState(null); // live on a second screen: { index, black, doc, display }
   const [consoleOpen, setConsoleOpen] = useState(true);
@@ -341,6 +343,31 @@ export default function DesignEditor({ id, onClose }) {
           <button className={`rt-btn ${snap ? 'on' : ''}`} title="Snap to page center, edges and other items (hold Option to skip)" aria-label="Smart guides" aria-pressed={snap} onClick={() => setSnap(!snap)}><Magnet size={16} /></button>
           <button className={`rt-btn ${grid ? 'on' : ''}`} title="Show and snap to a grid" aria-label="Grid" aria-pressed={grid} onClick={() => setGrid(!grid)}><Grid3x3 size={16} /></button>
         </div>
+        <div style={{ position: 'relative' }}>
+          <button className="btn sm" data-pop-trigger onClick={() => setResizeOpen(!resizeOpen)}><Scaling size={14} />Resize</button>
+          <Popover open={resizeOpen} onClose={() => setResizeOpen(false)} align="right" width={270}>
+            <div className="stack" style={{ gap: 6, padding: 6 }}>
+              <strong className="small">Make copies in other sizes</strong>
+              {RESIZE_TARGETS.filter((t) => !(t[2] === doc.size.w && t[3] === doc.size.h)).map((t) => (
+                <label key={t[0]} className="row small" style={{ gap: 8 }}>
+                  <input type="checkbox" checked={sizes.includes(t[0])} onChange={(e) => setSizes(e.target.checked ? [...sizes, t[0]] : sizes.filter((x) => x !== t[0]))} />
+                  <span className="grow">{t[1]}</span><span className="muted num">{t[2]}×{t[3]}</span>
+                </label>
+              ))}
+              <button className="btn primary sm" disabled={!sizes.length} onClick={async () => {
+                const made = [];
+                for (const key of sizes) {
+                  const copy = resizeDesign(doc, RESIZE_TARGETS.find((t) => t[0] === key));
+                  await api.put(`/api/designs/${copy.id}`, copy);
+                  made.push(copy);
+                }
+                setResizeOpen(false); setSizes([]);
+                toast({ celebrate: true, text: `Made ${made.length} new size${made.length > 1 ? 's' : ''}. Find them with your designs.`, action: { label: 'Back to designs', run: onClose } });
+              }}>Make {sizes.length || ''} cop{sizes.length === 1 ? 'y' : 'ies'}</button>
+              <span className="hint">The layout carries over. Check each one and nudge anything that needs it.</span>
+            </div>
+          </Popover>
+        </div>
         {show ? (
           <div className="row" style={{ gap: 6 }}>
             <span className="pc-live sm"><span className="status-dot" aria-hidden="true" />Live · {show.index + 1}</span>
@@ -365,7 +392,8 @@ export default function DesignEditor({ id, onClose }) {
             <PopList onPick={runExport} items={[
               { label: doc.pages.length > 1 ? 'PNG, this page' : 'PNG image', value: 'png-one', hint: 'Best for posting' },
               ...(doc.pages.length > 1 ? [{ label: `PNG, all ${doc.pages.length} pages`, value: 'png-all', hint: 'A folder of images, in order' }] : []),
-              { label: 'PDF', value: 'pdf', hint: 'For printing and sharing' },
+              { label: 'PDF', value: 'pdf', hint: 'For sharing and printing at home' },
+              { label: 'Print shop PDF', value: 'pdf-print', hint: `300 dpi with bleed and crop marks · ${(doc.size.w / 150).toFixed(1)} x ${(doc.size.h / 150).toFixed(1)} in` },
               { label: 'PowerPoint (.pptx)', value: 'pptx', hint: 'Opens in PowerPoint, Keynote and ProPresenter' },
             ]} />
           </Popover>

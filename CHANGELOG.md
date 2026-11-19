@@ -2,10 +2,19 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
-## Unreleased
+## 0.8.0 · November 19, 2026
 
 ### New
+- **Slide deck maker.** Pick sermon or class, add a title and key passages, choose headlines only, full bullets or a mix, and whether to show discussion questions. Paste your notes (or open a notes file) and headings become slides, or build from a transcribed sermon, or start one slide at a time.
+- **One design, many sizes.** Resize makes copies of any design for posts, stories, slides, YouTube, Facebook covers, flyers and banners. The layout carries over.
+- **Scripture graphics.** Type a reference any way you like ("first corinthians 10 16") and it's written the standard way, with your verse laid out in your brand.
+- **Event flyers and countdowns.** From any church calendar event, make a flyer or a countdown story set (7 days, 3 days, 1 more day, today).
+- **Print shop PDFs.** 300 dpi with bleed and crop marks, plus half-letter, 11x17 and 18x24 poster sizes.
+- **Intro and end cards for clips.** A graphic for the first seconds of a clip, and one for the last, each with a fade, slide or zoom. New "Clip intro card" and "Clip end card" templates in Design.
 - **Support Church Studio.** The Thank you page has a Buy me a coffee button. Church Studio stays free to use, forever.
+
+### Changed
+- Text in designs never ends with one word alone on its last line.
 
 ## 0.7.0 · November 19, 2026
 

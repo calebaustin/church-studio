@@ -104,6 +104,7 @@ export async function buildJob(project, clip, { preview = false, trackOnly = fal
     hookY: clip.hookY ?? null,
     overlay: clip.overlay?.rel ? { ...clip.overlay, file: await libraryFile(clip.overlay.rel) } : null,
     endCard: clip.endCard?.rel ? { ...clip.endCard, file: await libraryFile(clip.endCard.rel) } : null,
+    introCard: clip.introCard?.rel ? { ...clip.introCard, file: await libraryFile(clip.introCard.rel) } : null,
     keep: trackOnly ? null : keepSegments(words, clip),
     words: clipWords,
     hook: options.hook === false ? null : clip.hook || null,

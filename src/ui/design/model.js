@@ -18,7 +18,8 @@ export const KINDS = {
 };
 export const SIZE_PRESETS = [
   ['Square 1:1', 1080, 1080], ['Portrait 4:5', 1080, 1350], ['Story 9:16', 1080, 1920], ['Wide 16:9', 1920, 1080],
-  ['Letter', 1275, 1650], ['Facebook cover', 1640, 924], ['Banner 3:1', 1500, 500],
+  ['Letter', 1275, 1650], ['Half letter', 825, 1275], ['Poster 11x17', 1650, 2550], ['Poster 18x24', 2700, 3600],
+  ['Facebook cover', 1640, 924], ['Banner 3:1', 1500, 500],
 ];
 
 // ---------------------------------------------------------------- colors
@@ -154,6 +155,20 @@ export const TEMPLATES = [
     H(ctx, { text: ctx.ev?.title || 'Easter at Church Name', size: fit(ctx.ev?.title, 128, 84, 20), x: 0.5, y: 0.46, w: 0.84 }),
     B(ctx, { text: ctx.ev?.when || 'Sunday · 9am and 11am', size: 46, x: 0.5, y: 0.62, w: 0.84 }),
   ] })] },
+  // video intro and outro cards (export as PNG, then pick them in a clip's Graphics tab)
+  { id: 'intro-vertical', kind: 'story', name: 'Clip intro card', build: (ctx) => [page({ bg: mesh(21, 0.3), items: [
+    B(ctx, { text: 'SERMON SERIES', size: 40, weight: 700, letter: 8, x: 0.5, y: 0.4, opacity: 0.85 }),
+    H(ctx, { text: ctx.o?.title || 'Series Title', size: fit(ctx.o?.title, 150, 90, 14), x: 0.5, y: 0.5, w: 0.84 }),
+    shape({ x: 0.5, y: 0.59, w: 0.14, h: 0.004, fill: ctx.c[1] }),
+  ] })] },
+  { id: 'outro-vertical', kind: 'story', name: 'Clip end card', build: (ctx) => [page({ bg: solid(ctx.c[0]), items: [
+    H(ctx, { text: 'Join us Sunday', size: 120, x: 0.5, y: 0.44, w: 0.84, color: onColor(ctx.c[0]) }),
+    B(ctx, { text: '9 & 11 AM · yourchurch.org', size: 44, x: 0.5, y: 0.56, w: 0.84, color: onColor(ctx.c[0]), opacity: 0.9 }),
+  ] })] },
+  { id: 'intro-wide', kind: 'presentation', name: 'Video intro (16:9)', build: (ctx) => [page({ bg: mesh(33, 0.3), items: [
+    B(ctx, { text: 'SERMON SERIES', size: 40, weight: 700, letter: 8, x: 0.5, y: 0.36, opacity: 0.85 }),
+    H(ctx, { text: ctx.o?.title || 'Series Title', size: fit(ctx.o?.title, 150, 90, 20), x: 0.5, y: 0.52, w: 0.84 }),
+  ] })] },
   // thumbnails
   { id: 'thumb-sermon', kind: 'thumbnail', name: 'Sermon thumbnail', build: (ctx) => [page({ bg: mesh(3, 0.25), items: [
     H(ctx, { text: ctx.o?.title || 'You Can’t Earn This', size: fit(ctx.o?.title, 130, 76, 22), align: 'left', x: 0.34, y: 0.42, w: 0.6 }),
@@ -167,11 +182,11 @@ export const TEMPLATES = [
   // print
   { id: 'flyer-event', kind: 'flyer', name: 'Event flyer', build: (ctx) => [page({ bg: solid(ctx.c[3] || '#F4EFE6'), items: [
     shape({ x: 0.5, y: 0.22, w: 1, h: 0.44, fill: ctx.c[0] }),
-    H(ctx, { text: 'Fall Festival', size: 150, x: 0.5, y: 0.2, w: 0.86, color: onColor(ctx.c[0]) }),
-    B(ctx, { text: 'Saturday, October 18 · 2 to 5pm', size: 50, weight: 700, x: 0.5, y: 0.52, w: 0.86, color: ctx.c[2] }),
-    B(ctx, { text: 'Games, food trucks, hayrides and a pie contest. Bring a friend.', size: 42, x: 0.5, y: 0.62, w: 0.76, color: ctx.c[2] }),
-    { id: uid(), type: 'qr', url: 'https://example.org', x: 0.5, y: 0.8, w: 0.18, color: ctx.c[2] },
-    B(ctx, { text: 'Church Name · 123 Main St', size: 34, x: 0.5, y: 0.93, color: ctx.c[2], opacity: 0.8 }),
+    H(ctx, { text: ctx.ev?.title || 'Fall Festival', size: fit(ctx.ev?.title, 150, 90, 16), x: 0.5, y: 0.2, w: 0.86, color: onColor(ctx.c[0]) }),
+    B(ctx, { text: ctx.ev?.when || 'Saturday, October 18 · 2 to 5pm', size: 50, weight: 700, x: 0.5, y: 0.52, w: 0.86, color: ctx.c[2] }),
+    B(ctx, { text: ctx.ev ? (ctx.ev.summary?.slice(0, 120) || ctx.ev.place || 'Everyone is welcome.') : 'Games, food trucks, hayrides and a pie contest. Bring a friend.', size: 42, x: 0.5, y: 0.62, w: 0.76, color: ctx.c[2] }),
+    { id: uid(), type: 'qr', url: ctx.ev?.link || 'https://example.org', x: 0.5, y: 0.8, w: 0.18, color: ctx.c[2] },
+    B(ctx, { text: ctx.ev?.place || 'Church Name · 123 Main St', size: 34, x: 0.5, y: 0.93, color: ctx.c[2], opacity: 0.8 }),
   ] })] },
   { id: 'notes-blanks', kind: 'notes', name: 'Fill-in notes', build: (ctx) => {
     const o = ctx.o || {};
@@ -192,15 +207,30 @@ export const TEMPLATES = [
 export const blankPage = (kind, ctx) => page({ bg: kind === 'notes' || kind === 'flyer' ? solid('#FFFFFF') : mesh(Math.floor(Math.random() * 999), 0.15) });
 
 // ---------------------------------------------------------------- drawing
+/**
+ * Break text into lines that fit. Each paragraph is then balanced so it never ends with one word
+ * alone on its last line: words move down from the line above while they still fit.
+ */
 function wrap(ctx, str, maxW) {
   const out = [];
   for (const para of String(str).split('\n')) {
+    const lines = [];
     let line = '';
     for (const w of para.split(' ')) {
       const t = line ? `${line} ${w}` : w;
-      if (line && ctx.measureText(t).width > maxW) { out.push(line); line = w; } else line = t;
+      if (line && ctx.measureText(t).width > maxW) { lines.push(line); line = w; } else line = t;
     }
-    out.push(line);
+    lines.push(line);
+    for (let guard = 0; guard < 3 && lines.length >= 2; guard++) {
+      const last = lines[lines.length - 1].split(' ');
+      const prev = lines[lines.length - 2].split(' ');
+      if (last.length > 1 || prev.length < 3) break;
+      const moved = `${prev[prev.length - 1]} ${last.join(' ')}`;
+      if (ctx.measureText(moved).width > maxW) break;
+      lines[lines.length - 2] = prev.slice(0, -1).join(' ');
+      lines[lines.length - 1] = moved;
+    }
+    out.push(...lines);
   }
   return out;
 }
@@ -437,4 +467,73 @@ export async function pageDataUrl(doc, pg, scale, cache, type = 'image/png', qua
   const c = document.createElement('canvas');
   renderPage(c, doc, pg, scale, cache, { placeholders: false });
   return c.toDataURL(type, quality);
+}
+
+// ---------------------------------------------------------------- one design, many sizes
+export const RESIZE_TARGETS = [
+  ['post', 'Social post', 1080, 1350], ['square', 'Square post', 1080, 1080], ['story', 'Story or reel', 1080, 1920],
+  ['presentation', 'Slide', 1920, 1080], ['thumbnail', 'YouTube thumbnail', 1920, 1080], ['facebook', 'Facebook cover', 1640, 924],
+  ['flyer', 'Flyer (letter)', 1275, 1650], ['banner', 'Banner 3:1', 1500, 500],
+];
+const KIND_FOR = { post: 'post', square: 'custom', story: 'story', presentation: 'presentation', thumbnail: 'thumbnail', facebook: 'custom', flyer: 'flyer', banner: 'custom' };
+
+/**
+ * A copy of a design at a new size. Positions are fractions of the page, so the layout carries over;
+ * type is scaled for the new space, and shapes keep their proportions unless they span the page.
+ */
+export function resizeDesign(doc, target) {
+  const [key, label, W2, H2] = target;
+  const { w: W1, h: H1 } = doc.size;
+  const kText = Math.min(Math.sqrt((W2 * H2) / (W1 * H1)), (W2 / W1) * 1.15);
+  const copy = JSON.parse(JSON.stringify(doc));
+  copy.id = uid();
+  copy.name = `${doc.name} · ${label}`;
+  copy.kind = KIND_FOR[key] || 'custom';
+  copy.size = { w: W2, h: H2 };
+  copy.thumb = null;
+  for (const pg of copy.pages) {
+    pg.id = uid();
+    for (const it of pg.items) {
+      it.id = uid();
+      if (it.type === 'text') { it.size = Math.max(10, Math.round(it.size * kText)); if (it.letter) it.letter = +(it.letter * kText).toFixed(1); }
+      if (it.type === 'shape' && it.w < 0.95 && it.h < 0.95) {
+        const h2 = (it.h * H1 * W2) / (W1 * H2);
+        it.h = +Math.min(0.98, h2).toFixed(4);
+      }
+      if (it.radius) it.radius = Math.round(it.radius * kText);
+    }
+  }
+  return copy;
+}
+
+/** A countdown story set for an event: one page for each day left, ending on the day itself. */
+export function countdownPages(ctx, ev) {
+  const marks = [['7', 'DAYS TO GO'], ['3', 'DAYS TO GO'], ['1', 'MORE DAY'], ['TODAY', '']];
+  return marks.map(([big, small], i) => page({ bg: i === 3 ? { type: 'solid', color: ctx.c[0], darken: 0 } : { type: 'mesh', seed: 55 + i * 9, darken: 0.25 }, items: [
+    H(ctx, { text: big, size: big.length > 2 ? 200 : 420, x: 0.5, y: 0.36, color: i === 3 ? onColor(ctx.c[0]) : '#FFFFFF' }),
+    ...(small ? [B(ctx, { text: small, size: 56, weight: 800, letter: 8, x: 0.5, y: 0.52 })] : []),
+    H(ctx, { text: ev?.title || 'Event name', size: fit(ev?.title, 96, 60, 20), x: 0.5, y: 0.68, w: 0.84, color: i === 3 ? onColor(ctx.c[0]) : '#FFFFFF' }),
+    B(ctx, { text: ev?.when || 'Day · time', size: 42, x: 0.5, y: 0.78, w: 0.84, color: i === 3 ? onColor(ctx.c[0]) : '#FFFFFF', opacity: 0.9 }),
+  ] }));
+}
+
+/** A branded scripture graphic: the verse large, the reference beneath, the translation small. */
+export function scripturePage(ctx, { ref, verse, translation = '' }, look = 'calm') {
+  const dark = ctx.c[2]; const light = ctx.c[3] || '#F4EFE6'; const accent = ctx.c[1];
+  const quote = `“${String(verse || 'Paste the verse here.').trim().replace(/^“|”$/g, '')}”`;
+  if (look === 'bold') {
+    return page({ bg: solid(dark), items: [
+      shape({ x: 0.5, y: 0.14, w: 0.12, h: 0.008, fill: accent }),
+      H(ctx, { text: quote, size: fit(quote, 84, 48, 60), x: 0.5, y: 0.47, w: 0.82, lh: 1.2, color: '#FFFFFF' }),
+      B(ctx, { text: ref || 'Reference', size: 44, weight: 800, letter: 3, x: 0.5, y: 0.8, color: accent }),
+      ...(translation ? [B(ctx, { text: translation.toUpperCase(), size: 24, weight: 700, letter: 4, x: 0.5, y: 0.86, color: '#FFFFFF', opacity: 0.6 })] : []),
+    ] });
+  }
+  return page({ bg: solid(light), items: [
+    shape({ x: 0.5, y: 0.5, w: 0.86, h: 0.86, fill: '#FFFFFF', radius: 40, opacity: 0.7 }),
+    B(ctx, { text: 'SCRIPTURE', size: 28, weight: 700, letter: 8, x: 0.5, y: 0.17, color: ctx.c[0] }),
+    H(ctx, { text: quote, size: fit(quote, 76, 44, 60), x: 0.5, y: 0.47, w: 0.72, lh: 1.25, color: dark }),
+    B(ctx, { text: ref || 'Reference', size: 40, weight: 700, x: 0.5, y: 0.77, color: ctx.c[0] }),
+    ...(translation ? [B(ctx, { text: translation.toUpperCase(), size: 22, weight: 700, letter: 4, x: 0.5, y: 0.82, color: dark, opacity: 0.55 })] : []),
+  ] });
 }

@@ -317,7 +317,7 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
     if (!name) return;
     const { cues: _c, anchors: _a, x: _x, ...cropStyle } = crop;
     const exportOptions = templates.last?.exportOptions || config.exportOptions;
-    const settings = { crop: cropStyle, videoTheme: clip.videoTheme || null, captions: clip.captions !== false, tightenPauses: Boolean(clip.tightenPauses), pauseMax: clip.pauseMax ?? 0.45, hookY: clip.hookY ?? null, overlay: clip.overlay || null, endCard: clip.endCard || null, exportOptions };
+    const settings = { crop: cropStyle, videoTheme: clip.videoTheme || null, captions: clip.captions !== false, tightenPauses: Boolean(clip.tightenPauses), pauseMax: clip.pauseMax ?? 0.45, hookY: clip.hookY ?? null, overlay: clip.overlay || null, endCard: clip.endCard || null, introCard: clip.introCard || null, exportOptions };
     await api.post('/api/edit-templates', { name, settings });
     setTemplates(await api.get('/api/edit-templates'));
     toast({ text: `Saved template “${name}”.` });
@@ -327,8 +327,8 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
     <div className="stack" style={{ gap: 16 }}>
       {exporting && <ExportDialog project={project} clips={[current || clip]} beforeExport={save} onClose={() => setExporting(false)} />}
       {exportAll && <ExportDialog project={project} clips={working} beforeExport={save} onClose={() => setExportAll(false)} />}
-      {libPick && <LibraryPicker folder={libPick === 'overlay' ? 'Logos' : 'Graphics'} title={libPick === 'overlay' ? 'Pick a logo' : 'Pick an end card'} onClose={() => setLibPick(null)}
-        onPick={(i) => { if (libPick === 'overlay') set({ overlay: { rel: i.rel, corner: 'tr', size: 0.18, opacity: 1 } }); else set({ endCard: { rel: i.rel, seconds: 3 } }); setLibPick(null); }} />}
+      {libPick && <LibraryPicker folder={libPick === 'overlay' ? 'Logos' : 'Graphics'} title={libPick === 'overlay' ? 'Pick a logo' : libPick === 'introCard' ? 'Pick an intro card' : 'Pick an end card'} onClose={() => setLibPick(null)}
+        onPick={(i) => { if (libPick === 'overlay') set({ overlay: { rel: i.rel, corner: 'tr', size: 0.18, opacity: 1 } }); else if (libPick === 'introCard') set({ introCard: { rel: i.rel, seconds: 2.5, motion: 'fade' } }); else set({ endCard: { rel: i.rel, seconds: 3, motion: 'fade' } }); setLibPick(null); }} />}
       {helping && <SpeakerHelper project={project} clip={clip} onClose={() => setHelping(false)} onDone={async (anchors) => {
         setHelping(false);
         const next = { ...clip, crop: { ...crop, mode: 'auto', anchors } };
@@ -428,6 +428,10 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
                 ...(['tl', 'tr'].includes(clip.overlay.corner || 'tr') ? { top: '6.5%' } : { bottom: '10.5%' }),
               }} />
             )}
+            {clip.introCard?.rel && outTime < (clip.introCard.seconds ?? 2.5) && (() => {
+              const r = Math.max(0, Math.min(1, ((clip.introCard.seconds ?? 2.5) - outTime) / 0.4)); const m = clip.introCard.motion || 'fade';
+              return <img alt="" src={`/library/${clip.introCard.rel.split('/').map(encodeURIComponent).join('/')}`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 4, pointerEvents: 'none', opacity: r, transform: m === 'slide' ? `translateY(${-(1 - r) * 12}%)` : m === 'zoom' ? `scale(${1 + (1 - r) * 0.06})` : 'none' }} />;
+            })()}
             {clip.endCard?.rel && outTime >= outLen - (clip.endCard.seconds ?? 3) && (
               <img alt="" src={`/library/${clip.endCard.rel.split('/').map(encodeURIComponent).join('/')}`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 4, pointerEvents: 'none' }} />
             )}
@@ -526,6 +530,20 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
                 )}
               </div>
               <div className="keycard">
+                <div className="row between"><strong>Intro card</strong>
+                  {clip.introCard?.rel ? <button className="btn ghost sm danger" onClick={() => set({ introCard: null })}>Remove</button> : <button className="btn sm" onClick={() => setLibPick('introCard')}>Pick a graphic</button>}
+                </div>
+                <span className="hint">A full-screen graphic for the first seconds, like your series title. It moves out as the clip begins.</span>
+                {clip.introCard?.rel && (
+                  <>
+                    <label className="field">Shows for the first · {(clip.introCard.seconds ?? 2.5).toFixed(1)}s
+                      <input type="range" min="1" max="6" step="0.5" value={clip.introCard.seconds ?? 2.5} onChange={(e) => set({ introCard: { ...clip.introCard, seconds: Number(e.target.value) } })} />
+                    </label>
+                    <div className="seg sm">{[['fade', 'Fade'], ['slide', 'Slide'], ['zoom', 'Zoom']].map(([k, l]) => <button key={k} className={(clip.introCard.motion || 'fade') === k ? 'on' : ''} onClick={() => set({ introCard: { ...clip.introCard, motion: k } })}>{l}</button>)}</div>
+                  </>
+                )}
+              </div>
+              <div className="keycard">
                 <div className="row between"><strong>End card</strong>
                   {clip.endCard?.rel ? <button className="btn ghost sm danger" onClick={() => set({ endCard: null })}>Remove</button> : <button className="btn sm" onClick={() => setLibPick('endCard')}>Pick a graphic</button>}
                 </div>
@@ -535,7 +553,8 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
                     <input type="range" min="1" max="8" step="0.5" value={clip.endCard.seconds ?? 3} onChange={(e) => set({ endCard: { ...clip.endCard, seconds: Number(e.target.value) } })} />
                   </label>
                 )}
-                <button className="btn ghost sm" onClick={() => go({ name: 'graphics' })}>Open Graphics</button>
+                {clip.endCard?.rel && <div className="seg sm">{[['fade', 'Fade'], ['slide', 'Slide'], ['zoom', 'Zoom']].map(([k, l]) => <button key={k} className={(clip.endCard.motion || 'fade') === k ? 'on' : ''} onClick={() => set({ endCard: { ...clip.endCard, motion: k } })}>{l}</button>)}</div>}
+                <button className="btn ghost sm" onClick={() => go({ name: 'graphics' })}>Make one in Design</button>
               </div>
             </div>
           )}
