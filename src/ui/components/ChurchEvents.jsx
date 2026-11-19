@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { CalendarDays, ExternalLink, MapPin, RefreshCw, Send, Shapes } from 'lucide-react';
+import { CalendarDays, ExternalLink, MapPin, RefreshCw, Send, Shapes, Megaphone } from 'lucide-react';
 import { api, openLink } from '../api.js';
 import { useApp } from '../App.jsx';
 import Modal, { ModalHead } from './Modal.jsx';
@@ -49,6 +49,7 @@ export function EventCard({ event, onClose, onPlanPost }) {
         <button className="btn sm" onClick={() => { onClose(); go({ name: 'graphics', event, eventMode: 'flyer' }); }}>Flyer</button>
         <button className="btn sm" onClick={() => { onClose(); go({ name: 'graphics', event, eventMode: 'countdown' }); }}>Countdown</button>
         {onPlanPost && <button className="btn sm" onClick={() => { onClose(); onPlanPost(event); }}><Send size={14} />Plan a post</button>}
+        <button className="btn sm" onClick={() => { onClose(); go({ name: 'social', campaign: { event } }); }}><Megaphone size={14} />Plan a campaign</button>
         {event.link && <button className="btn ghost sm" onClick={() => openLink(event.link)}><ExternalLink size={14} />Open event page</button>}
       </div>
     </Modal>

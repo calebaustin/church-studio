@@ -17,6 +17,7 @@ import * as prefs from './prefs.js';
 import * as workspaces from './workspaces.js';
 import * as jumpstart from './jumpstart.js';
 import * as inspiration from './inspiration.js';
+import * as campaigns from './campaigns.js';
 import * as blog from './blog.js';
 import * as photos from './photos.js';
 import * as library from './library.js';
@@ -390,6 +391,13 @@ route('GET', '/api/social/media', async () => {
   return { media: out.sort((a, b) => String(b.at).localeCompare(String(a.at))) };
 });
 
+// ---------------------------------------------------------------- campaigns
+route('GET', '/api/campaigns', async () => ({ campaigns: await campaigns.listCampaigns() }));
+route('POST', '/api/campaigns/draft', async (_p, b) => { try { return await campaigns.draftCampaign(b || {}); } catch (e) { throw new HttpError(400, e.message); } });
+route('POST', '/api/campaigns', async (_p, b) => { try { return { campaign: await campaigns.createCampaign(b || {}) }; } catch (e) { throw new HttpError(400, e.message); } });
+route('POST', '/api/campaigns/:cid/repeat', async ({ cid }, b) => { try { return { campaign: await campaigns.repeatCampaign(cid, b || {}) }; } catch (e) { throw new HttpError(400, e.message); } });
+route('DELETE', '/api/campaigns/:cid', async ({ cid }) => campaigns.deleteCampaign(cid));
+
 // ---------------------------------------------------------------- inspiration, blog, photo notes
 route('GET', '/api/inspiration', async (_p, _b, q) => inspiration.inspiration({ period: q?.searchParams?.get('period') || 'quarter' }));
 route('GET', '/api/inspiration/year', async (_p, _b, q) => inspiration.yearInReview(Number(q?.searchParams?.get('year')) || new Date().getFullYear()));
@@ -450,6 +458,8 @@ route('POST', '/api/library/import', async (_p, b) => {
 // ---------------------------------------------------------------- writing
 route('GET', '/api/writing', async () => ({ drafts: await writing.listDrafts() }));
 route('POST', '/api/writing', async (_p, b) => { try { return await writing.newDraft(b || {}); } catch (e) { throw new HttpError(400, e.message); } });
+route('GET', '/api/writing/audiences', async () => ({ audiences: writing.AUDIENCES.map(([id, label, about]) => ({ id, label, about })) }));
+route('POST', '/api/writing/rewrite', async (_p, b) => { try { return await writing.rewriteFor(b.text, b.audience); } catch (e) { throw new HttpError(400, e.message); } });
 // Brand voice
 route('GET', '/api/brand-voice', async () => ({ voice: await voice.loadVoice() }));
 route('PUT', '/api/brand-voice', async (_p, b) => ({ voice: await voice.updateVoice(b || {}) }));

@@ -9,11 +9,23 @@ Every update keeps your sermons, designs, drafts and settings. Before a new vers
 - **Your blog.** Connect your blog and Church Studio reads its public feed (WordPress, Squarespace, Wix and most others), keeping a growing history on your Mac. See how often you post, days since the last post, and ideas for the next one: sermons without a blog post yet, quiet topics, and older posts worth sharing again. Jumpstart finds your blog automatically.
 - **Year in review.** One click makes a story set of your year: messages preached, the books you spent the most time in, the topics you kept coming back to, what you made and shared, your busiest month and longest streak. It opens in Design, in your brand, ready to edit and post.
 - **Background eraser.** Clear a white or plain background off a logo or picture, around the outside or inside letters too, with a strength slider and a light, dark and see-through preview. Saves a new copy and keeps the original. Find it in a logo's ⋯ menu, on brand files, and on pictures in a design.
+- **Campaigns.** In Social, plan a run of posts for a church event, a sermon or anything else. Church Studio suggests each post (save the date, invite, countdown, today, thank you; or preview, recap, clips, quote and question for a sermon) with a caption to start from, and puts them on the calendar as planned drafts. Add a design or clip and schedule each one. Start one from an event card, a sermon's content plan, or the Campaigns tab.
+- **Repeat for next time.** Repeat a campaign for a monthly or yearly event and every post moves with the new date, with its caption, design and clip. In Design, **Copy for a new date** makes a copy of a design with every date in its text rewritten.
+- **Newsletters.** A new Newsletter in Writing, built from Sunday's message, the next two weeks of your church calendar and a verse from the sermon. Copy formatted gives email-ready HTML in your brand colors and fonts, with your logo and button links, for Mailchimp, Flocknote, Constant Contact or Gmail.
+- **Rewrite for an audience.** Rewrite any writing for guests and newcomers, kids, students, volunteers, or as a short version. Works offline with plain-language rules, and does a fuller job with an AI helper turned on.
+- **From your computer, everywhere.** Every picture picker has From your computer and drag and drop, for graphics made in Canva, Photoshop or anywhere else. Posts can attach a video or picture from your computer. Design has Bring in your own to turn any picture into a design you can resize, add to or post.
+- **Worth sharing again.** Social suggests good posts from three or more months ago to share again.
 - **Alt text for photos.** Add alt text and tags to any picture in your brand library, copy it when you post, and search by it. With an AI helper turned on, Suggest writes a first draft.
 
 ### Changed
 - The brand kit says which logo files work best: SVG, or PNG with a see-through background.
 - SVG logos work as your primary logo in the menu and Dock.
+- Jumpstart finds a church's mission statement more reliably, skipping welcome text, headings and buttons.
+- Planned campaign posts show on the Social calendar with a dashed outline.
+
+### Fixed
+- Bringing in a file with the same name as one already in your brand library no longer replaces it.
+- Changing the clip or design on a saved draft post now saves.
 
 ## 0.9.0 · November 19, 2026
 

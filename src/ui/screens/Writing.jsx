@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, CalendarDays, Copy, FileDown, FileText, Heart, PenLine, Plus, Sparkles, Wand2, Check, RefreshCw, Undo2, Link2, Info, Printer } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Copy, FileDown, FileText, Heart, PenLine, Plus, Sparkles, Wand2, Check, RefreshCw, Undo2, Link2, Info, Printer, Mail, Users } from 'lucide-react';
 import Modal, { ModalHead } from '../components/Modal.jsx';
 import { Masonry } from '../components/Masonry.jsx';
 import { useChurchEvents } from '../components/ChurchEvents.jsx';
@@ -10,6 +10,7 @@ import { useApp } from '../App.jsx';
 import { api } from '../api.js';
 import { seoChecks } from '../seo.js';
 import { mdToHtml } from '../markdown.js';
+import { emailHtml } from '../emailHtml.js';
 import RichEditor from '../components/RichEditor.jsx';
 import Popover, { PopList } from '../components/Popover.jsx';
 
@@ -42,7 +43,17 @@ function SuggestField({ label, hint, value, onChange, items, onOpen, multiline, 
   );
 }
 
+// Mirrors AUDIENCES in src/daemon/writing.js.
+const AUDIENCE_LIST = [
+  ['newcomers', 'Guests and newcomers', 'Plain words for someone new to church, with a warm welcome.'],
+  ['kids', 'Kids', 'Short sentences and simple words a child can follow.'],
+  ['students', 'Students', 'Shorter and more direct, for middle and high school.'],
+  ['volunteers', 'Volunteers and leaders', 'Clear and practical, ending with what you need from them.'],
+  ['short', 'A short version', 'Two or three sentences for social media or a text.'],
+];
+
 const KINDS = [
+  ['newsletter', 'Newsletter'],
   ['blog', 'Blog post'],
   ['email', 'Email summary'],
   ['group', 'Discussion guide'],
@@ -106,7 +117,7 @@ function WritingEditor({ pid, onBack, startKind }) {
   const [devoDays, setDevoDays] = useState(5);
 
   useEffect(() => { if (!standalone) api.get(`/api/projects/${pid}`).then((r) => setProject(r.project)).catch(() => setProject(null)); }, [pid]);
-  useEffect(() => { api.get(`/api/writing/${pid}`).then((r) => { setDraft(r.draft); setTrashed(Boolean(r.trashed)); setDirty(false); setIdeas(null); setUndoBlog(null); setAngle(r.draft?.angle || 'teaching'); setLoaded(true); }); }, [pid]);
+  useEffect(() => { api.get(`/api/writing/${pid}`).then((r) => { setDraft(r.draft); setTrashed(Boolean(r.trashed)); setDirty(false); setIdeas(null); setUndoBlog(null); setAngle(r.draft?.angle || 'teaching'); if (!startKind && r.draft?.source?.type === 'newsletter') setKind('newsletter'); setLoaded(true); }); }, [pid]);
   const loadIdeas = (kp = draft?.keyphrase) => api.post(`/api/writing/${pid}/suggest`, { keyphrase: kp }).then(setIdeas).catch(() => setIdeas({ titles: [], keyphrases: [], metas: [] }));
   const rewrite = async () => {
     setBusy(true);
@@ -149,12 +160,26 @@ function WritingEditor({ pid, onBack, startKind }) {
   };
   const copy = async (asHtml) => {
     const text = draft[kind];
+    if (asHtml && window.ClipboardItem && (kind === 'newsletter' || kind === 'email')) {
+      // Email-ready: brand colors and fonts, every style inline, links as buttons.
+      const logo = config.appLogo ? await inlineImages(`src="/library/${config.appLogo.split('/').map(encodeURIComponent).join('/')}"`).then((x) => x.slice(5, -1)) : null;
+      const html = await inlineImages(emailHtml(text, { colors: config.brandColors, heading: config.brandFonts?.heading, body: config.brandFonts?.body, logo }));
+      await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([text], { type: 'text/plain' }) })]);
+      toast({ text: 'Copied, ready for email. Paste it into Mailchimp, Flocknote or any email tool.' });
+      return;
+    }
     if (asHtml && window.ClipboardItem) {
       const top = header?.rel && header.style !== 'color' ? `<p><img src="/library/${header.rel.split('/').map(encodeURIComponent).join('/')}" alt="" style="max-width:100%"></p>` : '';
       const html = await inlineImages(top + mdToHtml(text));
       await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([text], { type: 'text/plain' }) })]);
     } else await navigator.clipboard.writeText(text);
     toast({ text: asHtml ? 'Copied with formatting. Paste into your website or email tool.' : 'Copied.' });
+  };
+  const [rewriteMenu, setRewriteMenu] = useState(false);
+  const [rewritten, setRewritten] = useState(null); // { audience, text, local, busy }
+  const rewriteForAudience = async (audience) => {
+    setRewritten({ audience, text: '', busy: true });
+    try { const r = await api.post('/api/writing/rewrite', { text: draft[kind], audience }); setRewritten({ audience, text: r.text, local: r.local }); } catch (e) { setRewritten(null); toast({ kind: 'error', text: e.message }); }
   };
   const checks = useMemo(() => (draft && kind === 'blog' ? seoChecks(draft.blog, { keyphrase: draft.keyphrase, title: draft.title, meta: draft.metaDescription, slug: draft.slug }) : null), [draft, kind]);
   const placeholders = draft ? ((draft[kind] || '').match(/\[[A-Z][^\]]*\]/g) || []).length : 0;
@@ -166,7 +191,7 @@ function WritingEditor({ pid, onBack, startKind }) {
           <button className="btn ghost sm" onClick={async () => { if (dirty && !window.confirm('Leave without saving your changes?')) return; onBack(); }}><ArrowLeft size={15} />Writing</button>
           <div className="stack" style={{ gap: 0, minWidth: 0 }}>
             <h1 className="truncate" style={{ fontSize: 26 }}>{draft?.title || project?.title || 'Writing'}</h1>
-            <span className="muted small truncate">{standalone ? (draft?.source?.type === 'event' ? `About an event${draft.source.event?.start ? ` on ${new Date(draft.source.event.start).toLocaleDateString([], { month: 'short', day: 'numeric' })}` : ''}` : 'Your own writing') : `From “${project?.title || 'a sermon'}”`}</span>
+            <span className="muted small truncate">{standalone ? draft?.source?.type === 'newsletter' ? 'Newsletter' : (draft?.source?.type === 'event' ? `About an event${draft.source.event?.start ? ` on ${new Date(draft.source.event.start).toLocaleDateString([], { month: 'short', day: 'numeric' })}` : ''}` : 'Your own writing') : `From “${project?.title || 'a sermon'}”`}</span>
           </div>
         </div>
         {!standalone && <button className="btn primary" disabled={busy} onClick={generate}><Wand2 size={15} />{draft ? 'Write again' : 'Write drafts'}</button>}
@@ -182,7 +207,7 @@ function WritingEditor({ pid, onBack, startKind }) {
       {draft && (
         <>
           <div className="row between wrap">
-            <div className="seg">{KINDS.filter(([k]) => !(standalone && (k === 'group' || k === 'devotional') && !draft[k])).map(([k, l]) => <button key={k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>{l}</button>)}</div>
+            <div className="seg">{KINDS.filter(([k]) => (k !== 'newsletter' || draft.newsletter != null) && !(draft.source?.type === 'newsletter' && ['blog', 'email', 'group', 'devotional'].includes(k) && !draft[k]) && !(standalone && (k === 'group' || k === 'devotional') && !draft[k])).map(([k, l]) => <button key={k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>{l}</button>)}</div>
             <div className="row wrap">
               {placeholders > 0 && <span className="chip warn">{placeholders} spot{placeholders > 1 ? 's' : ''} to fill in</span>}
               <button className="btn sm" onClick={() => copy(false)}><Copy size={13} />Copy</button>
@@ -190,6 +215,12 @@ function WritingEditor({ pid, onBack, startKind }) {
               {kind !== 'social' && <button className="btn sm" onClick={() => setPrinting(true)}><Printer size={13} />Print or PDF</button>}
               <button className="btn sm" onClick={() => api.post(`/api/writing/${pid}/save-file`, { name: `${draft.title} - ${KINDS.find((k) => k[0] === kind)[1]}`, text: draft[kind] })}><FileDown size={13} />Save to library</button>
               {config.llmProvider !== 'none' && <button className="btn sm" disabled={busy} onClick={polish}><Sparkles size={13} />Polish with AI</button>}
+              <div style={{ position: 'relative' }}>
+                <button className="btn sm" data-pop-trigger onClick={() => setRewriteMenu(!rewriteMenu)}><Users size={13} />Rewrite for…</button>
+                <Popover open={rewriteMenu} onClose={() => setRewriteMenu(false)} align="right" width={300}>
+                  <PopList items={AUDIENCE_LIST.map(([id, label, about]) => ({ label, hint: about, value: id }))} onPick={(id) => { setRewriteMenu(false); rewriteForAudience(id); }} />
+                </Popover>
+              </div>
               {kind === 'blog' && <button className="btn sm" onClick={saveToVoice}><Heart size={13} />Save to brand voice</button>}
               <button className="btn sm primary" onClick={async () => { if (dirty) await save(); showNext({ kind: 'writing', title: draft.title, text: draft.blog, caption: draft.metaDescription || draft.title, projectId: standalone ? null : pid }); }}><Check size={13} />Done</button>
               <button className={`btn sm ${dirty ? 'accent' : ''}`} disabled={!dirty} onClick={save}><Check size={13} />{dirty ? 'Save' : 'Saved'}</button>
@@ -261,7 +292,20 @@ function WritingEditor({ pid, onBack, startKind }) {
               </aside>
             )}
           </div>
-          {printing && <PrintDialog pid={pid} kind={kind} kindLabel={KINDS.find((k) => k[0] === kind)[1]} draft={draft} header={header} onClose={() => setPrinting(false)} />}
+          {rewritten && (
+        <Modal onClose={() => setRewritten(null)} width={720} label="Rewrite for an audience"
+          footer={<>
+            <span className="hint">{rewritten.local ? 'Rewritten with plain-language rules on this Mac. An AI helper does a fuller rewrite.' : 'Rewritten by your AI helper. Check the facts before you share it.'}</span>
+            <div className="row">
+              <button className="btn" disabled={rewritten.busy} onClick={async () => { await navigator.clipboard.writeText(rewritten.text); toast({ text: 'Copied.' }); }}><Copy size={13} />Copy</button>
+              <button className="btn primary" disabled={rewritten.busy} onClick={() => { const before = draft[kind]; const k = kind; set({ [k]: rewritten.text }); setRewritten(null); toast({ text: 'Rewritten.', action: { label: 'Undo', run: () => set({ [k]: before }) } }); }}>Use this</button>
+            </div>
+          </>}>
+          <ModalHead title={`For ${AUDIENCE_LIST.find(([id]) => id === rewritten.audience)?.[1].toLowerCase()}`} sub={AUDIENCE_LIST.find(([id]) => id === rewritten.audience)?.[2]} />
+          {rewritten.busy ? <div className="skeleton" style={{ height: 220 }} /> : <textarea className="input" rows={14} value={rewritten.text} onChange={(e) => setRewritten({ ...rewritten, text: e.target.value })} />}
+        </Modal>
+      )}
+      {printing && <PrintDialog pid={pid} kind={kind} kindLabel={KINDS.find((k) => k[0] === kind)[1]} draft={draft} header={header} onClose={() => setPrinting(false)} />}
           {imgPick && (
             <LibraryPicker title="Add an image" onClose={() => { imgPick(null); setImgPick(null); }}
               onPick={(i) => { imgPick({ url: `/library/${i.rel.split('/').map(encodeURIComponent).join('/')}`, alt: i.name.replace(/\.[a-z]+$/i, '') }); setImgPick(null); }} />
@@ -296,7 +340,7 @@ function VoiceChecks({ text }) {
   return <Checks title="Brand voice" score={r.score} list={r.checks} />;
 }
 
-const SOURCE_LABEL = { sermon: 'From a sermon', event: 'About an event', blank: 'Your own writing' };
+const SOURCE_LABEL = { sermon: 'From a sermon', event: 'About an event', blank: 'Your own writing', newsletter: 'Newsletter' };
 const ago = (iso) => { if (!iso) return ''; const m = Math.round((Date.now() - Date.parse(iso)) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} hr ago` : new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' }); };
 
 /** Writing home: start from a transcript, a blank page or an event, and find past writing. */
@@ -329,6 +373,10 @@ function WritingHome({ onOpen }) {
         <button className="start-tile glass" onClick={() => create({ type: 'blank' })}>
           <span className="type-badge" style={{ width: 40, height: 40, '--t': 'var(--tone-2)' }}><Plus size={19} /></span>
           <strong>Blank post</strong><span className="small muted">Start from a clean page with the same editor, SEO and brand voice checks.</span>
+        </button>
+        <button className="start-tile glass" onClick={() => create({ type: 'newsletter' })}>
+          <span className="type-badge" style={{ width: 40, height: 40, '--t': 'var(--tone-4)' }}><Mail size={19} /></span>
+          <strong>Newsletter</strong><span className="small muted">This week’s message, what’s coming up from your calendar, and ways to get involved. Copies ready for any email tool.</span>
         </button>
         <button className="start-tile glass" onClick={() => setPickEvent(true)}>
           <span className="type-badge" style={{ width: 40, height: 40, '--t': 'var(--tone-3)' }}><CalendarDays size={19} /></span>

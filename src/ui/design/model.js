@@ -539,3 +539,34 @@ export function scripturePage(ctx, { ref, verse, translation = '' }, look = 'cal
     ...(translation ? [B(ctx, { text: translation.toUpperCase(), size: 22, weight: 700, letter: 4, x: 0.5, y: 0.82, color: dark, opacity: 0.55 })] : []),
   ] });
 }
+
+// ---------------------------------------------------------------- copy for a new date
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const DATE_RE = new RegExp(
+  `\\b(?:(${DAYS.join('|')}|${DAYS.map((d) => d.slice(0, 3)).join('|')})\\.?,?\\s+)?(${MONTHS.join('|')}|${MONTHS.map((m) => m.slice(0, 3)).join('|')}|Sept)\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s+(\\d{4}))?\\b|\\b(\\d{1,2})\\/(\\d{1,2})(?:\\/(\\d{2,4}))?\\b`, 'gi');
+
+/** Rewrite every date in a text in the same style (long or short names, with or without weekday and year). */
+export function swapDates(text, when) {
+  return String(text).replace(DATE_RE, (m, wd, mon, day, year, nm, nd, ny) => {
+    if (nm) return `${when.getMonth() + 1}/${when.getDate()}${ny ? `/${ny.length === 2 ? String(when.getFullYear()).slice(2) : when.getFullYear()}` : ''}`;
+    const longMonth = mon.length > 4 || /^(may|june|july)$/i.test(mon);
+    const M = longMonth ? MONTHS[when.getMonth()] : MONTHS[when.getMonth()].slice(0, 3);
+    const W = wd ? (wd.length > 3 ? DAYS[when.getDay()] : DAYS[when.getDay()].slice(0, 3)) : null;
+    const upper = mon === mon.toUpperCase();
+    const out = `${W ? `${W}${m.includes(`${wd},`) ? ',' : ''} ` : ''}${M} ${when.getDate()}${year ? `, ${when.getFullYear()}` : ''}`;
+    return upper ? out.toUpperCase() : out;
+  });
+}
+
+/** A copy of a design with its dates moved to a new day. Returns the copy and how many dates changed. */
+export function copyForDate(doc, when, name) {
+  let changed = 0;
+  const pages = doc.pages.map((p) => ({ ...p, id: uid(), items: p.items.map((it) => {
+    if (it.type !== 'text') return { ...it, id: uid() };
+    const next = swapDates(it.text, when);
+    if (next !== it.text) changed++;
+    return { ...it, id: uid(), text: next };
+  }) }));
+  return { doc: { ...doc, id: uid(), name: name || `${doc.name} (${MONTHS[when.getMonth()].slice(0, 3)} ${when.getDate()})`, pages, thumb: null }, changed };
+}

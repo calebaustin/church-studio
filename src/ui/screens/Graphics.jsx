@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Clapperboard, Copy, GalleryHorizontalEnd, Heart, LayoutGrid, MonitorPlay, NotebookPen, Presentation, Printer,
-  Scaling, Search, Smartphone, Sparkles, Trash2, Home as HomeIcon, Wand2, X, BookOpen, Plus, PenTool, Film, Laptop,
+  Scaling, Search, Smartphone, Sparkles, Trash2, Home as HomeIcon, Wand2, X, BookOpen, Plus, PenTool, Film, Laptop, CalendarClock,
 } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { Masonry } from '../components/Masonry.jsx';
@@ -9,7 +9,7 @@ import { api } from '../api.js';
 import Modal, { ModalHead } from '../components/Modal.jsx';
 import DesignEditor from '../design/DesignEditor.jsx';
 import LibraryPicker from '../components/LibraryPicker.jsx';
-import { KINDS, SIZE_PRESETS, TEMPLATES as BASE_TEMPLATES, blankPage, countdownPages, loadAssets, page as newPage, renderPage, scripturePage, uid } from '../design/model.js';
+import { KINDS, SIZE_PRESETS, TEMPLATES as BASE_TEMPLATES, blankPage, copyForDate, countdownPages, loadAssets, page as newPage, renderPage, scripturePage, uid } from '../design/model.js';
 import { PACKS, PACK_TEMPLATES } from '../design/packs.js';
 import { buildDeck, parseNotes } from '../design/deckBuilder.js';
 
@@ -96,6 +96,7 @@ export default function Graphics({ image, design, event, eventMode, quote, make 
   const [pack, setPack] = useState(null);
   const [q, setQ] = useState('');
   const [modal, setModal] = useState(null); // 'sermon' | 'custom'
+  const [redate, setRedate] = useState(null); // a design to copy for a new date
   const load = () => api.get('/api/designs').then((r) => setDesigns(r.designs)).catch(() => setDesigns([]));
   useEffect(() => { if (!open) load(); }, [open]);
 
@@ -205,6 +206,7 @@ export default function Graphics({ image, design, event, eventMode, quote, make 
                     <span className="muted" style={{ fontSize: 12 }}>{KINDS[d.kind]?.label}{d.pages > 1 ? ` · ${d.pages} pages` : ''}</span>
                   </div>
                   <div className="row" style={{ gap: 2 }}>
+                    <button className="rt-btn" title="Copy for a new date" aria-label="Copy for a new date" onClick={() => setRedate(d)}><CalendarClock size={14} /></button>
                     <button className="rt-btn" title="Make a copy" aria-label="Make a copy" onClick={async () => { const { design } = await api.get(`/api/designs/${d.id}`); await api.put(`/api/designs/${uid()}`, { ...design, name: `${design.name} copy` }); load(); }}><Copy size={14} /></button>
                     <button className="rt-btn" title="Move to trash" aria-label="Move to trash" onClick={async () => { await api.post('/api/finder/trash', { key: `design:${d.id}` }); load(); toast({ text: `“${d.name}” moved to the trash.`, action: { label: 'Undo', run: async () => { await api.post('/api/finder/restore', { key: `design:${d.id}` }); load(); } } }); }}><Trash2 size={14} /></button>
                   </div>
@@ -263,6 +265,7 @@ export default function Graphics({ image, design, event, eventMode, quote, make 
           onMaker={(m) => setModal(m)}
           onSize={(size) => { setModal(null); const d = newDoc('custom', null, ctx, size); d.name = `Untitled ${size.w}×${size.h}`; create(d); }} />
       )}
+      {redate && <Redate design={redate} onClose={() => setRedate(null)} onDone={(id, changed) => { setRedate(null); load(); toast({ text: changed ? `Copy made with ${changed} date${changed === 1 ? '' : 's'} updated. Check the times too.` : 'Copy made. No dates were found in its text, so check it over.', action: { label: 'Open', run: () => setOpen(id) } }); }} />}
       {modal === 'import' && (
         <LibraryPicker title="Bring in your own design" folder="Graphics" onClose={() => setModal(null)} onPick={async (i) => {
           setModal(null);
@@ -385,6 +388,27 @@ function CreateNew({ ctx, onClose, onBlank, onTemplate, onBrowse, onMaker, onSiz
         </div>
         {!ok && <span className="hint">Sizes run from 100 to 6000 pixels.</span>}
       </div>
+    </Modal>
+  );
+}
+
+/** Copy a design for the next time an event comes around, with every date in its text moved. */
+function Redate({ design, onClose, onDone }) {
+  const next = new Date(); next.setDate(next.getDate() + 7);
+  const [date, setDate] = useState(`${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`);
+  const [busy, setBusy] = useState(false);
+  const go = async () => {
+    setBusy(true);
+    const { design: full } = await api.get(`/api/designs/${design.id}`);
+    const { doc, changed } = copyForDate(full, new Date(`${date}T12:00`));
+    await api.put(`/api/designs/${doc.id}`, doc);
+    onDone(doc.id, changed);
+  };
+  return (
+    <Modal label="Copy for a new date" onClose={onClose} width={440}
+      footer={<><span className="hint">Dates like “Sunday, Nov 22” or “11/22” are rewritten.</span><button className="btn primary" disabled={busy || !date} onClick={go}><Copy size={14} />Make copy</button></>}>
+      <ModalHead title="Copy for a new date" sub={design.name} />
+      <label className="field">New date<input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
     </Modal>
   );
 }

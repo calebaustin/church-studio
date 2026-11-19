@@ -6,7 +6,8 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { DATA_DIR } from './tools.js';
-import { getProject, getTranscript } from './projects.js';
+import { getProject, getTranscript, listProjects } from './projects.js';
+import { cachedEvents } from './calendar.js';
 import { toSentences, backgroundOf, keywords, STOPWORDS } from './text.js';
 import { lineScore, lineFeatures } from './clips.js';
 import { normalizeWords, normalizeText, extractRefs } from './scripture.js';
@@ -446,6 +447,55 @@ const when = (e) => {
   return e.allDay ? day : `${day} at ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
 };
 
+
+/**
+ * A weekly newsletter built from what's already in the app: the latest sermon, the next two weeks of
+ * church events, a verse from the message and the church's details. Brackets mark what to fill in.
+ */
+async function newsletterDraft(title = '') {
+  const cfg = await loadConfig();
+  const church = cfg.churchInfo || {};
+  const name = church.name || 'our church';
+  // The most recent sermon with a transcript.
+  const latest = (await listProjects()).filter((p) => p.status === 'transcribed').sort((a, b) => String(b.created).localeCompare(String(a.created)));
+  let sermon = null;
+  for (const s of latest.slice(0, 5)) { const p = await getProject(s.id); if (p && !p.blank) { sermon = p; break; } }
+  let summary = ''; let verse = '';
+  if (sermon) {
+    const draft = await loadDraft(sermon.id).catch(() => null);
+    const firstPara = String(draft?.blog || '').split(/\n{2,}/).map((x) => x.trim()).find((x) => x && !x.startsWith('#') && !x.startsWith('!') && !x.includes('[ADD'));
+    summary = firstPara || sermon.clips.find((c) => c.summary)?.summary || '';
+    verse = (draft?.refs || [])[0] || '';
+    if (!verse) { const t = await getTranscript(sermon.id).catch(() => null); verse = t?.words ? extractRefs(normalizeText(t.words.slice(0, 4000).map((w) => w.w).join(' ')), 1)[0] || '' : ''; }
+  }
+  const watch = sermon?.sourceUrl ? `[Watch the message](${sermon.sourceUrl})` : '[ADD: link to watch the message]';
+  const soon = (await cachedEvents()).events.filter((e) => { const t = Date.parse(e.start); return t >= Date.now() && t <= Date.now() + 15 * 86400000; }).slice(0, 6);
+  const eventLines = soon.length ? soon.map((e) => `- **${e.title}**, ${when(e)}${e.location ? ` at ${e.location}` : ''}${e.link ? ` ([details](${e.link}))` : ''}`) : ['- [ADD: an event, a date and a time]'];
+  const t = title.trim() || `This week at ${name}`;
+  const footer = [name, church.address, church.times, church.website, church.phone, church.email].filter(Boolean).join(' · ');
+  const newsletter = [
+    `# ${t}`,
+    'Hi [FIRST NAME],',
+    '[ADD: a warm opening line or two. What are you grateful for this week?]',
+    sermon ? `## Sunday’s message: “${sermon.title}”` : '## This Sunday',
+    summary ? sentenceEnd(summary) : '[ADD: the main point of the message in two sentences.]',
+    sermon ? watch : '[ADD: what’s happening Sunday and when.]',
+    '## Coming up',
+    eventLines.join('\n'),
+    ...(verse ? ['## A verse for the week', `> ${verse}. [ADD: paste the verse text.]`] : []),
+    '## Get involved',
+    '[ADD: a serving need, a sign-up, or a giving link.]',
+    'See you Sunday,',
+    '[YOUR NAME]',
+    `*${footer}*`,
+  ].join('\n\n');
+  return {
+    title: t, keyphrase: '', metaDescription: '', slug: slugify(t),
+    newsletter, blog: '', email: '', group: '', social: `**Caption 1**\nThis week’s newsletter is out. ${sermon ? `A look back at “${sermon.title}”, ` : ''}what’s coming up, and ways to get involved. [ADD: link]`,
+    source: { type: 'newsletter', projectId: sermon?.id || null },
+  };
+}
+
 /** Start a blank draft, or one about a calendar event. Brackets mark what the writer fills in. */
 export async function newDraft({ type = 'blank', event = null, title = '' } = {}) {
   const id = `w-${randomUUID().slice(0, 8)}`;
@@ -464,6 +514,8 @@ export async function newDraft({ type = 'blank', event = null, title = '' } = {}
       group: '', social: [`**Caption 1**`, `${t} is ${when(event)}${place}. ${event.summary ? sentenceEnd(event.summary) : '[ADD: one line about why to come.]'}`, '', 'Save the date and bring a friend.'].join('\n'),
       source: { type: 'event', event: { title: event.title, start: event.start, location: event.location || '', link: event.link || null } },
     };
+  } else if (type === 'newsletter') {
+    d = await newsletterDraft(title);
   } else {
     const t = title.trim() || 'Untitled post';
     d = {
@@ -476,4 +528,84 @@ export async function newDraft({ type = 'blank', event = null, title = '' } = {}
   }
   await saveDraft(id, { ...d, generated: new Date().toISOString(), angle: 'teaching', keywords: [], refs: [] });
   return { id, draft: await loadDraft(id) };
+}
+
+// ------------------------------------------------------------------ rewrite for an audience
+export const AUDIENCES = [
+  ['newcomers', 'Guests and newcomers', 'Plain words for someone new to church, with a warm welcome.'],
+  ['kids', 'Kids', 'Short sentences and simple words a child can follow.'],
+  ['students', 'Students', 'Shorter and more direct, for middle and high school.'],
+  ['volunteers', 'Volunteers and leaders', 'Clear and practical, ending with what you need from them.'],
+  ['short', 'A short version', 'Two or three sentences for social media or a text.'],
+];
+
+// Church words a guest might not know, and plainer ways to say them.
+const PLAIN = [
+  [/\bfellowship\b(?!\s+(meal|hall|dinner|lunch|time|night|event|supper|breakfast))/gi, 'time together'], [/\bsanctification\b/gi, 'growing more like Jesus'], [/\bjustification\b/gi, 'being made right with God'],
+  [/\bthe body of christ\b/gi, 'the church'], [/\btithes?\b/gi, 'giving'], [/\btithing\b/gi, 'giving'], [/\bthe lord'?s supper\b/gi, 'communion (bread and cup shared to remember Jesus)'],
+  [/\bsaints\b/gi, 'Christians'], [/\bbrethren\b/gi, 'friends'], [/\brepent(ance)?\b/gi, 'turning back to God'], [/\bthe sanctuary\b/gi, 'the main room'],
+  [/\bsmall groups?\b/gi, (m) => `${m} (a few people who meet during the week)`], [/\bdeacons?\b/gi, (m) => `${m} (servant leaders)`], [/\belders\b/gi, 'elders (church leaders)'],
+];
+const SIMPLE = [
+  [/\bapproximately\b/gi, 'about'], [/\butilize\b/gi, 'use'], [/\btherefore\b/gi, 'so'], [/\bhowever\b/gi, 'but'], [/\bnumerous\b/gi, 'many'], [/\bdemonstrates?\b/gi, 'shows'],
+  [/\bassist\b/gi, 'help'], [/\brequires?\b/gi, 'needs'], [/\bindividuals\b/gi, 'people'], [/\bpurchase\b/gi, 'buy'], [/\bcommence\b/gi, 'start'],
+  [/\bopportunity\b/gi, 'chance'], [/\bencounter\b/gi, 'meet'], [/\bprovide\b/gi, 'give'], [/\bnevertheless\b/gi, 'still'], [/\bfurthermore\b/gi, 'also'],
+];
+const sentences = (t) => String(t).replace(/\s+/g, ' ').match(/[^.!?]+[.!?]+["”’)]*|\S[^.!?]*$/g) || [];
+/** Split a long sentence at a comma or "and" so each part stays short. */
+function shorten(s, max = 16, depth = 0) {
+  const words = s.trim().split(' ');
+  if (words.length <= max || depth > 4) return s.trim();
+  const at = s.search(/,\s+(and|but|so|because)\s+|;\s+|,\s+which\s+/i);
+  if (at > 20) {
+    const head = s.slice(0, at).trim().replace(/[,;]$/, '');
+    const tail = s.slice(at).replace(/^[,;]\s+(and|but|which)?\s*/i, '').replace(/^\w/, (c) => c.toUpperCase()).trim();
+    return `${head}. ${shorten(tail, max, depth + 1)}`;
+  }
+  return s.trim();
+}
+/** Swap words but keep a capital letter where the original had one. */
+const swapCase = (t, list) => list.reduce((acc, [re, to]) => acc.replace(re, (m, ...rest) => {
+  const out = typeof to === 'function' ? to(m, ...rest) : to;
+  return /^[A-Z]/.test(m) ? out.replace(/^\w/, (c) => c.toUpperCase()) : out;
+}), t).replace(/\b([Aa])n (?=[bcdfghjklmnpqrstvwxyz])/g, '$1 ');
+/** Keep Markdown headings, lists and quotes; change the words in the paragraphs. */
+function mapParagraphs(md, fn) {
+  return String(md).split(/\n{2,}/).map((p) => (/^(#|>|!|\s*[-*]|\s*\d+\.|\*\*Subject|\*\*Preview)/.test(p.trim()) ? p : fn(p))).join('\n\n');
+}
+
+function rewriteLocal(text, audience) {
+  const swap = swapCase;
+  if (audience === 'short') {
+    const body = String(text).replace(/^#.*$/gm, '').replace(/\*\*(Subject|Preview):\*\*.*$/gm, '').replace(/\[[^\]]*\]\([^)]*\)/g, '').replace(/[#>*_]/g, '');
+    const out = []; let n = 0;
+    for (const s of sentences(body).map((x) => x.trim()).filter((x) => x.length > 20 && !/^\[/.test(x) && !/^hi\b/i.test(x))) { if (n + s.length > 240) break; out.push(s); n += s.length; }
+    return `${out.join(' ') || '[ADD: two sentences that say it simply.]'} [ADD: link]`;
+  }
+  if (audience === 'newcomers') {
+    const t = mapParagraphs(text, (p) => swap(p, PLAIN));
+    return `${t}\n\nNew here? You’re welcome just as you are. [ADD: where to park, what to expect, or who to ask.]`;
+  }
+  if (audience === 'kids') return mapParagraphs(text, (p) => sentences(swap(swap(p, PLAIN), SIMPLE)).map((s) => shorten(s, 12)).join(' '));
+  if (audience === 'students') return mapParagraphs(text, (p) => sentences(swap(p, SIMPLE)).map((s) => shorten(s, 18)).join(' '));
+  if (audience === 'volunteers') {
+    const t = mapParagraphs(text, (p) => sentences(swap(p, SIMPLE)).map((s) => shorten(s, 20)).join(' '));
+    return `${t}\n\n**What we need from you:** [ADD: the ask, the time, and who to reply to.]\n\nThank you for serving.`;
+  }
+  return text;
+}
+
+const REWRITE_SYSTEM = (who) => `You rewrite church communications for a specific audience: ${who}.
+Keep the meaning, every fact and every link. Never invent events, times, names or stories. Keep Markdown headings and lists.
+Keep every [BRACKETED] placeholder exactly as written. Capitalize pronouns for God and Jesus. No em dashes. Return only the rewritten text.`;
+
+/** Rewrite text for an audience. Uses the AI helper when it's on; otherwise plain-language rules on this Mac. */
+export async function rewriteFor(text, audience) {
+  const a = AUDIENCES.find(([id]) => id === audience);
+  if (!a) throw new Error('Pick who it’s for.');
+  if (!String(text || '').trim()) throw new Error('There’s nothing to rewrite yet.');
+  const cfg = await loadConfig();
+  if (!providerReady(cfg)) return { text: rewriteLocal(text, audience), local: true };
+  const r = await withFallback(cfg, () => complete(cfg, REWRITE_SYSTEM(`${a[1]}. ${a[2]}`), text), () => rewriteLocal(text, audience));
+  return { text: r.value, local: r.local };
 }

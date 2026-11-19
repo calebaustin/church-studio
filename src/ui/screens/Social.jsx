@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useApp } from '../App.jsx';
 import { api, desktop, fmt, openLink } from '../api.js';
 import { usePoll } from '../poll.js';
-import { Laptop, MessageSquare } from 'lucide-react';
+import { Laptop, MessageSquare, Repeat2 } from 'lucide-react';
 import { exportDesign } from '../design/exporters.js';
+import Campaigns from '../components/Campaigns.jsx';
 import { checkCaption } from '../captionCheck.js';
 import Modal from '../components/Modal.jsx';
 import { EventCard, RefreshEvents, eventTime, useChurchEvents } from '../components/ChurchEvents.jsx';
@@ -31,9 +32,9 @@ function useSocial() {
   return { ...state, load };
 }
 
-export default function Social({ compose: initialCompose, caption: initialCaption }) {
+export default function Social({ compose: initialCompose, caption: initialCaption, campaign }) {
   const s = useSocial();
-  const [tab, setTab] = useState('calendar');
+  const [tab, setTab] = useState(campaign ? 'campaigns' : 'calendar');
   const [composer, setComposer] = useState(initialCompose?.design ? { design: initialCompose.design } : initialCompose?.clipId ? { media: initialCompose } : initialCompose?.projectId ? { projectId: initialCompose.projectId } : initialCaption ? { caption: initialCaption } : null);
   const needsYou = s.posts.filter((p) => p.status === 'needs-you').length;
   const plat = (id) => s.platforms.find((p) => p.id === id);
@@ -49,14 +50,16 @@ export default function Social({ compose: initialCompose, caption: initialCaptio
       <div className="row between">
         <div className="seg">
           <button className={tab === 'calendar' ? 'on' : ''} onClick={() => setTab('calendar')}>Calendar</button>
+          <button className={tab === 'campaigns' ? 'on' : ''} onClick={() => setTab('campaigns')}>Campaigns</button>
           <button className={tab === 'posts' ? 'on' : ''} onClick={() => setTab('posts')}>Posts{needsYou ? ` · ${needsYou} need you` : ''}</button>
           <button className={tab === 'messages' ? 'on' : ''} onClick={() => setTab('messages')}>Messages</button>
           <button className={tab === 'accounts' ? 'on' : ''} onClick={() => setTab('accounts')}>Accounts ({s.accounts.length})</button>
         </div>
         <span className="muted small">Scheduled posts go out while the app is open.</span>
       </div>
-      {tab === 'posts' && <Posts s={s} plat={plat} onEdit={(p) => setComposer({ post: p })} onConnect={() => setTab('accounts')} />}
+      {tab === 'posts' && <Posts s={s} plat={plat} onEdit={(p) => setComposer({ post: p })} onConnect={() => setTab('accounts')} onShareAgain={(p) => setComposer({ caption: p.caption, media: p.media, title: p.title, hashtags: p.hashtags })} />}
       {tab === 'calendar' && <Calendar s={s} plat={plat} onEdit={(p) => setComposer({ post: p })} onNew={(d) => setComposer({ when: d })} />}
+      {tab === 'campaigns' && <Campaigns s={s} start={campaign} onEdit={(p) => setComposer({ post: p })} />}
       {tab === 'accounts' && <Accounts s={s} />}
       {tab === 'messages' && <Messages s={s} />}
       {composer && <Composer s={s} plat={plat} init={composer} onClose={() => { setComposer(null); s.load(); }} onConnect={() => { setComposer(null); setTab('accounts'); }} />}
@@ -65,7 +68,7 @@ export default function Social({ compose: initialCompose, caption: initialCaptio
 }
 
 // ------------------------------------------------------------------ posts list
-function Posts({ s, plat, onEdit, onConnect }) {
+function Posts({ s, plat, onEdit, onConnect, onShareAgain }) {
   const groups = [
     ['Needs you', s.posts.filter((p) => p.status === 'needs-you')],
     ['Publishing', s.posts.filter((p) => p.status === 'publishing')],
@@ -82,12 +85,30 @@ function Posts({ s, plat, onEdit, onConnect }) {
       </div>
     );
   }
-  return groups.map(([label, list]) => (
-    <section key={label} className="stack">
-      <h3>{label}</h3>
-      {list.map((p) => <PostRow key={p.id} post={p} s={s} plat={plat} onEdit={onEdit} />)}
-    </section>
-  ));
+  // Good posts from a while back: most people didn't see them the first time.
+  const again = s.posts.filter((p) => ['published', 'partial'].includes(p.status) && p.publishedAt && Date.now() - Date.parse(p.publishedAt) > 90 * 86400000 && p.caption?.length > 40)
+    .sort((a, b) => String(a.publishedAt).localeCompare(String(b.publishedAt))).slice(0, 4);
+  return (
+    <>
+      {again.length > 0 && (
+        <section className="glass panel stack" style={{ gap: 8 }}>
+          <div className="stack" style={{ gap: 2 }}><h3 style={{ margin: 0 }}>Worth sharing again</h3><span className="muted small">Posts from three or more months ago. Most of your people didn’t see them the first time.</span></div>
+          {again.map((p) => (
+            <div key={p.id} className="insp-row">
+              <div className="stack grow" style={{ gap: 0, minWidth: 0 }}><strong className="small truncate">{p.title || p.caption.slice(0, 80)}</strong><span className="muted small">Posted {new Date(p.publishedAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</span></div>
+              <button className="btn sm" onClick={() => onShareAgain(p)}><Repeat2 size={13} />Share again</button>
+            </div>
+          ))}
+        </section>
+      )}
+      {groups.map(([label, list]) => (
+        <section key={label} className="stack">
+          <h3>{label}</h3>
+          {list.map((p) => <PostRow key={p.id} post={p} s={s} plat={plat} onEdit={onEdit} />)}
+        </section>
+      ))}
+    </>
+  );
 }
 
 function PostRow({ post, s, plat, onEdit }) {
@@ -166,7 +187,7 @@ function Calendar({ s, plat, onEdit, onNew }) {
   const title = weeks
     ? `${days[0].toLocaleDateString([], { month: 'short', day: 'numeric' })} to ${days[13].toLocaleDateString([], { month: 'short', day: 'numeric' })}`
     : month.toLocaleDateString([], { month: 'long', year: 'numeric' });
-  const when = (p) => new Date(p.scheduledAt || p.publishedAt || p.created);
+  const when = (p) => new Date(p.scheduledAt || p.publishedAt || p.plannedAt || p.created);
   const today = new Date().toDateString();
   const todayStart = new Date(new Date().toDateString());
   return (
@@ -185,7 +206,7 @@ function Calendar({ s, plat, onEdit, onNew }) {
       <div className={`month-grid ${weeks ? 'weeks' : ''}`}>
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => <div key={d} className="month-head">{d}</div>)}
         {days.map((d) => {
-          const list = s.posts.filter((p) => p.status !== 'draft' && when(p).toDateString() === d.toDateString()).sort((a, b) => when(a) - when(b));
+          const list = s.posts.filter((p) => (p.status !== 'draft' || p.plannedAt) && when(p).toDateString() === d.toDateString()).sort((a, b) => when(a) - when(b));
           const out = !weeks && d.getMonth() !== month.getMonth();
           const evMax = weeks ? 6 : 2; const postMax = weeks ? 8 : 3;
           const past = d < todayStart;
@@ -203,7 +224,7 @@ function Calendar({ s, plat, onEdit, onNew }) {
               ))}
               {evs.length > evMax && <span className="muted small">+{evs.length - evMax} events</span>}
               {list.slice(0, postMax).map((p) => (
-                <button key={p.id} className="month-post" onClick={() => ['draft', 'scheduled'].includes(p.status) && onEdit(p)} title={p.title || p.caption}>
+                <button key={p.id} className={`month-post ${p.status === 'draft' ? 'planned' : ''}`} title={p.status === 'draft' ? `Planned: ${p.title || p.caption}` : undefined} onClick={() => ['draft', 'scheduled'].includes(p.status) && onEdit(p)} title={p.title || p.caption}>
                   <span className="row" style={{ gap: 2 }}>{p.destinations.slice(0, 4).map((x) => <span key={x.accountId} className="dot" style={{ color: plat(x.platform)?.color, width: 6, height: 6 }} />)}</span>
                   <span className="truncate">{when(p).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} {p.title || p.caption}</span>
                 </button>
@@ -216,7 +237,7 @@ function Calendar({ s, plat, onEdit, onNew }) {
       <div className="row wrap" style={{ gap: 14 }}>
         {cal.linked ? <span className="row small muted"><span className="month-event-key" />Church events from {cal.source || 'your calendar'}</span>
           : <span className="small muted">Add your church calendar's iCal link in Settings › Connections to see events here.</span>}
-        {s.posts.some((p) => p.status === 'draft') && <span className="muted small">Drafts show on the calendar once you schedule them.</span>}
+        {s.posts.some((p) => p.status === 'draft' && p.plannedAt) && <span className="row small muted"><span className="month-planned-key" />Planned campaign posts, not scheduled yet</span>}
       </div>
       {ev && <EventCard event={ev} onClose={() => setEv(null)} onPlanPost={(e) => { const t = new Date(e.start); t.setDate(t.getDate() - 2); t.setHours(12, 0, 0, 0); onNew(t < new Date() ? new Date(Date.now() + 3600_000) : t); }} />}
     </section>
@@ -385,13 +406,13 @@ function Composer({ s, plat, init, onClose, onConnect }) {
   const editing = init.post || null;
   const initialMedia = editing?.media || (init.media && s.media.find((m) => m.clipId === init.media.clipId)) || init.media || null;
   const [media, setMedia] = useState(initialMedia);
-  const [title, setTitle] = useState(editing?.title ?? initialMedia?.title ?? '');
+  const [title, setTitle] = useState(editing?.title ?? init.title ?? initialMedia?.title ?? '');
   const [caption, setCaption] = useState(editing?.caption ?? init.caption ?? initialMedia?.summary ?? '');
-  const [tags, setTags] = useState((editing?.hashtags ?? initialMedia?.hashtags ?? []).join(', '));
+  const [tags, setTags] = useState((editing?.hashtags ?? init.hashtags ?? initialMedia?.hashtags ?? []).join(', '));
   const [picked, setPicked] = useState(new Set(editing?.destinations.map((d) => d.accountId) || []));
   const [overrides, setOverrides] = useState(Object.fromEntries((editing?.destinations || []).filter((d) => d.caption != null).map((d) => [d.accountId, d.caption])));
-  const [mode, setMode] = useState(editing?.status === 'draft' ? 'draft' : init.when || editing?.scheduledAt ? 'schedule' : 'now');
-  const [when, setWhen] = useState(localInput(init.when || (editing?.scheduledAt ? new Date(editing.scheduledAt) : new Date(Date.now() + 3600_000))));
+  const [mode, setMode] = useState(editing?.status === 'draft' && !editing.plannedAt ? 'draft' : init.when || editing?.scheduledAt || editing?.plannedAt ? 'schedule' : 'now');
+  const [when, setWhen] = useState(localInput(init.when || (editing?.scheduledAt ? new Date(editing.scheduledAt) : editing?.plannedAt && new Date(editing.plannedAt) > new Date() ? new Date(editing.plannedAt) : new Date(Date.now() + 3600_000))));
   const [privacy, setPrivacy] = useState(editing?.options?.youtubePrivacy || 'public');
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);

@@ -1261,3 +1261,17 @@ div.cn-card { cursor: default; }
 .picker-drop.over { outline-color: var(--accent); }
 .search-mini { display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; height: 32px; border-radius: var(--radius-pill); background: var(--field); box-shadow: inset 0 0 0 1px var(--line); color: var(--muted); }
 .search-mini input { border: 0; outline: none; background: transparent; font: inherit; font-size: 13px; color: var(--text); width: 150px; }
+
+/* Campaigns */
+.camp-steps { display: grid; gap: 6px; }
+.camp-step { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--field); box-shadow: inset 0 0 0 1px var(--line); }
+.camp-step.edit { align-items: flex-start; }
+.camp-step.edit > input[type=checkbox] { margin-top: 4px; }
+.camp-step.off { opacity: 0.5; }
+.camp-step.done { box-shadow: inset 3px 0 0 var(--ok), inset 0 0 0 1px var(--line); }
+.camp-when { width: 112px; flex: none; display: grid; gap: 0; }
+.camp-when strong { font-size: 13px; }
+.camp-cap { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; }
+.month-post.planned { background: transparent; box-shadow: inset 0 0 0 1px var(--line-strong); border: 1px dashed var(--line-strong); color: var(--muted); }
+.month-planned-key { width: 14px; height: 10px; border-radius: 3px; border: 1px dashed var(--line-strong); display: inline-block; }
+.modal-foot > .hint { flex: 1 1 240px; min-width: 0; }

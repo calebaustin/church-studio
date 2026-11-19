@@ -90,20 +90,24 @@ function rollup(post) {
   return ok ? 'partial' : 'failed';
 }
 
+/** Check an attached clip, video or design and note its size and length. */
+async function resolveMedia(m) {
+  if (!m?.file) return null;
+  if (m.kind === 'image') {
+    // A design: one image, or a folder of pages for a carousel. Shared by hand, not uploaded to video platforms.
+    if (!existsSync(m.file)) throw new Error('That design file no longer exists. Pick the design again.');
+    return { kind: 'image', file: m.file, designId: m.designId || null, projectId: m.projectId || null, pages: m.pages || 1, thumb: m.thumb || null };
+  }
+  if (!existsSync(m.file)) throw new Error('That video file no longer exists. Export the clip again.');
+  const info = await probe(m.file);
+  return { ...m, width: info.width, height: info.height, length: info.duration, bytes: statSync(m.file).size };
+}
+
 export async function createPost(body) {
   const accounts = await store.listAccounts();
   const dests = (body.accountIds || []).map((id) => accounts.find((a) => a.id === id)).filter(Boolean)
     .map((a) => ({ accountId: a.id, platform: a.platform, status: 'pending', caption: body.captions?.[a.id] ?? null }));
-  let media = null;
-  if (body.media?.file && body.media.kind === 'image') {
-    // A design: one image, or a folder of pages for a carousel. Shared by hand, not uploaded to video platforms.
-    if (!existsSync(body.media.file)) throw new Error('That design file no longer exists. Pick the design again.');
-    media = { kind: 'image', file: body.media.file, designId: body.media.designId || null, projectId: body.media.projectId || null, pages: body.media.pages || 1, thumb: body.media.thumb || null };
-  } else if (body.media?.file) {
-    if (!existsSync(body.media.file)) throw new Error('That video file no longer exists. Export the clip again.');
-    const info = await probe(body.media.file);
-    media = { ...body.media, width: info.width, height: info.height, length: info.duration, bytes: statSync(body.media.file).size };
-  }
+  const media = await resolveMedia(body.media);
   const when = body.mode === 'schedule' ? new Date(body.scheduledAt) : null;
   if (body.mode === 'schedule' && (Number.isNaN(when?.getTime()) || when < Date.now() - 60_000)) throw new Error('Pick a time in the future.');
   if (body.mode !== 'draft' && !dests.length) throw new Error('Pick at least one account.');
@@ -111,6 +115,7 @@ export async function createPost(body) {
   const post = {
     id: store.newId(), title: (body.title || '').slice(0, 200), caption: body.caption || '', hashtags: body.hashtags || [],
     media, destinations: dests, options: body.options || {},
+    campaignId: body.campaignId || null, plannedAt: body.plannedAt || null, step: body.step || null,
     status: body.mode === 'draft' ? 'draft' : body.mode === 'schedule' ? 'scheduled' : 'publishing',
     scheduledAt: when ? when.toISOString() : null, created: new Date().toISOString(), publishedAt: null,
   };
@@ -121,9 +126,11 @@ export async function createPost(body) {
 
 export async function editPost(id, body) {
   const accounts = await store.listAccounts();
+  const media = 'media' in body ? await resolveMedia(body.media) : undefined;
   return store.updatePost(id, (p) => {
     if (p.status === 'publishing') throw new Error('This post is being published right now.');
-    for (const k of ['title', 'caption', 'hashtags', 'options']) if (k in body) p[k] = body[k];
+    if (media !== undefined) p.media = media;
+    for (const k of ['title', 'caption', 'hashtags', 'options', 'plannedAt']) if (k in body) p[k] = body[k];
     if (body.accountIds) {
       p.destinations = body.accountIds.map((aid) => p.destinations.find((d) => d.accountId === aid)
         || { accountId: aid, platform: accounts.find((a) => a.id === aid)?.platform, status: 'pending', caption: null }).filter((d) => d.platform);
