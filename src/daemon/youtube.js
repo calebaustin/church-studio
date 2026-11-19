@@ -190,11 +190,11 @@ export async function downloadToProject(url, ctx, existingProject = null, range 
 }
 
 /** Use a video file already on this computer. It is copied so the project is self-contained. */
-export async function importLocalFile(filePath, ctx) {
+export async function importLocalFile(filePath, ctx, kind = 'sermon') {
   const st = await stat(filePath).catch(() => null);
   if (!st?.isFile()) throw new Error('File not found.');
   const title = path.basename(filePath).replace(/\.[^.]+$/, '');
-  const project = await createProject({ title });
+  const project = await createProject({ title, kind: ['sermon', 'short', 'lyric', 'wide'].includes(kind) ? kind : 'sermon' });
   ctx.progress(5, 'Copying the file into the project…');
   const ext = path.extname(filePath).toLowerCase() || '.mp4';
   const dest = file(project.id, `source${ext}`);

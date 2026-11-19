@@ -36,7 +36,7 @@ PageThumb.cache = {};
 
 // ---------------------------------------------------------------- editor
 export default function DesignEditor({ id, onClose }) {
-  const { toast, config } = useApp();
+  const { toast, config, showNext } = useApp();
   const families = useFamilies();
   const [doc, setDoc] = useState(null);
   const [pi, setPi] = useState(0);
@@ -312,6 +312,7 @@ export default function DesignEditor({ id, onClose }) {
     setBusy('Exporting…');
     try {
       const r = await exportDesign(doc, format, { pageIndex: pi, onProgress: (i, n) => setBusy(n > 1 ? `Exporting page ${i + 1} of ${n}…` : 'Exporting…') });
+      showNext({ kind: 'design', title: doc.name, rel: r.rel, thumb: null });
       toast({ celebrate: true, text: r.count ? `Saved ${r.count} pages to Graphics in your brand library.` : 'Saved to Graphics in your brand library.', action: { label: 'Show', run: () => api.post('/api/library/reveal', { rel: r.rel }) } });
     } catch (e) { toast({ kind: 'error', text: e.message }); }
     setBusy(null);

@@ -50,6 +50,19 @@ export async function transcribeProject(id, { start = null, end = null, cleanup 
   await updateProject(id, (p) => {
     p.status = 'transcribed';
     p.sermon = sermon;
+    // Shorts, lyric clips and wide videos use the whole recording as one clip, ready to edit.
+    if (['short', 'lyric', 'wide'].includes(p.kind) && !p.clips.length) {
+      const words = transcript.words;
+      const start = Math.max(0, (words[0]?.start ?? 0) - 0.3);
+      const end = Math.min(p.media?.duration ?? transcript.duration, (words.at(-1)?.end ?? p.media?.duration ?? 60) + 0.6);
+      p.sermon = { start, end, confidence: 1, method: 'whole', confirmed: true, reasons: ['The whole recording'] };
+      p.clips.push({
+        id: Math.random().toString(36).slice(2, 10), start, end, title: p.title, summary: '', hook: '', score: null, category: 'Whole video',
+        reasons: ['The whole recording'], startPhrase: '', endPhrase: '', hashtags: [], cutWords: [], tightenPauses: false,
+        crop: p.kind === 'lyric' ? { mode: 'lyric', smooth: 0 } : p.kind === 'wide' ? { mode: 'fit', smooth: 0, bg: { type: 'blur' } } : { mode: 'auto', smooth: 0 },
+        format: p.kind === 'wide' ? 'wide' : 'vertical', videoTheme: null, status: 'kept', source: 'whole',
+      });
+    }
     p.transcriptInfo = { model: transcript.model, device: transcript.device, words: transcript.words.length };
   });
   ctx.progress(100, `Transcribed ${transcript.words.length.toLocaleString()} words`);

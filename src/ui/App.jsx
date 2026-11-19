@@ -4,6 +4,7 @@ import { enabledTools, isOn } from './tools.js';
 import { makeDockIcon } from './dockIcon.js';
 import SideCards from './components/SideCards.jsx';
 import { maybeNote } from './encourage.js';
+import NextSteps from './components/NextSteps.jsx';
 import { api, fmt as fmtClock } from './api.js';
 import Library from './screens/Library.jsx';
 import Dashboard from './screens/Dashboard.jsx';
@@ -60,6 +61,8 @@ export default function App() {
   const [keyGuide, setKeyGuide] = useState([]);
   const [themes, setThemes] = useState({ app: [], video: [], fonts: [], systemFonts: [] });
   const [jobs, setJobs] = useState([]);
+  const jobsRef = useRef([]);
+  jobsRef.current = jobs;
   const [toasts, setToasts] = useState([]);
   const [needsYou, setNeedsYou] = useState(0);
   const [error, setError] = useState(null);
@@ -68,6 +71,7 @@ export default function App() {
   // Unsaved-changes guard: a screen registers { dirty(), save(), discard() }; leaving asks first.
   const guard = useRef(null);
   const [leaveAsk, setLeaveAsk] = useState(null);
+  const [nextInfo, showNext] = useState(null); // the "What's next?" page after finishing something
   const setGuard = useCallback((g) => { guard.current = g; }, []);
   const confirmLeave = useCallback(() => new Promise((resolve) => {
     if (!guard.current?.dirty()) return resolve(true);
@@ -203,7 +207,7 @@ export default function App() {
   const configRef = useRef(config); configRef.current = config;
   useEffect(() => onJobFinished((j) => {
     const done = j.status === 'done';
-    const names = { transcribe: 'Transcript ready', download: 'Download finished', import: 'Recording added', export: 'Clip exported', 'clean-audio': 'Clean audio saved', update: 'Update downloaded' };
+    const names = { 'export-joined': 'Joined video saved', transcribe: 'Transcript ready', download: 'Download finished', import: 'Recording added', export: 'Clip exported', 'clean-audio': 'Clean audio saved', update: 'Update downloaded' };
     if (done && names[j.kind]) notify('jobs', names[j.kind], j.label.replace(/^[^:]+:\s*/, ''));
     if (j.status === 'error' && names[j.kind]) notify('jobs', `${j.label} didn't finish`, (j.error || '').slice(0, 120));
   }), [onJobFinished, notify]);
@@ -212,14 +216,19 @@ export default function App() {
   useEffect(() => onJobFinished((j) => {
     if (j.kind === 'export' && j.status === 'done') {
       toast({ kind: 'export', result: j.result, sticky: true, celebrate: true });
+      // When the last export of a batch is done, suggest what to make next.
+      const r = j.result || {};
+      const busy = jobsRef.current.some((x) => x.kind === 'export' && x.id !== j.id && (x.status === 'running' || x.status === 'queued'));
+      if (!busy) showNext({ kind: 'clip', projectId: r.projectId, clipId: r.clipId, title: r.title, thumb: r.thumb, quote: r.hook || r.title });
     }
     if (j.status === 'done' && (j.kind === 'download' || j.kind === 'import') && j.result?.projectId) {
       const r = j.result;
       const what = r.range ? `Sermon downloaded (${fmtClock(r.range.start)} to ${fmtClock(r.range.end)})` : j.kind === 'import' ? (r.height ? 'Video added' : 'Recording added') : 'Video downloaded';
       toast({ text: `${what}. ${r.summary || ''}`.trim(), duration: 9000, action: { label: 'Open', run: () => setRoute({ name: 'project', id: r.projectId }) } });
     }
+    if (j.status === 'done' && j.kind === 'export-joined') toast({ celebrate: true, text: `Joined ${j.result?.clips || ''} clips into one video.`, duration: 9000, action: { label: 'Show', run: () => api.post('/api/reveal', { path: j.result?.file }) } });
     if (j.status === 'done' && j.kind === 'transcribe') toast({ text: `Transcribed ${j.result?.words?.toLocaleString() || ''} words. Check the sermon range next.`, duration: 7000 });
-    if (j.status === 'error' && ['export', 'download', 'transcribe'].includes(j.kind)) toast({ kind: 'error', text: `${j.label} didn't finish: ${j.error?.slice(0, 160)}`, duration: 9000 });
+    if (j.status === 'error' && ['export', 'export-joined', 'download', 'transcribe'].includes(j.kind)) toast({ kind: 'error', text: `${j.label} didn't finish: ${j.error?.slice(0, 160)}`, duration: 9000 });
   }), [onJobFinished, toast]);
 
   const trackJob = useCallback((job) => {
@@ -244,7 +253,7 @@ export default function App() {
       .then((png) => window.desktop.setDockIcon(png)).catch(() => {});
   }, [logo?.url, config?.dockLogo, config?.brandColors?.[0]]);
 
-  const value = { route, go, logo, refreshLogo: () => setLogoTick((n) => n + 1), setGuard, confirmLeave, config, saveConfig, reloadConfig, keyGuide, themes, reloadThemes, jobs, trackJob, onJobFinished, toast };
+  const value = { route, go, showNext, logo, refreshLogo: () => setLogoTick((n) => n + 1), setGuard, confirmLeave, config, saveConfig, reloadConfig, keyGuide, themes, reloadThemes, jobs, trackJob, onJobFinished, toast };
 
   if (error) {
     return (
@@ -332,6 +341,7 @@ export default function App() {
           </div>
         </Modal>
       )}
+      {nextInfo && <NextSteps info={nextInfo} onClose={() => showNext(null)} />}
       {config && !config.onboarded && <Onboarding />}
     </Ctx.Provider>
   );

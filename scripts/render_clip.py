@@ -483,6 +483,117 @@ def blend(frame: np.ndarray, arr: np.ndarray, x: int, y: int, opacity: float = 1
     frame[y0:y1, x0:x1] = (rgb * a + roi * (1 - a)).astype(np.uint8)
 
 
+# ---------------------------------------------------------------- lyric backgrounds and pop-ups
+
+def hex_bgr(h: str) -> np.ndarray:
+    h = str(h).lstrip("#")[:6].ljust(6, "0")
+    return np.array([int(h[4:6], 16), int(h[2:4], 16), int(h[0:2], 16)], dtype=np.float32)
+
+
+class Lyric:
+    """Slowly moving soft color for clips with no picture (lyric and podcast clips)."""
+
+    def __init__(self, colors, W, H):
+        cols = [hex_bgr(c) for c in (colors or ["#2B7F5F", "#D9A441", "#1B2440"])][:4]
+        while len(cols) < 3:
+            cols.append(cols[-1] * 0.6)
+        self.cols = cols
+        self.W, self.H = W, H
+        self.w, self.h = max(8, W // 10), max(8, H // 10)
+        yy, xx = np.mgrid[0:self.h, 0:self.w]
+        self.x = xx / self.w
+        self.y = yy / self.h
+
+    def frame(self, t: float) -> np.ndarray:
+        img = np.zeros((self.h, self.w, 3), np.float32)
+        img[:] = self.cols[-1] * 0.55
+        weight = np.full((self.h, self.w, 1), 0.35, np.float32)
+        acc = img * weight
+        for i, c in enumerate(self.cols[:3]):
+            cx = 0.5 + 0.38 * np.sin(t * 0.21 + i * 2.1)
+            cy = 0.5 + 0.40 * np.cos(t * 0.17 + i * 1.7)
+            d = (self.x - cx) ** 2 + ((self.y - cy) * (self.h / self.w)) ** 2
+            w = np.exp(-d / 0.09)[..., None]
+            acc += c * w
+            weight += w
+        small = (acc / weight) * 0.82  # a little darker, so captions stand out
+        return cv2.resize(small.clip(0, 255).astype(np.uint8), (self.W, self.H), interpolation=cv2.INTER_CUBIC)
+
+
+def popup_image(p: dict, W: int, H: int, font_path, style_name, font_index, accent: str) -> np.ndarray:
+    """One text pop-up drawn once: a pill, a lower third, or plain text with a shadow."""
+    k = W / 1080
+    style = p.get("style", "pill")
+    size = int((44 if style == "lower" else 50) * k)
+    font = load_font(font_path, style_name, size, font_index)
+    text = str(p.get("text", "")).strip() or " "
+    lines = text.split("\n")[:3]
+    probe = ImageDraw.Draw(Image.new("RGBA", (10, 10)))
+    widths = [probe.textlength(l, font=font) for l in lines]
+    lh = int(size * 1.25)
+    pad_x, pad_y = int(30 * k), int(18 * k)
+    tw = int(min(W * 0.86, max(widths)))
+    th = lh * len(lines)
+    if style == "lower":
+        bw, bh = tw + pad_x * 2 + int(10 * k), th + pad_y * 2
+        img = Image.new("RGBA", (bw, bh), (0, 0, 0, 0))
+        d = ImageDraw.Draw(img)
+        d.rounded_rectangle([0, 0, bw - 1, bh - 1], radius=int(14 * k), fill=(12, 14, 20, 200))
+        ac = hex_bgr(accent)[::-1].astype(int)
+        d.rectangle([0, 0, int(10 * k), bh], fill=(int(ac[0]), int(ac[1]), int(ac[2]), 255))
+        for i, l in enumerate(lines):
+            d.text((pad_x + int(10 * k), pad_y + i * lh), l, font=font, fill=(255, 255, 255, 255))
+    elif style == "plain":
+        bw, bh = tw + pad_x * 2, th + pad_y * 2
+        img = Image.new("RGBA", (bw, bh), (0, 0, 0, 0))
+        d = ImageDraw.Draw(img)
+        for i, l in enumerate(lines):
+            x = (bw - probe.textlength(l, font=font)) / 2
+            d.text((x + 3 * k, pad_y + i * lh + 3 * k), l, font=font, fill=(0, 0, 0, 150))
+            d.text((x, pad_y + i * lh), l, font=font, fill=(255, 255, 255, 255))
+    else:
+        bw, bh = tw + pad_x * 2, th + pad_y * 2
+        img = Image.new("RGBA", (bw, bh), (0, 0, 0, 0))
+        d = ImageDraw.Draw(img)
+        d.rounded_rectangle([0, 0, bw - 1, bh - 1], radius=int(min(bh / 2, 40 * k)), fill=(255, 255, 255, 235))
+        for i, l in enumerate(lines):
+            x = (bw - probe.textlength(l, font=font)) / 2
+            d.text((x, pad_y + i * lh), l, font=font, fill=(20, 24, 33, 255))
+    return np.array(img)
+
+
+class Popups:
+    """Text that appears for a while, with a fade, slide or pop transition."""
+
+    def __init__(self, items, W, H, theme, accent):
+        self.W, self.H = W, H
+        self.items = []
+        for p in items or []:
+            try:
+                start, end = float(p.get("start", 0)), float(p.get("end", 0))
+            except (TypeError, ValueError):
+                continue
+            if end <= start:
+                continue
+            arr = popup_image(p, W, H, theme.get("fontFile"), theme.get("fontStyle"), theme.get("fontIndex"), accent)
+            h, w = arr.shape[:2]
+            pos = p.get("position", "lower")
+            y = int(H * {"top": 0.12, "middle": 0.44, "lower": 0.70}.get(pos, 0.70))
+            x = int(W * 0.06) if p.get("style") == "lower" else (W - w) // 2
+            self.items.append((start, end, arr, x, y, p.get("transition", "fade")))
+
+    def at(self, t: float):
+        out = []
+        for start, end, arr, x, y, tr in self.items:
+            if t < start or t > end:
+                continue
+            d = 0.18 if tr == "pop" else 0.35
+            r = max(0.0, min(1.0, (t - start) / d, (end - t) / d))
+            dy = int((1 - r) * 46 * self.W / 1080) if tr == "slide" else 0
+            out.append((arr, x, y + dy, r))
+        return out
+
+
 # ---------------------------------------------------------------- render
 
 def encoder_args(preview: bool, codec: str = "h264", mbps: float = 12.0) -> list[str]:
@@ -506,9 +617,15 @@ def main() -> None:
     W, H = int(job.get("width", 1080)), int(job.get("height", 1920))
     if preview:
         W, H = W // 4 * 2, H // 4 * 2
-    src_w, src_h = probe_size(src)
     crop = job.get("crop") or {"mode": "auto"}
     mode = crop.get("mode", "auto")
+    try:
+        src_w, src_h = probe_size(src)
+    except Exception:  # audio only: there is no picture to read
+        src_w, src_h = W, H
+        mode = "lyric"
+    if mode == "lyric":
+        src_w, src_h = W, H
 
     crop_w = min(src_w, int(src_h * W / H) // 2 * 2)
     crop_frac = crop_w / src_w
@@ -517,7 +634,7 @@ def main() -> None:
     # ---- 1. camera path
     info = {"mode": mode}
     follow = glide = None
-    if mode == "auto" and crop_frac < 0.98:
+    if mode == "auto" and crop_frac < 0.98 and mode != "lyric":
         picks = pick_speaker(detect_faces(src, start, dur, src_w, src_h), crop.get("anchors"), job.get("speakerPrior"))
         follow, f_info = camera_path(picks, n_frames, fps, crop_frac)
         glide, g_info = glide_path(picks, n_frames, fps, crop_frac)
@@ -611,7 +728,9 @@ def main() -> None:
          *encoder_args(preview, job.get("codec", "h264"), float(job.get("mbps", 12))), "-pix_fmt", "yuv420p", "-c:a", "copy", "-movflags", "+faststart", "-shortest", out],
         stdin=subprocess.PIPE, stderr=subprocess.PIPE,
     )
-    dec = subprocess.Popen(
+    lyric = Lyric((job.get("lyric") or {}).get("colors"), W, H) if mode == "lyric" else None
+    pops = Popups(job.get("popups"), W, H, theme, (job.get("lyric") or {}).get("colors", ["#D9A441"])[1] if len((job.get("lyric") or {}).get("colors", [])) > 1 else "#D9A441")
+    dec = None if lyric else subprocess.Popen(
         [FFMPEG, "-loglevel", "error", "-ss", f"{start:.3f}", "-t", f"{dur:.3f}", "-i", src, "-an",
          "-vf", f"fps={fps}", "-f", "rawvideo", "-pix_fmt", "bgr24", "-"],
         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
@@ -628,15 +747,22 @@ def main() -> None:
     interp = cv2.INTER_LINEAR if preview else cv2.INTER_CUBIC
     try:
         while True:
-            buf = dec.stdout.read(size)
-            if len(buf) < size:
-                break
-            t = n / fps
-            n += 1
-            if not in_keep(t, keep):
-                continue
-            frame = np.frombuffer(buf, dtype=np.uint8).reshape(src_h, src_w, 3)
-            if fit:
+            if lyric:
+                if written >= int(round(out_len * fps)):
+                    break
+                frame = None
+            else:
+                buf = dec.stdout.read(size)
+                if len(buf) < size:
+                    break
+                t = n / fps
+                n += 1
+                if not in_keep(t, keep):
+                    continue
+                frame = np.frombuffer(buf, dtype=np.uint8).reshape(src_h, src_w, 3)
+            if lyric:
+                img = lyric.frame(written / fps)
+            elif fit:
                 if bg_cfg.get("type") == "color":
                     bg = np.empty((H, W, 3), dtype=np.uint8)
                     bg[:] = bg_color
@@ -676,6 +802,8 @@ def main() -> None:
             if caps:
                 for arr, x, y, op in caps.at(t_out):
                     blend(img, arr, x, y, op)
+            for arr, x, y, op in pops.at(t_out):
+                blend(img, arr, x, y, op)
             if overlay:
                 blend(img, overlay[0], overlay[1], overlay[2], overlay[3])
             if end_card and t_out >= out_len - end_card[1]:
@@ -692,8 +820,9 @@ def main() -> None:
         if enc.wait() != 0:
             raise SystemExit(f"Encoder failed: {err[-800:]}")
     finally:
-        dec.stdout.close()
-        dec.wait()
+        if dec:
+            dec.stdout.close()
+            dec.wait()
         for f in tmp.iterdir():
             f.unlink()
         tmp.rmdir()

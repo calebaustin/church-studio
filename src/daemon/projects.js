@@ -19,11 +19,12 @@ function slug(text) {
     .replace(/^-+|-+$/g, '').slice(0, 40) || 'sermon';
 }
 
-export async function createProject({ title, sourceUrl = null, youtubeId = null, thumbnail = null }) {
+export async function createProject({ title, sourceUrl = null, youtubeId = null, thumbnail = null, kind = 'sermon' }) {
   const id = `${slug(title)}-${randomUUID().slice(0, 6)}`;
   await mkdir(projectDir(id), { recursive: true });
   const project = {
     id, title, sourceUrl, youtubeId, thumbnail,
+    kind, // sermon | short (a whole short video as one clip) | lyric (audio with moving color) | wide (a 16:9 video)
     created: new Date().toISOString(),
     status: 'new', // new | downloading | ready | transcribed
     media: null, // {duration,width,height,fps}

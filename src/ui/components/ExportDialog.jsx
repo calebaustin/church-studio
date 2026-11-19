@@ -25,10 +25,11 @@ function estimate(o, seconds) {
 
 export default function ExportDialog({ project, clips, onClose, beforeExport }) {
   const { config, saveConfig, trackJob } = useApp();
-  const [o, setO] = useState({ preset: 'vertical', resolution: '1080', quality: 'high', fps: 30, codec: 'h264', captions: true, hook: true, ...(config.exportOptions || {}) });
+  const [o, setO] = useState({ preset: 'vertical', resolution: '1080', quality: 'high', fps: 30, codec: 'h264', captions: true, hook: true, ...(config.exportOptions || {}), ...(clips.length && clips.every((c) => c.format === 'wide') ? { preset: 'landscape' } : {}) });
   const [folder, setFolder] = useState(config.exportFolder || '');
   const [fileName, setFileName] = useState(config.exportPattern || '{date} - {title}');
   const [remember, setRemember] = useState(true);
+  const [join, setJoin] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const set = (p) => setO({ ...o, ...p });
@@ -44,7 +45,10 @@ export default function ExportDialog({ project, clips, onClose, beforeExport }) 
       await beforeExport?.();
       if (remember) await saveConfig({ exportOptions: o });
       const options = { ...o, folder: folder || null, fileName };
-      if (clips.length === 1) {
+      if (join && clips.length > 1) {
+        const { job } = await api.post(`/api/projects/${project.id}/export-joined`, { options, clipIds: clips.map((c) => c.id) });
+        trackJob(job);
+      } else if (clips.length === 1) {
         const { job } = await api.post(`/api/projects/${project.id}/clips/${clips[0].id}/export`, { options });
         trackJob(job);
       } else {
@@ -127,10 +131,13 @@ export default function ExportDialog({ project, clips, onClose, beforeExport }) 
 
       {error && <div className="banner bad">{error}</div>}
       <div className="row between wrap" style={{ marginTop: 4 }}>
-        <label className="row small"><input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />Remember these settings</label>
+        <div className="stack" style={{ gap: 4 }}>
+          {clips.length > 1 && <label className="row small"><input type="checkbox" checked={join} onChange={(e) => setJoin(e.target.checked)} />Join into one video, in this order</label>}
+          <label className="row small"><input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />Remember these settings</label>
+        </div>
         <div className="row">
           <button className="btn ghost" onClick={onClose}>Cancel</button>
-          <button className="btn primary lg" disabled={busy} onClick={go}><Download size={16} />{busy ? 'Starting…' : clips.length === 1 ? 'Export clip' : `Export ${clips.length} clips`}</button>
+          <button className="btn primary lg" disabled={busy} onClick={go}><Download size={16} />{busy ? 'Starting…' : clips.length === 1 ? 'Export clip' : join ? `Join ${clips.length} clips` : `Export ${clips.length} clips`}</button>
         </div>
       </div>
     </Modal>

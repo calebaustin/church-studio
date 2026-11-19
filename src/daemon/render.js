@@ -111,6 +111,9 @@ export async function buildJob(project, clip, { preview = false, trackOnly = fal
     theme: { ...theme, fontFile: font?.file, fontStyle: font?.style, fontIndex: font?.index ?? null },
     // Audio cleanup: the clip's own setting, else the sermon's.
     audioFilter: audioFilter(clip.audioCleanup !== undefined ? clip.audioCleanup : project.audioCleanup),
+    // Text pop-ups (times are in the finished clip) and colors for clips with no picture.
+    popups: Array.isArray(clip.popups) ? clip.popups.filter((p) => p.text && p.end > p.start) : [],
+    lyric: { colors: (await loadConfig()).brandColors || [] },
   };
 }
 
@@ -190,6 +193,49 @@ export async function exportClip(projectId, clipId, { preview = false, options =
   if (!preview) await saveLast(pickEditSettings(clip, options)).catch(() => {});
   ctx.progress(100, preview ? 'Preview ready' : `Exported ${path.basename(out)}`);
   return { file: out, ...result };
+}
+
+/**
+ * Several clips joined into one video, in order (a series, or two speakers back to back).
+ * Each clip renders with the same settings, then they're joined without re-encoding.
+ */
+export async function exportJoined(projectId, clipIds, options = {}, ctx) {
+  const project = await getProject(projectId);
+  const clips = clipIds.map((id) => project?.clips.find((c) => c.id === id)).filter(Boolean);
+  if (clips.length < 2) throw new Error('Pick at least two clips to join.');
+  const config = await loadConfig();
+  const tmp = path.join(projectDir(projectId), 'exports', `join-${Date.now().toString(36)}`);
+  await mkdir(tmp, { recursive: true });
+  const parts = [];
+  try {
+    for (let i = 0; i < clips.length; i++) {
+      const job = await buildJob(project, clips[i], { options });
+      const out = path.join(tmp, `${String(i).padStart(2, '0')}.mp4`);
+      Object.assign(job, { out, thumb: i === 0 ? path.join(tmp, 'thumb.jpg') : null });
+      const jobFile = path.join(tmp, `${i}.job.json`);
+      await writeFile(jobFile, JSON.stringify(job));
+      const part = {
+        ...ctx,
+        progress: (pct, msg) => ctx.progress(Math.min(96, ((i + pct / 100) / clips.length) * 96), `Clip ${i + 1} of ${clips.length}: ${msg || 'Rendering'}`),
+      };
+      await runRender(jobFile, part);
+      parts.push(out);
+    }
+    ctx.progress(97, 'Joining the clips…');
+    const list = path.join(tmp, 'list.txt');
+    await writeFile(list, parts.map((f) => `file '${f.replace(/'/g, "'\\''")}'`).join('\n'));
+    const folder = options.folder || config.exportFolder || downloadsDir();
+    await mkdir(folder, { recursive: true });
+    const safe = project.title.replace(/[/\\:*?"<>|]+/g, '-').slice(0, 100);
+    const date = new Date().toISOString().slice(0, 10);
+    const out = path.join(folder, `${date} - ${safe} (${clips.length} clips joined).mp4`);
+    await run(tool('ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', '-movflags', '+faststart', out], { signal: ctx.signal });
+    await updateProject(projectId, (p) => { p.joined = [{ file: out, at: new Date().toISOString(), clips: clipIds }, ...(p.joined || [])].slice(0, 10); });
+    ctx.progress(100, `Saved ${path.basename(out)}`);
+    return { file: out, projectId, clips: clips.length };
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
 }
 
 /** A few evenly spread frames from a clip, for the "click the speaker" helper. */

@@ -12,7 +12,7 @@ import { listProjects, getProject, updateProject, deleteProject, getTranscript, 
 import { channelDetails, listChannel, downloadToProject, importLocalFile, scoutVideo } from './youtube.js';
 import { transcribeProject } from './transcribe.js';
 import { proposeClips } from './pipeline.js';
-import { exportClip, trackClip, revealInFinder, EXPORT_PRESETS, moveExport, downloadsDir, sampleFrames } from './render.js';
+import { exportClip, exportJoined, trackClip, revealInFinder, EXPORT_PRESETS, moveExport, downloadsDir, sampleFrames } from './render.js';
 import * as prefs from './prefs.js';
 import * as workspaces from './workspaces.js';
 import * as library from './library.js';
@@ -133,7 +133,7 @@ route('POST', '/api/projects', async (_p, b) => {
     return { job: jobs.view(job) };
   }
   if (b.file) {
-    const job = jobs.enqueue({ kind: 'import', label: `Import ${path.basename(b.file)}` }, (ctx) => importLocalFile(b.file, ctx));
+    const job = jobs.enqueue({ kind: 'import', label: `Import ${path.basename(b.file)}` }, (ctx) => importLocalFile(b.file, ctx, b.kind));
     return { job: jobs.view(job) };
   }
   throw new HttpError(400, 'Send a YouTube url or a local file path.');
@@ -222,7 +222,7 @@ async function exportWithInfo(id, cid, ctx, options) {
   const r = await exportClip(id, cid, { options }, ctx);
   const p = await getProject(id);
   const c = p.clips.find((x) => x.id === cid);
-  return { ...r, after: options.after || 'reveal', projectId: id, clipId: cid, title: c?.title, thumb: c?.export?.thumb ? `/media/${encodeURIComponent(id)}/${c.export.thumb}` : null, bytes: c?.export?.bytes };
+  return { ...r, after: options.after || 'reveal', projectId: id, clipId: cid, title: c?.title, hook: c?.hook || null, thumb: c?.export?.thumb ? `/media/${encodeURIComponent(id)}/${c.export.thumb}` : null, bytes: c?.export?.bytes };
 }
 route('POST', '/api/projects/:id/clips/:cid/track', clipJob('track', 'Track speaker in', (id, cid, ctx) => trackClip(id, cid, ctx)));
 route('POST', '/api/projects/:id/clips/:cid/preview', clipJob('preview', 'Preview', (id, cid, ctx) => exportClip(id, cid, { preview: true }, ctx)));
@@ -240,6 +240,12 @@ route('GET', '/api/edit-templates', () => prefs.listTemplates());
 route('POST', '/api/edit-templates', async (_p, b) => ({ template: await prefs.saveTemplate(b.name, b.settings) }));
 route('DELETE', '/api/edit-templates/:tid', async ({ tid }) => { await prefs.deleteTemplate(tid); return { ok: true }; });
 
+route('POST', '/api/projects/:id/export-joined', async ({ id }, b) => {
+  const project = await requireProject(id);
+  const ids = (Array.isArray(b.clipIds) ? b.clipIds : []).filter((cid) => project.clips.some((c) => c.id === cid));
+  if (ids.length < 2) throw new HttpError(400, 'Pick at least two clips to join.');
+  return { job: jobs.view(jobs.enqueue({ kind: 'export-joined', label: `Join ${ids.length} clips: ${project.title.slice(0, 40)}`, projectId: id, key: `join:${id}` }, (ctx) => exportJoined(id, ids, b.options || {}, ctx))) };
+});
 route('POST', '/api/projects/:id/export-all', async ({ id }, b) => {
   const project = await requireProject(id);
   const chosen = project.clips.filter((c) => c.status === 'kept' || c.status === 'exported');

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useApp } from '../App.jsx';
-import { Check, MonitorPlay, FolderOpen, Link2, Clapperboard, AudioLines, FileAudio } from 'lucide-react';
+import { ArrowRight, Check, MonitorPlay, FolderOpen, Link2, Clapperboard, AudioLines, FileAudio, ScissorsLineDashed } from 'lucide-react';
 import CleanAudioDialog from '../components/CleanAudioDialog.jsx';
 import { api, desktop, fmt, media } from '../api.js';
 import Modal from '../components/Modal.jsx';
@@ -33,9 +33,9 @@ export default function Library({ openPicker = false }) {
       setTimeout(load, 1500);
     } catch (e) { setError(e.message); }
   };
-  const openFile = async () => {
+  const openFile = async (kind = 'sermon') => {
     const file = await (desktop?.pickMedia || desktop?.pickVideo)?.();
-    if (file) add({ file });
+    if (file) add({ file, kind });
   };
 
   return (
@@ -56,7 +56,7 @@ export default function Library({ openPicker = false }) {
           </div>
           {desktop?.pickVideo && (
             <div className="row wrap" style={{ gap: 8 }}>
-              <button className="btn" onClick={openFile}><FileAudio size={15} />Transcribe a file from this Mac</button>
+              <button className="btn" onClick={() => openFile('sermon')}><FileAudio size={15} />Transcribe a file from this Mac</button>
               <button className="btn ghost" onClick={() => setCleaning(true)}><AudioLines size={15} />Clean up a recording</button>
             </div>
           )}
@@ -64,6 +64,8 @@ export default function Library({ openPicker = false }) {
           {error && <div className="banner">{error}</div>}
         </div>
       </section>
+
+      <MakeGroups openFile={openFile} onPick={() => setPicker(true)} />
 
       <GettingStarted projects={projects} onPick={() => setPicker(true)} />
       <div className="row between">
@@ -184,5 +186,44 @@ function GettingStarted({ projects, onPick }) {
   return (
     <SetupChecklist id="getting-started" title={(done, total) => (done === 0 ? 'Five quick steps to your first clip' : `${done} of ${total} done`)}
       steps={steps.map(([label, help, ok, action, cta]) => ({ label, help, ok, action, cta }))} />
+  );
+}
+
+/** Three ways to start: clips from a long video, a wide video, or a single short clip. */
+function MakeGroups({ openFile, onPick }) {
+  const groups = [
+    {
+      title: 'Clips from a video', sub: 'Find the best moments in a sermon, class or podcast.', steps: ['Trim', 'Transcribe', 'Clip'], tone: 1, icon: ScissorsLineDashed,
+      actions: [['Sermon clips', 'From your channel or a link', onPick], ['From a file', 'Video or audio on this Mac', () => openFile('sermon')]],
+    },
+    {
+      title: 'Make a video', sub: 'A wide 16:9 video for YouTube, your website or the screens.', steps: ['Open', 'Transcribe', 'Export'], tone: 2, icon: MonitorPlay,
+      actions: [['Announcement video', 'Captions and your logo', () => openFile('wide')], ['Podcast video', 'Audio with moving color', () => openFile('lyric')]],
+    },
+    {
+      title: 'Make a clip', sub: 'One short vertical clip for Reels, Shorts and stories.', steps: ['Open', 'Transcribe', 'Polish'], tone: 3, icon: Clapperboard,
+      actions: [['From a short video', 'The whole thing becomes the clip', () => openFile('short')], ['Lyric clip', 'Just audio, with captions on color', () => openFile('lyric')]],
+    },
+  ];
+  return (
+    <div className="make-groups">
+      {groups.map((g) => (
+        <section key={g.title} className="glass make-group">
+          <div className="row between" style={{ alignItems: 'flex-start', gap: 8 }}>
+            <span className="type-badge" style={{ width: 38, height: 38, '--t': `var(--tone-${g.tone})` }}><g.icon size={18} /></span>
+            <ol className="mini-steps" aria-label="Steps">{g.steps.map((x, i) => <li key={x}><span>{i + 1}</span>{x}</li>)}</ol>
+          </div>
+          <div className="stack" style={{ gap: 2 }}><h3 style={{ margin: 0 }}>{g.title}</h3><span className="small muted">{g.sub}</span></div>
+          <div className="stack" style={{ gap: 6 }}>
+            {g.actions.map(([label, hint, fn]) => (
+              <button key={label} className="make-action" onClick={fn} disabled={!fn}>
+                <span className="stack" style={{ gap: 0 }}><strong>{label}</strong><span className="small muted">{hint}</span></span>
+                <ArrowRight size={15} />
+              </button>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
   );
 }

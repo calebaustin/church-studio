@@ -2,6 +2,21 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## 0.6.0 · November 19, 2026
+
+### New
+- **Three ways to start in Videos.** Clips from a video, make a wide video (announcement or podcast), or make a single clip (from a short video, or a lyric clip from audio). Each shows its steps.
+- **Keep means keep.** Kept clips are saved to the video, ready to edit and export. A bar shows how many you've kept and takes you straight to editing them.
+- **Edit your clips in a row.** The editor shows your kept clips in a strip. Flip between them and your changes save as you go. Export all, schedule, or save for later.
+- **Come back to more.** A video with kept clips opens in the editor. "Cut more clips" takes you back to find more.
+- **Text pop-ups.** Add text that comes in and out at the times you choose, as a pill, a lower third or plain text, with a fade, slide or pop. Add an event straight from your church calendar.
+- **Lyric clips.** Audio with captions over your brand colors, moving slowly. Great for podcasts and songs.
+- **Join clips into one video.** Pick several clips and export them as one, in order.
+- **What's next?** After an export, a design or a finished blog, see ways to reuse it: post it, write about it, make a quote graphic and more.
+
+### Changed
+- The transcribe step shows the three steps to share-ready clips.
+
 ## 0.5.0 · November 19, 2026
 
 ### New

@@ -87,7 +87,7 @@ export default function Writing({ project: startProject }) {
 }
 
 function WritingEditor({ pid, onBack }) {
-  const { toast, config, go } = useApp();
+  const { toast, config, go, showNext } = useApp();
   const [project, setProject] = useState(null);
   const [draft, setDraft] = useState(null);
   const [loaded, setLoaded] = useState(false);
@@ -189,6 +189,7 @@ function WritingEditor({ pid, onBack }) {
               <button className="btn sm" onClick={() => api.post(`/api/writing/${pid}/save-file`, { name: `${draft.title} - ${KINDS.find((k) => k[0] === kind)[1]}`, text: draft[kind] })}><FileDown size={13} />Save to library</button>
               {config.llmProvider !== 'none' && <button className="btn sm" disabled={busy} onClick={polish}><Sparkles size={13} />Polish with AI</button>}
               {kind === 'blog' && <button className="btn sm" onClick={saveToVoice}><Heart size={13} />Save to brand voice</button>}
+              <button className="btn sm primary" onClick={async () => { if (dirty) await save(); showNext({ kind: 'writing', title: draft.title, text: draft.blog, caption: draft.metaDescription || draft.title, projectId: standalone ? null : pid }); }}><Check size={13} />Done</button>
               <button className={`btn sm ${dirty ? 'accent' : ''}`} disabled={!dirty} onClick={save}><Check size={13} />{dirty ? 'Save' : 'Saved'}</button>
             </div>
           </div>

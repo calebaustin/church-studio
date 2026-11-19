@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Undo2, Redo2, Download, Zap, Plus, Trash2, Crosshair, Play, Pause, Send, FolderOpen, Save, MousePointerClick, Bookmark, X } from 'lucide-react';
+import { Undo2, Redo2, Download, Zap, Plus, Trash2, Crosshair, Play, Pause, Send, FolderOpen, Save, MousePointerClick, Bookmark, X, ScissorsLineDashed, CalendarDays } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { api, fmt, media } from '../api.js';
 import CaptionOverlay, { findFont } from '../components/CaptionOverlay.jsx';
@@ -12,6 +12,8 @@ import { keepSegments, keptLength } from '../captions.js';
 import { sampleTrack, cueX, clampX } from '../framing.js';
 import ColorField from '../components/ColorField.jsx';
 import AudioCleanup from '../components/AudioCleanup.jsx';
+import Popover from '../components/Popover.jsx';
+import { useChurchEvents } from '../components/ChurchEvents.jsx';
 
 const FILLERS = new Set(['um', 'uh', 'uhm', 'umm', 'er', 'erm', 'ah']);
 const FRAME_W = 340;
@@ -28,14 +30,27 @@ function useHistory(initial) {
 }
 
 /** Whole-frame and three-stack previews: draw the video into a canvas over a blurred or solid background. */
-function CanvasFrame({ video, mode, bg, gap, width, height }) {
+function CanvasFrame({ video, mode, bg, gap, width, height, colors }) {
   const ref = useRef(null);
   useEffect(() => {
     let raf;
     const ctx = ref.current.getContext('2d');
     const draw = () => {
       const v = video.current;
-      if (v && v.videoWidth) {
+      if (mode === 'lyric') {
+        // Slowly moving soft color, matching the export.
+        const t = (v?.currentTime || 0);
+        const cols = (colors?.length ? colors : ['#2B7F5F', '#D9A441', '#1B2440']).slice(0, 3);
+        ctx.filter = 'none';
+        ctx.fillStyle = cols[2] || cols[0]; ctx.fillRect(0, 0, width, height);
+        cols.forEach((c, i) => {
+          const cx = width * (0.5 + 0.38 * Math.sin(t * 0.21 + i * 2.1)); const cy = height * (0.5 + 0.4 * Math.cos(t * 0.17 + i * 1.7));
+          const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(width, height) * 0.55);
+          g.addColorStop(0, c); g.addColorStop(1, `${c}00`);
+          ctx.fillStyle = g; ctx.fillRect(0, 0, width, height);
+        });
+        ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(0, 0, width, height);
+      } else if (v && v.videoWidth) {
         const W = width;
         const H = height;
         const ar = v.videoWidth / v.videoHeight;
@@ -64,7 +79,7 @@ function CanvasFrame({ video, mode, bg, gap, width, height }) {
     };
     draw();
     return () => cancelAnimationFrame(raf);
-  }, [mode, bg?.type, bg?.color, bg?.blur, gap, width, height]);
+  }, [mode, bg?.type, bg?.color, bg?.blur, gap, width, height, colors?.join()]);
   return <canvas ref={ref} className="preview-canvas" width={width} height={height} />;
 }
 
@@ -114,7 +129,7 @@ function SpeakerHelper({ project, clip, onClose, onDone }) {
   );
 }
 
-export default function ClipEditor({ project, transcript, clipId, onSelect, patch, jobs }) {
+export default function ClipEditor({ project, transcript, clipId, onSelect, patch, jobs, onMore }) {
   const { themes, config, trackJob, onJobFinished, go, setGuard, confirmLeave, toast, reloadThemes } = useApp();
   const original = project.clips.find((c) => c.id === clipId) || project.clips[0];
   const h = useHistory(original);
@@ -170,7 +185,8 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
     setGuard({ dirty: () => latest.current.dirty, save: () => latest.current.save(), discard: () => latest.current.discard() });
     return () => setGuard(null);
   }, []);
-  const selectClip = async (id) => { if (await confirmLeave()) onSelect(id); };
+  // Moving to another clip saves this one first, so nothing is lost while flipping through.
+  const selectClip = async (id) => { if (latest.current.dirty) await latest.current.save(); onSelect(id); };
 
   // ---- speaker track
   const loadTrack = useCallback(() => {
@@ -251,7 +267,7 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
   }
   x = clampX(x, frac);
   const left = Math.min(0, Math.max(-(VW - FRAME_W), -(x * VW - FRAME_W / 2)));
-  const canvasMode = mode === 'fit' || mode === 'stack3';
+  const canvasMode = mode === 'fit' || mode === 'stack3' || mode === 'lyric' || !project.media?.width;
   const setCrop = (p) => set({ crop: { ...crop, ...p } });
   const addCue = () => {
     const t = Math.round(rel * 10) / 10;
@@ -284,6 +300,10 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
   };
   const current = project.clips.find((c) => c.id === clip.id);
   const idx = project.clips.findIndex((c) => c.id === clip.id);
+  // The clips being worked on: kept and exported ones, plus this one if it isn't kept yet.
+  const working = project.clips.filter((c) => c.status === 'kept' || c.status === 'exported' || c.id === clip.id);
+  const wi = working.findIndex((c) => c.id === clip.id);
+  const [exportAll, setExportAll] = useState(false);
 
   // ---- edit templates
   const applySettings = (st) => {
@@ -306,6 +326,7 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
   return (
     <div className="stack" style={{ gap: 16 }}>
       {exporting && <ExportDialog project={project} clips={[current || clip]} beforeExport={save} onClose={() => setExporting(false)} />}
+      {exportAll && <ExportDialog project={project} clips={working} beforeExport={save} onClose={() => setExportAll(false)} />}
       {libPick && <LibraryPicker folder={libPick === 'overlay' ? 'Logos' : 'Graphics'} title={libPick === 'overlay' ? 'Pick a logo' : 'Pick an end card'} onClose={() => setLibPick(null)}
         onPick={(i) => { if (libPick === 'overlay') set({ overlay: { rel: i.rel, corner: 'tr', size: 0.18, opacity: 1 } }); else set({ endCard: { rel: i.rel, seconds: 3 } }); setLibPick(null); }} />}
       {helping && <SpeakerHelper project={project} clip={clip} onClose={() => setHelping(false)} onDone={async (anchors) => {
@@ -319,14 +340,34 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
         trackJob(job);
       }} />}
 
-      <div className="glass panel row between wrap" style={{ padding: 12 }}>
-        <div className="row grow" style={{ minWidth: 280 }}>
-          <button className="btn icon sm" aria-label="Previous clip" disabled={idx <= 0} onClick={() => selectClip(project.clips[idx - 1].id)}>‹</button>
-          <select className="input" style={{ maxWidth: 420 }} value={clip.id} onChange={(e) => selectClip(e.target.value)}>
-            {project.clips.map((c, i) => <option key={c.id} value={c.id}>{i + 1}. {c.title.slice(0, 70)}</option>)}
-          </select>
-          <button className="btn icon sm" aria-label="Next clip" disabled={idx >= project.clips.length - 1} onClick={() => selectClip(project.clips[idx + 1].id)}>›</button>
+      <div className="glass panel stack" style={{ padding: 12, gap: 10 }}>
+        <div className="row between wrap" style={{ gap: 8 }}>
+          <div className="row" style={{ gap: 8 }}>
+            {onMore && <button className="btn ghost sm" onClick={async () => { if (latest.current.dirty) await latest.current.save(); onMore(); }}><ScissorsLineDashed size={14} />Cut more clips</button>}
+            <span className="muted small">Clip {wi + 1} of {working.length} · changes save when you switch</span>
+          </div>
+          <div className="row wrap" style={{ gap: 6 }}>
+            <button className="btn sm" disabled={!working.length} onClick={async () => { if (latest.current.dirty) await latest.current.save(); setExportAll(true); }}><Download size={13} />Export all {working.length}</button>
+            <button className="btn sm" onClick={async () => { if (latest.current.dirty) await latest.current.save(); go({ name: 'social', compose: { projectId: project.id, clipId: clip.id } }); }}><Send size={13} />Schedule</button>
+            <button className="btn sm ghost" onClick={async () => { await latest.current.save(); toast({ text: 'Saved for later. Your clips are waiting in Videos.', celebrate: true }); go({ name: 'library' }); }}><Bookmark size={13} />Save for later</button>
+          </div>
         </div>
+        <div className="clip-strip">
+          <button className="btn icon sm" aria-label="Previous clip" disabled={wi <= 0} onClick={() => selectClip(working[wi - 1].id)}>‹</button>
+          <div className="clip-strip-list" role="tablist" aria-label="Kept clips">
+            {working.map((c, i) => (
+              <button key={c.id} role="tab" aria-selected={c.id === clip.id} className={`clip-pill ${c.id === clip.id ? 'on' : ''}`} onClick={() => c.id !== clip.id && selectClip(c.id)}>
+                <strong>{i + 1}. {c.title}</strong>
+                <span>{Math.round(c.end - c.start)}s · {c.export ? 'Exported' : c.edited ? 'Edited' : 'Not edited yet'}</span>
+              </button>
+            ))}
+          </div>
+          <button className="btn icon sm" aria-label="Next clip" disabled={wi >= working.length - 1} onClick={() => selectClip(working[wi + 1].id)}>›</button>
+        </div>
+      </div>
+
+      <div className="glass panel row between wrap" style={{ padding: 12 }}>
+        <strong className="truncate" style={{ minWidth: 0 }}>{clip.title}</strong>
         <div className="row wrap">
           <button className="btn ghost sm" disabled={!h.canUndo} onClick={h.undo} title="Undo (⌘Z)"><Undo2 size={15} />Undo</button>
           <button className="btn ghost sm" disabled={!h.canRedo} onClick={h.redo} title="Redo (⇧⌘Z)"><Redo2 size={15} />Redo</button>
@@ -362,7 +403,8 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
             title={canDrag ? 'Drag sideways to aim the frame. Click to play or pause.' : 'Click to play or pause'}>
             <video ref={video} src={media(project.id, project.sourceFile)} preload="auto" playsInline
               style={canvasMode ? { opacity: 0, width: 2, height: 2 } : { height: FH, width: VW, left }} />
-            {canvasMode && <CanvasFrame video={video} mode={mode} bg={crop.bg} gap={crop.gap} width={FRAME_W} height={Math.round(FH)} />}
+            {canvasMode && <CanvasFrame video={video} mode={project.media?.width ? mode : 'lyric'} colors={config.brandColors} bg={crop.bg} gap={crop.gap} width={FRAME_W} height={Math.round(FH)} />}
+            {(clip.popups || []).map((p) => <PopupPreview key={p.id} p={p} t={outTime} frameWidth={FRAME_W} accent={config.brandColors?.[1]} />)}
             {themeDraft && (
               <CaptionOverlay theme={themeDraft} font={font} words={clip.captions !== false ? capWords : []} t={rel} frameWidth={FRAME_W}
                 hook={clip.hook} showHook={outTime < (themeDraft.hookDuration ?? 3.5) || tab === 'text'} hookY={clip.hookY} onHookDrag={(y) => set({ hookY: +y.toFixed(3) })} />
@@ -396,7 +438,7 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
 
         <section className="glass strong panel">
           <div className="tabs">
-            {[['words', 'Words & trim'], ['text', 'Title & hook'], ['look', 'Captions'], ['crop', 'Framing'], ['gfx', 'Graphics'], ['sound', 'Sound']].map(([k, l]) => (
+            {[['words', 'Words & trim'], ['text', 'Title & hook'], ['look', 'Captions'], ['crop', 'Framing'], ['popups', 'Pop-ups'], ['gfx', 'Graphics'], ['sound', 'Sound']].map(([k, l]) => (
               <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>
             ))}
           </div>
@@ -486,6 +528,8 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
             </div>
           )}
 
+          {tab === 'popups' && <PopupsTab clip={clip} set={set} now={outTime} len={outLen} />}
+
           {tab === 'sound' && (
             <div className="stack" style={{ gap: 12 }}>
               <div className="row between wrap">
@@ -504,7 +548,8 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
                   ['cues', 'By timestamp', 'Cut or glide where you choose.'],
                   ['manual', 'Fixed', 'One steady frame.'],
                   ['fit', 'Whole frame', 'Full shot on a background.'],
-                  ['stack3', 'Three stack', 'The full shot, three times.']].map(([m, t, d]) => (
+                  ['stack3', 'Three stack', 'The full shot, three times.'],
+                  ['lyric', 'Moving color', 'No video. Captions on your brand colors.']].filter(([m]) => project.media?.width || m === 'lyric').map(([m, t, d]) => (
                   <button key={m} className={`choice ${mode === m ? 'on' : ''}`} onClick={() => setCrop({ mode: m, ...(m === 'manual' && crop.x == null ? { x } : {}) })}>
                     <span className="t"><span className="radio" />{t}</span><span className="d">{d}</span>
                   </button>
@@ -647,6 +692,87 @@ function WordsTab({ words, clip, set, cut, rel, outLen, seek }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- text pop-ups
+const PSTYLES = [['pill', 'Pill'], ['lower', 'Lower third'], ['plain', 'Plain']];
+const PPOS = [['top', 'Top'], ['middle', 'Middle'], ['lower', 'Lower']];
+const PTRANS = [['fade', 'Fade'], ['slide', 'Slide up'], ['pop', 'Pop']];
+
+/** How a pop-up looks at time t: hidden, coming in, showing, or going out. Matches the export. */
+function popupState(p, t) {
+  if (t < p.start || t > p.end) return null;
+  const d = p.transition === 'pop' ? 0.18 : 0.35;
+  const r = Math.max(0, Math.min(1, (t - p.start) / d, (p.end - t) / d));
+  return { r, dy: p.transition === 'slide' ? (1 - r) * 46 : 0, scale: p.transition === 'pop' ? 0.85 + 0.15 * r : 1 };
+}
+
+function PopupPreview({ p, t, frameWidth, accent }) {
+  const st = popupState(p, t);
+  if (!st) return null;
+  const k = frameWidth / 1080;
+  const top = { top: '12%', middle: '44%', lower: '70%' }[p.position || 'lower'];
+  const style = p.style || 'pill';
+  return (
+    <div className={`popup-prev ${style}`} style={{
+      top, opacity: st.r, transform: `translate(${style === 'lower' ? '0' : '-50%'}, ${st.dy * k}px) scale(${st.scale})`,
+      left: style === 'lower' ? '6%' : '50%', fontSize: (style === 'lower' ? 44 : 50) * k, '--pa': accent || 'var(--accent-2)',
+    }}>{String(p.text || '').split('\n').map((l, i) => <div key={i}>{l}</div>)}</div>
+  );
+}
+
+function PopupsTab({ clip, set, now, len }) {
+  const { config } = useApp();
+  const list = clip.popups || [];
+  const cal = useChurchEvents();
+  const [pickEvent, setPickEvent] = useState(false);
+  const save = (next) => set({ popups: next });
+  const up = (id, patch) => save(list.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+  const add = (text = 'Your text here') => {
+    const start = +Math.min(Math.max(0, now), Math.max(0, len - 1)).toFixed(1);
+    save([...list, { id: Math.random().toString(36).slice(2, 8), text, start, end: +Math.min(len, start + 4).toFixed(1), position: 'lower', style: 'pill', transition: 'fade' }]);
+  };
+  const eventText = (e) => `${e.title}\n${new Date(e.start).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}${e.allDay ? '' : ` · ${new Date(e.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`}`;
+  const upcoming = cal.events.filter((e) => new Date(e.start) >= new Date()).slice(0, 12);
+  return (
+    <div className="stack" style={{ gap: 12 }}>
+      <div className="row between wrap" style={{ gap: 8 }}>
+        <div className="stack" style={{ gap: 0 }}><h3>Text pop-ups</h3><span className="small muted">Short text that comes in and out, like a name, a verse or an event.</span></div>
+        <div className="row" style={{ gap: 6 }}>
+          {cal.linked && (
+            <div style={{ position: 'relative' }}>
+              <button className="btn sm" data-pop-trigger onClick={() => setPickEvent(!pickEvent)}><CalendarDays size={13} />From calendar</button>
+              <Popover open={pickEvent} onClose={() => setPickEvent(false)} align="right" width={300}>
+                <div className="pop-list">
+                  {upcoming.length ? upcoming.map((e) => <button key={e.id} className="pop-item" onClick={() => { add(eventText(e)); setPickEvent(false); }}>{e.title}<span className="pop-hint">{new Date(e.start).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span></button>) : <div className="pop-empty">No upcoming events.</div>}
+                </div>
+              </Popover>
+            </div>
+          )}
+          <button className="btn primary sm" onClick={() => add()}><Plus size={13} />Add at {fmt(now)}</button>
+        </div>
+      </div>
+      {!list.length && <div className="keycard small muted">Play to the moment you want, then press Add. Pop-ups show in the preview and the export.</div>}
+      {list.map((p) => (
+        <div key={p.id} className="keycard stack" style={{ gap: 10 }}>
+          <div className="row" style={{ gap: 8, alignItems: 'flex-start' }}>
+            <textarea className="input grow" rows={2} value={p.text} onChange={(e) => up(p.id, { text: e.target.value })} aria-label="Pop-up text" />
+            <button className="rt-btn" aria-label="Remove pop-up" title="Remove" onClick={() => save(list.filter((x) => x.id !== p.id))}><Trash2 size={14} /></button>
+          </div>
+          <div className="row wrap" style={{ gap: 10 }}>
+            <label className="field small">Starts<div className="row" style={{ gap: 4 }}><input className="input num" style={{ width: 70 }} type="number" step="0.1" min="0" max={len} value={p.start} onChange={(e) => up(p.id, { start: Number(e.target.value) })} /><button className="btn ghost sm" onClick={() => up(p.id, { start: +now.toFixed(1) })}>Now</button></div></label>
+            <label className="field small">Ends<div className="row" style={{ gap: 4 }}><input className="input num" style={{ width: 70 }} type="number" step="0.1" min="0" max={len} value={p.end} onChange={(e) => up(p.id, { end: Number(e.target.value) })} /><button className="btn ghost sm" onClick={() => up(p.id, { end: +now.toFixed(1) })}>Now</button></div></label>
+          </div>
+          <div className="row wrap" style={{ gap: 8 }}>
+            <div className="seg sm">{PSTYLES.map(([k, l]) => <button key={k} className={(p.style || 'pill') === k ? 'on' : ''} onClick={() => up(p.id, { style: k })}>{l}</button>)}</div>
+            <div className="seg sm">{PPOS.map(([k, l]) => <button key={k} className={(p.position || 'lower') === k ? 'on' : ''} onClick={() => up(p.id, { position: k })}>{l}</button>)}</div>
+            <div className="seg sm">{PTRANS.map(([k, l]) => <button key={k} className={(p.transition || 'fade') === k ? 'on' : ''} onClick={() => up(p.id, { transition: k })}>{l}</button>)}</div>
+          </div>
+          {p.end <= p.start && <span className="small" style={{ color: 'var(--bad)' }}>End needs to be after the start.</span>}
+        </div>
+      ))}
     </div>
   );
 }

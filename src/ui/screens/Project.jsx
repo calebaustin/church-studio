@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../App.jsx';
 import { api, fmt, fmtEta, media } from '../api.js';
-import { ArrowLeft, Square, Wand2, Download, Trash2, Plus, Send, FolderOpen, Copy, ScissorsLineDashed, AudioLines, ChevronDown, FileText, PenLine, Quote } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Square, Wand2, Download, Trash2, Plus, Send, FolderOpen, Copy, ScissorsLineDashed, AudioLines, ChevronDown, FileText, PenLine, Quote } from 'lucide-react';
 import AudioCleanup from '../components/AudioCleanup.jsx';
 import ClipEditor from './ClipEditor.jsx';
 import { StatusChip } from './Library.jsx';
@@ -70,8 +70,11 @@ export default function Project({ id, initialStep, initialClip }) {
   useEffect(() => {
     load().then((p) => {
       const audioOnly = p.media && !p.media.width;
+      const keptClip = p.clips.find((c) => c.status === 'kept' || c.status === 'exported');
       const fallback = p.status !== 'transcribed' ? 'transcribe' : audioOnly ? 'text' : p.clips.length ? 'clips' : 'sermon';
-      if (initialStep === 'edit' && p.clips.length) { setSelected((p.clips.find((c) => c.id === initialClip) || p.clips.find((c) => c.status === 'kept' || c.status === 'exported') || p.clips[0]).id); setStep('edit'); }
+      // A video that already has kept clips opens in the editor. "Cut more clips" goes back to the picker.
+      if (!initialStep && (!audioOnly || p.kind === 'lyric') && keptClip) { setSelected(keptClip.id); setStep('edit'); }
+      else if (initialStep === 'edit' && p.clips.length) { setSelected((p.clips.find((c) => c.id === initialClip) || p.clips.find((c) => c.status === 'kept' || c.status === 'exported') || p.clips[0]).id); setStep('edit'); }
       else setStep(fallback);
     }).catch(() => go({ name: 'library' }));
   }, [load]);
@@ -80,7 +83,11 @@ export default function Project({ id, initialStep, initialClip }) {
     if (j.projectId !== id) return;
     const p = await load();
     if (j.status === 'error') return;
-    if (j.kind === 'transcribe') setStep('sermon');
+    if (j.kind === 'transcribe') {
+      // Shorts, lyric clips and wide videos come back as one clip, so open it in the editor.
+      const whole = ['short', 'lyric', 'wide'].includes(p.kind) && p.clips.find((c) => c.status === 'kept');
+      if (whole) { setSelected(whole.id); setStep('edit'); } else setStep(p.media && !p.media.width ? 'text' : 'sermon');
+    }
     if (j.kind === 'propose') { setStep('clips'); setNotice(j.result?.warning || null); }
     if (j.kind === 'download' && p.status === 'ready') setStep('transcribe');
   }), [onJobFinished, id, load]);
@@ -105,7 +112,11 @@ export default function Project({ id, initialStep, initialClip }) {
   const src = project.sourceFile ? media(id, project.sourceFile) : null;
   const transcribed = project.status === 'transcribed';
   const audioOnly = Boolean(project.media && !project.media.width);
-  const steps = audioOnly ? [
+  const steps = audioOnly && project.kind === 'lyric' ? [
+    ['transcribe', 'Transcribe', transcribed],
+    ['edit', 'Edit & export', project.clips.some((c) => c.export)],
+    ['text', 'Transcript', false],
+  ] : audioOnly ? [
     ['transcribe', 'Transcribe', transcribed],
     ['sermon', 'Trim', project.sermon?.confirmed],
     ['text', 'Transcript', false],
@@ -161,7 +172,7 @@ export default function Project({ id, initialStep, initialClip }) {
       )}
       {step === 'edit' && transcript && (
         <ClipEditor project={project} transcript={transcript} clipId={selected || project.clips[0]?.id}
-          onSelect={setSelected} patch={patch} jobs={busy} />
+          onSelect={setSelected} patch={patch} jobs={busy} onMore={() => setStep('clips')} />
       )}
       {step === 'exports' && <ExportsStep project={project} />}
       {step === 'text' && transcript && <TranscriptStep project={project} />}
@@ -187,8 +198,18 @@ function TranscribeStep({ project, src, player, job, onStart, audioOnly, onRead 
             onSetEnd={mode === 'range' ? (t) => setRange((r) => ({ ...r, end: t })) : null} />}
         </section>
         <section className="glass strong panel stack" style={{ gap: 14 }}>
+          {!audioOnly && !done && (
+            <div className="three-steps">
+              <strong className="small">Share-ready clips in 3 easy steps</strong>
+              <ol>
+                <li className={mode === 'range' ? 'on' : ''}><span>1</span>Trim to the sermon <em>optional, faster</em></li>
+                <li className="on"><span>2</span>Make the transcript</li>
+                <li><span>3</span>Pick and polish clips</li>
+              </ol>
+            </div>
+          )}
           <div className="stack" style={{ gap: 4 }}>
-            <span className="eyebrow">Step 1</span>
+            <span className="eyebrow">{audioOnly ? 'Step 1' : 'Step 2 of 3'}</span>
             <h2>{audioOnly ? 'Transcribe the recording' : 'Transcribe the video'}</h2>
             <p className="muted">{audioOnly ? 'Turns speech into text you can read, search and share.' : 'Turns speech into timed text for captions and clips.'}</p>
           </div>
@@ -357,12 +378,21 @@ function ClipsStep({ project, src, player, patch, busy, job, start, onEdit }) {
       </div>
       <div className="stack" style={{ gap: 12 }}>
         <div className="row between">
-          <h2>{clips.length} clips</h2>
-          <button className="btn primary" disabled={!kept} title={kept ? '' : 'Keep at least one clip first'} onClick={() => setExportKept(true)}>
+          <h2>{clips.length} suggested clips</h2>
+          <button className="btn" disabled={!kept} title={kept ? '' : 'Keep at least one clip first'} onClick={() => setExportKept(true)}>
             <Download size={15} />Export {kept || ''} kept…
           </button>
           {exportKept && <ExportDialog project={project} clips={project.clips.filter((c) => c.status === 'kept' || c.status === 'exported')} onClose={() => setExportKept(false)} />}
         </div>
+        {clips.length > 0 && (
+          <div className="keep-bar glass">
+            <div className="stack grow" style={{ gap: 1 }}>
+              <strong>{kept ? `${kept} clip${kept === 1 ? '' : 's'} kept` : 'Keep the ones you like'}</strong>
+              <span className="small muted">Keep saves a clip to this video, ready to edit and export. Skip hides it. You can come back for more anytime.</span>
+            </div>
+            <button className="btn primary" disabled={!kept} onClick={() => onEdit(project.clips.find((c) => c.status === 'kept' || c.status === 'exported').id)}>Edit kept clips<ArrowRight size={15} /></button>
+          </div>
+        )}
         {!clips.length && <div className="glass empty"><ScissorsLineDashed size={40} /><h3>No clips yet</h3><p>Press Find clips.</p></div>}
         <div className="clip-list">
           {clips.map((c) => (
@@ -382,8 +412,8 @@ function ClipsStep({ project, src, player, patch, busy, job, start, onEdit }) {
               </div>
               <div className="stack" onClick={(e) => e.stopPropagation()}>
                 {c.status === 'kept' || c.status === 'exported'
-                  ? <button className="btn sm" onClick={() => setStatus(c.id, 'proposed')}>✓ Kept</button>
-                  : <button className="btn primary sm" onClick={() => setStatus(c.id, 'kept')} title="Keep this clip">Keep</button>}
+                  ? <button className="btn sm kept-btn" onClick={() => setStatus(c.id, 'proposed')} title="Kept: saved to this video. Click to un-keep."><Check size={13} />Kept</button>
+                  : <button className="btn primary sm" onClick={() => setStatus(c.id, 'kept')} title="Save this clip to edit and export"><Plus size={13} />Keep</button>}
                 <button className="btn sm" onClick={() => onEdit(c.id)}>Edit</button>
                 {c.status !== 'skipped'
                   ? <button className="btn ghost sm" onClick={() => setStatus(c.id, 'skipped')}>Skip</button>
