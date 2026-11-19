@@ -257,6 +257,42 @@ function groupFor(a, title, topic) {
   ].join('\n');
 }
 
+/**
+ * A devotional series: one short reading a day for 3, 5 or 7 days, walking through the sermon in
+ * order. Each day has a passage to read, the sermon's own words, a question and a prayer prompt.
+ */
+function devotionalFor(a, title, days = 5) {
+  const n = [3, 5, 7].includes(Number(days)) ? Number(days) : 5;
+  const ok = (s) => !s.f.dangling && !s.f.context && !s.f.housekeeping && !s.f.logistics;
+  const per = Math.ceil(a.sentences.length / n);
+  const out = [`# ${n}-day devotional: ${title}`, '', `A short reading for each day this week, from Sunday's message.`];
+  for (let d = 0; d < n; d++) {
+    const part = a.sentences.slice(d * per, (d + 1) * per);
+    if (!part.length) break;
+    const strong = [...part].filter(ok).sort((x, y) => y.score - x.score);
+    const lead = strong.find((s) => !s.f.question) || part[0];
+    const body = topIn([lead, ...strong.filter((s) => s !== lead && !s.f.question)].slice(0, 6), 3).map((s) => sentenceEnd(clean(s.text))).join(' ');
+    const q = part.find((s) => s.f.question && ok(s) && clean(s.text).length < 160) || a.questions[d % Math.max(1, a.questions.length)];
+    const apply = strong.find((s) => s.f.apply && !s.f.question);
+    const ref = a.refs[d % Math.max(1, a.refs.length)];
+    const head = headingFor(part, title);
+    out.push('', `## Day ${d + 1}: ${titleCase(head)}`, '',
+      ref ? `**Read:** ${ref}` : '**Read:** [ADD: a passage for today]', '',
+      body, '',
+      `**Reflect:** ${q ? sentenceEnd(clean(q.text)) : 'Where do you see this in your own life right now?'}`, '',
+      ...(apply ? [`**Try today:** ${sentenceEnd(clean(apply.text))}`, ''] : []),
+      `**Pray:** [ADD: a one-line prayer about ${titleCase(head).toLowerCase()}.]`);
+  }
+  return out.join('\n');
+}
+
+/** Rebuild the devotional with a different number of days. */
+export async function devotional(projectId, days = 5) {
+  const { project, a } = await load(projectId);
+  const titleLine = a.best.find((s) => s.text.length <= 70 && !s.f.dangling) || a.best[0];
+  return { text: devotionalFor(a, titleCase(clean(titleLine.text).replace(/[.?!]$/, '')) || project.title, days) };
+}
+
 export async function generate(projectId) {
   const { project, a } = await load(projectId);
   const main = a.best.find((s) => s.f.apply || s.f.quotable) || a.best[0];
@@ -287,6 +323,7 @@ export async function generate(projectId) {
   ].join('\n');
 
   const group = groupFor(a, title, topic);
+  const devo = devotionalFor(a, title, 5);
 
   const lines = topIn(a.best.filter((s) => s.text.length < 220).slice(0, 10), 3);
   const social = lines.map((s, i) => [
@@ -300,7 +337,7 @@ export async function generate(projectId) {
 
   return {
     generated: new Date().toISOString(), title, slug: slugify(title), metaDescription, keyphrase: topic, angle: 'teaching',
-    blog, email, group, social, keywords: a.keys, refs: a.refs,
+    blog, email, group, social, devotional: devo, keywords: a.keys, refs: a.refs,
   };
 }
 

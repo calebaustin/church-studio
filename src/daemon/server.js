@@ -8,8 +8,8 @@ import { randomUUID } from 'node:crypto';
 import { ROOT, PROJECTS_DIR, toolStatus, repairTool, run, tool } from './tools.js';
 import { loadConfig, saveConfig, mask, KEY_GUIDE } from './config.js';
 import * as jobs from './jobs.js';
-import { listProjects, getProject, updateProject, deleteProject, getTranscript, projectDir, file as fileOf } from './projects.js';
-import { channelDetails, listChannel, downloadToProject, importLocalFile, scoutVideo } from './youtube.js';
+import { listProjects, getProject, updateProject, deleteProject, getTranscript, projectDir, createProject, file as fileOf } from './projects.js';
+import { channelDetails, listChannel, downloadToProject, importLocalFile, replaceSource, scoutVideo } from './youtube.js';
 import { transcribeProject } from './transcribe.js';
 import { proposeClips } from './pipeline.js';
 import { exportClip, exportJoined, trackClip, revealInFinder, EXPORT_PRESETS, moveExport, downloadsDir, sampleFrames } from './render.js';
@@ -27,6 +27,9 @@ import { listThemes, saveTheme, deleteTheme, refreshSystemFonts, bundledFontDir 
 import { makeThumbs } from './thumbs.js';
 import * as audio from './audio.js';
 import * as transcripts from './transcripts.js';
+import { exportPodcast } from './podcast.js';
+import { contentPlan } from './hub.js';
+import * as insights from './insights.js';
 import * as churchCal from './calendar.js';
 import { aiStatus, resetAiStatus, testProvider } from './ai.js';
 import { binTranscript } from './sermon.js';
@@ -139,6 +142,32 @@ route('POST', '/api/projects', async (_p, b) => {
   throw new HttpError(400, 'Send a YouTube url or a local file path.');
 });
 
+// A project started from scratch: 30 seconds of silence, one clip, ready for text, color and pop-ups.
+// A video or recording can be added later.
+route('POST', '/api/projects/blank', async (_p, b) => {
+  const kind = ['short', 'lyric', 'wide'].includes(b.kind) ? b.kind : 'short';
+  const seconds = Math.max(5, Math.min(600, Number(b.seconds) || 30));
+  const project = await createProject({ title: String(b.title || 'Untitled video').slice(0, 120), kind });
+  const src = fileOf(project.id, 'source.m4a');
+  await run(tool('ffmpeg'), ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo', '-t', String(seconds), '-c:a', 'aac', src]);
+  const { writeFile: wf } = await import('node:fs/promises');
+  await wf(fileOf(project.id, 'transcript.json'), JSON.stringify({ words: [], segments: [], duration: seconds, scripture: 1 }));
+  const p = await updateProject(project.id, (x) => {
+    x.sourceFile = 'source.m4a'; x.media = { duration: seconds, width: 0, height: 0, fps: 30, hasAudio: true }; x.status = 'transcribed'; x.blank = true;
+    x.sermon = { start: 0, end: seconds, confidence: 1, method: 'whole', confirmed: true, reasons: ['Started from scratch'] };
+    x.clips = [{ id: randomUUID().slice(0, 8), start: 0, end: seconds, title: x.title, summary: '', hook: '', score: null, category: 'From scratch', reasons: [], startPhrase: '', endPhrase: '',
+      hashtags: [], cutWords: [], tightenPauses: false, crop: { mode: 'lyric', smooth: 0 }, format: kind === 'wide' ? 'wide' : 'vertical', videoTheme: null, status: 'kept', source: 'blank', captions: false }];
+  });
+  return { project: p };
+});
+
+// Add or replace the video or recording behind a project (used by projects started from scratch).
+route('POST', '/api/projects/:id/source', async ({ id }, b) => {
+  await requireProject(id);
+  const job = jobs.enqueue({ kind: 'import', label: `Add ${path.basename(String(b.file || 'file'))}`, projectId: id }, (ctx) => replaceSource(id, String(b.file || ''), ctx));
+  return { job: jobs.view(job) };
+});
+
 route('GET', '/api/projects/:id', async ({ id }) => {
   const project = await requireProject(id);
   return { project, jobs: jobs.listJobs({ projectId: id }) };
@@ -151,6 +180,7 @@ route('PATCH', '/api/projects/:id', async ({ id }, b) => {
     if (b.sermon) p.sermon = { ...p.sermon, ...b.sermon };
     if (Array.isArray(b.clips)) p.clips = b.clips;
     if ('videoTheme' in b) p.videoTheme = b.videoTheme;
+    if (typeof b.series === 'string') p.series = b.series.trim().slice(0, 80) || null;
   });
   return { project };
 });
@@ -240,6 +270,21 @@ route('GET', '/api/edit-templates', () => prefs.listTemplates());
 route('POST', '/api/edit-templates', async (_p, b) => ({ template: await prefs.saveTemplate(b.name, b.settings) }));
 route('DELETE', '/api/edit-templates/:tid', async ({ tid }) => { await prefs.deleteTemplate(tid); return { ok: true }; });
 
+route('GET', '/api/index', () => insights.sermonIndex());
+route('GET', '/api/gaps', () => insights.gapReport());
+route('POST', '/api/gaps/save', async () => {
+  const cfg = await loadConfig();
+  const md = insights.gapMarkdown(await insights.gapReport(), cfg.churchInfo?.name || '');
+  const out = path.join(downloadsDir(), `Content report ${new Date().toISOString().slice(0, 10)}.md`);
+  const { writeFile: wf } = await import('node:fs/promises');
+  await wf(out, md);
+  return { file: out };
+});
+route('GET', '/api/projects/:id/plan', async ({ id }) => { await requireProject(id); return contentPlan(id); });
+route('POST', '/api/projects/:id/podcast', async ({ id }, b) => {
+  const project = await requireProject(id);
+  return { job: jobs.view(jobs.enqueue({ kind: 'podcast', label: `Podcast: ${project.title.slice(0, 50)}`, projectId: id, key: `podcast:${id}` }, (ctx) => exportPodcast(id, b || {}, ctx))) };
+});
 route('POST', '/api/projects/:id/export-joined', async ({ id }, b) => {
   const project = await requireProject(id);
   const ids = (Array.isArray(b.clipIds) ? b.clipIds : []).filter((cid) => project.clips.some((c) => c.id === cid));
@@ -379,6 +424,7 @@ route('POST', '/api/writing/:id/generate', async ({ id }) => { try { return { dr
 route('PUT', '/api/writing/:id', async ({ id }, b) => ({ draft: await writing.saveDraft(id, b) }));
 route('POST', '/api/writing/:id/suggest', async ({ id }, b) => { try { return await writing.suggest(id, b || {}); } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/writing/:id/rewrite', async ({ id }, b) => { try { return await writing.rewriteBlog(id, b || {}); } catch (e) { throw new HttpError(400, e.message); } });
+route('POST', '/api/writing/:id/devotional', async ({ id }, b) => { try { return await writing.devotional(id, b.days); } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/writing/:id/polish', async ({ id }, b) => { try { return await writing.polish(id, b.kind, b.text); } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/writing/:id/save-file', async ({ id }, b) => {
   const p = await getProject(id);

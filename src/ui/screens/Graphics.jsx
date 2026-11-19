@@ -80,7 +80,7 @@ export function eventForDesign(e) {
     countdown: days > 1 ? `${days} DAYS TO GO` : days === 1 ? 'TOMORROW' : 'TODAY' };
 }
 
-export default function Graphics({ image, design, event, quote }) {
+export default function Graphics({ image, design, event, quote, make }) {
   const { toast } = useApp();
   const ctx = useBrandCtx();
   const [open, setOpen] = useState(design || null);
@@ -110,6 +110,18 @@ export default function Graphics({ image, design, event, quote }) {
     d.name = event.title;
     create(d);
   }, [event]);
+
+  // From a sermon's content plan: a design built from its outline, linked back to the sermon.
+  useEffect(() => {
+    if (!make?.projectId) return;
+    api.get(`/api/outline/${make.projectId}`).then(({ outline }) => {
+      const tpl = TEMPLATES.find((t) => t.id === make.template) || TEMPLATES.find((t) => t.id === 'post-quote');
+      const d = newDoc(tpl.kind, tpl, { ...ctx, o: outline });
+      d.name = `${outline.title} · ${tpl.name}`;
+      d.source = { projectId: make.projectId, template: tpl.id };
+      create(d);
+    }).catch((e) => toast({ kind: 'error', text: e.message }));
+  }, [make?.projectId, make?.template]);
 
   // From a transcript selection: a quote card.
   useEffect(() => {
@@ -245,6 +257,7 @@ function FromSermon({ ctx, onClose, onCreate }) {
       const tpl = TEMPLATES.find((t) => t.id === out);
       const d = newDoc(tpl.kind, tpl, { ...ctx, o: outline });
       d.name = `${outline.title} · ${tpl.name}`;
+      d.source = { projectId: pid, template: tpl.id };
       onCreate(d);
     } catch (e) { setErr(e.message); setBusy(false); }
   };

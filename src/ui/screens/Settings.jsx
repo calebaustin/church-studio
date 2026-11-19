@@ -396,7 +396,7 @@ function AppTheme() {
   return (
     <>
       <section className="glass strong panel stack" style={{ gap: 16 }}>
-        <h2>App theme</h2>
+        <div className="row between wrap" style={{ gap: 8 }}><h2>App theme</h2><span className="own-note">Make Church Studio your own!</span></div>
         <div className="stack" style={{ gap: 6 }}>
           <span className="small" style={{ fontWeight: 600, color: 'var(--ink)' }}>Appearance</span>
           <div className="seg" role="radiogroup" aria-label="Appearance">

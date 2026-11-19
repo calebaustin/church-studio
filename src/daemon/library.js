@@ -7,8 +7,8 @@ import path from 'node:path';
 import { APP_NAME, WORKSPACE } from './tools.js';
 import { loadConfig } from './config.js';
 
-export const FOLDERS = ['Photos', 'Logos', 'Graphics', 'Brand', 'Writing'];
-const KINDS = { image: /\.(png|jpe?g|webp|gif|heic|svg)$/i, video: /\.(mp4|mov|m4v)$/i, doc: /\.(pdf|md|txt|docx|pptx)$/i };
+export const FOLDERS = ['Photos', 'Logos', 'Graphics', 'Brand', 'Writing', 'Audio'];
+const KINDS = { image: /\.(png|jpe?g|webp|gif|heic|svg)$/i, video: /\.(mp4|mov|m4v)$/i, doc: /\.(pdf|md|txt|docx|pptx)$/i, audio: /\.(mp3|m4a|wav|aac|aiff?|flac|ogg)$/i };
 
 export async function libraryRoot() {
   const cfg = await loadConfig();

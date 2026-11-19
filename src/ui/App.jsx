@@ -5,6 +5,7 @@ import { makeDockIcon } from './dockIcon.js';
 import SideCards from './components/SideCards.jsx';
 import { maybeNote } from './encourage.js';
 import NextSteps from './components/NextSteps.jsx';
+import NotificationsWallet, { NotificationsButton } from './components/Notifications.jsx';
 import { api, fmt as fmtClock } from './api.js';
 import Library from './screens/Library.jsx';
 import Dashboard from './screens/Dashboard.jsx';
@@ -64,6 +65,8 @@ export default function App() {
   const jobsRef = useRef([]);
   jobsRef.current = jobs;
   const [toasts, setToasts] = useState([]);
+  const [notes, setNotes] = useState([]);
+  const [wallet, setWallet] = useState(false);
   const [needsYou, setNeedsYou] = useState(0);
   const [error, setError] = useState(null);
   const [, setSchemeTick] = useState(0);
@@ -112,6 +115,9 @@ export default function App() {
     // Good moments (an export, a post, a finished draft) sometimes carry a word of encouragement.
     const note = t.celebrate ? maybeNote(t.kind === 'export' ? 0.6 : 0.34) : null;
     setToasts((ts) => [...ts.slice(-3), { id, ...t, ...(note ? { note } : {}) }]);
+    // Keep a short history so missed notifications can be seen again.
+    const text = t.kind === 'export' ? `Clip exported: ${t.result?.title || 'your clip'}` : t.text;
+    if (text) setNotes((ns) => [{ id, text, kind: t.kind, at: Date.now(), action: t.action || (t.kind === 'export' && t.result?.file ? { label: 'Show in Finder', run: () => api.post('/api/reveal', { path: t.result.file }) } : null), read: false }, ...ns].slice(0, 30));
     return id;
   }, []);
   const dismissToast = useCallback((id) => setToasts((ts) => ts.filter((t) => t.id !== id)), []);
@@ -299,6 +305,7 @@ export default function App() {
           <div className="grow" />
           {config && <SideCards />}
           <nav className="side-nav side-bottom" aria-label="You">
+            <NotificationsButton items={notes} onOpen={() => { setWallet(true); setNotes((ns) => ns.map((n) => ({ ...n, read: true }))); }} />
             {bottomNav.map(([name, label, Icon, on]) => (
               <button key={name} className={on ? 'on' : ''} aria-current={on ? 'page' : undefined} onClick={() => go({ name })}>
                 <Icon size={18} aria-hidden="true" /><span className="grow">{label}</span>
@@ -318,11 +325,11 @@ export default function App() {
             : route.name === 'social' ? <Social compose={route.compose} caption={route.caption} key={route.compose?.clipId || route.caption || 'social'} />
               : route.name === 'project' ? <Project id={route.id} initialStep={route.clip ? 'edit' : route.step} initialClip={route.clip} key={route.id + (route.step || '') + (route.clip || '')} />
                 : route.name === 'library' ? <Library openPicker={route.pick} key={route.pick ? 'pick' : 'lib'} />
-                  : route.name === 'writing' ? <Writing project={route.project} key={route.project || 'w'} />
+                  : route.name === 'writing' ? <Writing project={route.project} kind={route.kind} key={(route.project || 'w') + (route.kind || '')} />
                     : route.name === 'projects' ? <AllProjects />
-                    : route.name === 'graphics' ? <Graphics image={route.image} design={route.design} event={route.event} quote={route.quote} key={route.image || route.design || route.event?.id || route.quote || 'g'} />
+                    : route.name === 'graphics' ? <Graphics image={route.image} design={route.design} event={route.event} quote={route.quote} make={route.make} key={route.image || route.design || route.event?.id || route.quote || (route.make && `${route.make.projectId}${route.make.template}`) || 'g'} />
                       : route.name === 'assets' ? <BrandLibrary section={route.section} key={route.section || 'b'} />
-                        : route.name === 'me' ? <MyApp />
+                        : route.name === 'me' ? <MyApp section={route.section} key={route.section || 'me'} />
                   : <Dashboard />}
         </main>
       </div>
@@ -341,6 +348,7 @@ export default function App() {
           </div>
         </Modal>
       )}
+      {wallet && notes.length > 0 && <NotificationsWallet items={notes} onClose={() => setWallet(false)} onDismiss={(id) => setNotes((ns) => ns.filter((n) => n.id !== id))} onDismissAll={() => { setNotes([]); setWallet(false); }} />}
       {nextInfo && <NextSteps info={nextInfo} onClose={() => showNext(null)} />}
       {config && !config.onboarded && <Onboarding />}
     </Ctx.Provider>

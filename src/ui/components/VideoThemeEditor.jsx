@@ -43,7 +43,20 @@ export function ThemePreview({ theme, font, width = 230, hook = null, app = null
   const { words, t } = useSampleWords();
   return (
     <div className="vframe" style={{ width, background: 'linear-gradient(160deg,#8a93a6,#3a4152 55%,#1a1f2b)' }} aria-label="Caption preview">
-      <div style={{ position: 'absolute', left: '30%', top: '30%', width: '40%', height: '58%', borderRadius: '42% 42% 18% 18%', background: 'linear-gradient(#d8c8b8,#6d7a8f 40%,#3b4558)', opacity: 0.8 }} />
+      <svg className="podium-art" viewBox="0 0 100 178" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+        <defs>
+          <linearGradient id="pd-wood" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#6b5444" /><stop offset="1" stopColor="#3a2c24" /></linearGradient>
+          <linearGradient id="pd-coat" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#4a5468" /><stop offset="1" stopColor="#262c3a" /></linearGradient>
+          <radialGradient id="pd-light" cx="0.5" cy="0.25" r="0.6"><stop offset="0" stopColor="#fff" stopOpacity=".28" /><stop offset="1" stopColor="#fff" stopOpacity="0" /></radialGradient>
+        </defs>
+        <rect width="100" height="178" fill="url(#pd-light)" />
+        <circle cx="50" cy="70" r="11" fill="#d9b9a0" />
+        <path d="M28 120 Q30 88 50 85 Q70 88 72 120 Z" fill="url(#pd-coat)" />
+        <path d="M30 108 L70 108 L66 112 L34 112 Z" fill="#7d6452" />
+        <path d="M34 112 L66 112 L62 178 L38 178 Z" fill="url(#pd-wood)" />
+        <rect x="45" y="124" width="10" height="10" rx="2" fill="#c9a96e" opacity=".6" />
+        <rect x="0" y="170" width="100" height="8" fill="#1a1f2b" opacity=".6" />
+      </svg>
       <CaptionOverlay theme={theme} font={font} words={words} t={t} frameWidth={width} hook={hook} showHook={Boolean(hook)} />
       <AppOverlay app={app} />
     </div>
@@ -202,16 +215,17 @@ export default function VideoThemeEditor({ selectedId, onPick, pickLabel = 'Use 
       <div style={{ display: 'grid', gridTemplateColumns: '250px minmax(0, 1fr)', gap: 22, alignItems: 'start' }}>
         <div className="stack sticky-col">
           <ThemePreview theme={draft} font={font} width={250} app={app} hook={tab === 'hook' ? 'Your hook goes here' : null} />
-          <div className="seg" aria-label="Preview with app buttons">
+          <span className="small muted">See what it looks like on:</span>
+          <div className="seg sm fit-seg" style={{ width: 250 }} aria-label="Preview with app buttons">
             {[[null, 'Plain'], ['tiktok', 'TikTok'], ['reels', 'Reels'], ['shorts', 'Shorts']].map(([k, l]) => <button key={l} className={app === k ? 'on' : ''} onClick={() => setApp(k)}>{l}</button>)}
           </div>
           {onPick && !isNew && <button className="btn" disabled={draft.id === selectedId} onClick={() => onPick(draft.id)}>{draft.id === selectedId ? 'Default for new clips' : pickLabel}</button>}
         </div>
         <div className="stack" style={{ gap: 14 }}>
           <label className="field">Theme name<input className="input" value={draft.name} onChange={(e) => set({ name: e.target.value })} /></label>
-          <div className="seg">
-            <button className={tab === 'captions' ? 'on' : ''} onClick={() => setTab('captions')}>Captions</button>
-            <button className={tab === 'hook' ? 'on' : ''} onClick={() => setTab('hook')}>On-screen hook</button>
+          <div className="tabs" role="tablist" aria-label="Part of this theme">
+            <button role="tab" aria-selected={tab === 'captions'} className={tab === 'captions' ? 'on' : ''} onClick={() => setTab('captions')}>Captions</button>
+            <button role="tab" aria-selected={tab === 'hook'} className={tab === 'hook' ? 'on' : ''} onClick={() => setTab('hook')}>On-screen hook</button>
           </div>
           {tab === 'captions' ? <CaptionStyleFields draft={draft} set={set} /> : <HookStyleFields draft={draft} set={set} />}
           <div className="row wrap">

@@ -340,6 +340,18 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
         trackJob(job);
       }} />}
 
+      {project.blank && (
+        <div className="banner info">
+          <span className="grow">Started from scratch. Add text pop-ups and color now, or bring in a video or recording to work from.</span>
+          {window.desktop?.pickMedia && <button className="btn sm primary" onClick={async () => {
+            const f = await window.desktop.pickMedia();
+            if (!f) return;
+            const { job } = await api.post(`/api/projects/${project.id}/source`, { file: f });
+            trackJob(job);
+            toast({ text: 'Adding it now. Transcribe it next to get captions.' });
+          }}><Plus size={13} />Add a video or recording</button>}
+        </div>
+      )}
       <div className="glass panel stack" style={{ padding: 12, gap: 10 }}>
         <div className="row between wrap" style={{ gap: 8 }}>
           <div className="row" style={{ gap: 8 }}>

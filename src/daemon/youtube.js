@@ -202,6 +202,18 @@ export async function importLocalFile(filePath, ctx, kind = 'sermon') {
   return finishIngest(project.id, dest, ctx);
 }
 
+/** Swap in a new video or recording for an existing project. Its clips stay; it needs transcribing again. */
+export async function replaceSource(id, filePath, ctx) {
+  const st = await stat(filePath).catch(() => null);
+  if (!st?.isFile()) throw new Error('File not found.');
+  ctx.progress(5, 'Copying the file into the project…');
+  const ext = path.extname(filePath).toLowerCase() || '.mp4';
+  const dest = file(id, `source-${Date.now().toString(36)}${ext}`);
+  await copyFile(filePath, dest);
+  await updateProject(id, (p) => { p.status = 'ready'; p.blank = false; });
+  return finishIngest(id, dest, ctx);
+}
+
 const fmtDur = (t) => { t = Math.round(t); const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), x = t % 60; return h ? `${h}:${String(m).padStart(2, '0')}:${String(x).padStart(2, '0')}` : `${m}:${String(x).padStart(2, '0')}`; };
 
 async function finishIngest(id, source, ctx) {

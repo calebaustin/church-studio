@@ -3,6 +3,7 @@ import { useApp } from '../App.jsx';
 import { api, fmt, fmtEta, media } from '../api.js';
 import { ArrowLeft, ArrowRight, Check, Square, Wand2, Download, Trash2, Plus, Send, FolderOpen, Copy, ScissorsLineDashed, AudioLines, ChevronDown, FileText, PenLine, Quote } from 'lucide-react';
 import AudioCleanup from '../components/AudioCleanup.jsx';
+import ContentPlan from '../components/ContentPlan.jsx';
 import ClipEditor from './ClipEditor.jsx';
 import { StatusChip } from './Library.jsx';
 import Filmstrip from '../components/Filmstrip.jsx';
@@ -112,7 +113,8 @@ export default function Project({ id, initialStep, initialClip }) {
   const src = project.sourceFile ? media(id, project.sourceFile) : null;
   const transcribed = project.status === 'transcribed';
   const audioOnly = Boolean(project.media && !project.media.width);
-  const steps = audioOnly && project.kind === 'lyric' ? [
+  const plan = ['plan', 'Content plan', false];
+  const stepsBase = audioOnly && project.kind === 'lyric' ? [
     ['transcribe', 'Transcribe', transcribed],
     ['edit', 'Edit & export', project.clips.some((c) => c.export)],
     ['text', 'Transcript', false],
@@ -128,6 +130,8 @@ export default function Project({ id, initialStep, initialClip }) {
     ['exports', 'Exports', false],
     ['text', 'Transcript', false],
   ];
+  // Sermons get a content plan: everything that can be made from them.
+  const steps = project.kind === 'sermon' || !project.kind ? [...stepsBase, plan] : stepsBase;
 
   return (
     <div className="page">
@@ -176,6 +180,7 @@ export default function Project({ id, initialStep, initialClip }) {
       )}
       {step === 'exports' && <ExportsStep project={project} />}
       {step === 'text' && transcript && <TranscriptStep project={project} />}
+      {step === 'plan' && <ContentPlan project={project} setStep={setStep} onChange={load} />}
     </div>
   );
 }
@@ -190,7 +195,7 @@ function TranscribeStep({ project, src, player, job, onStart, audioOnly, onRead 
   const cur = () => player.current?.currentTime || 0;
   return (
     <div className="stack" style={{ gap: 18 }}>
-      <div className="grid2" style={{ gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 1fr)' }}>
+      <div className="grid2" style={{ gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 1fr)', alignItems: 'start' }}>
         <section className="glass panel stack">
           {src ? <Player player={player} src={src} audioOnly={audioOnly} /> : <div className="player" style={{ display: 'grid', placeItems: 'center', color: '#aab' }}>Downloading…</div>}
           {src && !audioOnly && <Filmstrip project={project} player={player} range={mode === 'range' ? range : null}

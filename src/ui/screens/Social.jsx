@@ -34,7 +34,7 @@ function useSocial() {
 
 export default function Social({ compose: initialCompose, caption: initialCaption }) {
   const s = useSocial();
-  const [tab, setTab] = useState('posts');
+  const [tab, setTab] = useState('calendar');
   const [composer, setComposer] = useState(initialCompose ? { media: initialCompose } : initialCaption ? { caption: initialCaption } : null);
   const needsYou = s.posts.filter((p) => p.status === 'needs-you').length;
   const plat = (id) => s.platforms.find((p) => p.id === id);
@@ -49,8 +49,8 @@ export default function Social({ compose: initialCompose, caption: initialCaptio
       </div>
       <div className="row between">
         <div className="seg">
-          <button className={tab === 'posts' ? 'on' : ''} onClick={() => setTab('posts')}>Posts{needsYou ? ` · ${needsYou} need you` : ''}</button>
           <button className={tab === 'calendar' ? 'on' : ''} onClick={() => setTab('calendar')}>Calendar</button>
+          <button className={tab === 'posts' ? 'on' : ''} onClick={() => setTab('posts')}>Posts{needsYou ? ` · ${needsYou} need you` : ''}</button>
           <button className={tab === 'messages' ? 'on' : ''} onClick={() => setTab('messages')}>Messages</button>
           <button className={tab === 'accounts' ? 'on' : ''} onClick={() => setTab('accounts')}>Accounts ({s.accounts.length})</button>
         </div>

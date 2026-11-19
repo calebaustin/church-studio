@@ -90,7 +90,7 @@ li { margin: 2pt 0; }
     </div>
   </div>
 
-  <div class="note">Go into all the world. Today, that includes a feed.</div>
+  <div class="note">Go into all the world and share the good news.</div>
   <div class="foot">Church Studio is free and runs entirely on your Mac. Updates and source: <a href="https://github.com/${REPO}">github.com/${REPO}</a></div>
 </div></body></html>`;
 

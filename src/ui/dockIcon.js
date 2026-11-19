@@ -12,6 +12,26 @@ function squircle(ctx) {
   ctx.roundRect(O, O, B, B, R);
 }
 
+/** The logo's main dark color: the most used color that isn't near white or near black. */
+function darkFromLogo(img) {
+  const c = document.createElement('canvas'); c.width = 64; c.height = 64;
+  const x = c.getContext('2d', { willReadFrequently: true });
+  x.drawImage(img, 0, 0, 64, 64);
+  const d = x.getImageData(0, 0, 64, 64).data;
+  const tally = new Map();
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] < 160) continue;
+    const l = lum([d[i], d[i + 1], d[i + 2]]);
+    if (l > 0.72 || l < 0.06) continue;
+    const key = `${d[i] >> 5},${d[i + 1] >> 5},${d[i + 2] >> 5}`;
+    const t = tally.get(key) || { weight: 0, count: 0, r: 0, g: 0, b: 0 };
+    t.weight += 1 + (0.72 - l) * 2; t.count += 1; t.r += d[i]; t.g += d[i + 1]; t.b += d[i + 2];
+    tally.set(key, t);
+  }
+  const best = [...tally.values()].sort((p, q) => q.weight - p.weight)[0];
+  return best ? [best.r / best.count, best.g / best.count, best.b / best.count] : null;
+}
+
 /** Average color of the logo's visible pixels, and whether its corners are see-through. */
 function readLogo(img) {
   const c = document.createElement('canvas'); c.width = 64; c.height = 64;
@@ -49,32 +69,28 @@ export async function makeDockIcon({ logoUrl, brandColor = '#2B7F5F', ink = '#1B
   }
   ctx.restore();
 
-  // The corner badge: a rounded square tucked into the bottom-right corner, with "CS" cut out of it.
-  // Its color is picked to stand out from whatever is behind it (at least 3:1 contrast): white over
-  // dark or colorful logos, and a dark brand color over white or light ones.
-  const bs = B * 0.34; const pad = B * 0.045;
-  const bx0 = O + B - bs - pad; const by0 = O + B - bs - pad;
-  const under = ctx.getImageData(bx0 - bs * 0.2, by0 - bs * 0.2, bs * 1.4, bs * 1.4).data;
-  let r = 0; let g = 0; let b = 0; let n = 0;
-  for (let i = 0; i < under.length; i += 4) if (under[i + 3] > 0) { r += under[i]; g += under[i + 1]; b += under[i + 2]; n++; }
-  const behind = n ? [r / n, g / n, b / n] : [255, 255, 255];
+  // The corner badge: a tab filling the bottom-right corner. Its outer corner follows the icon's own
+  // rounding; its inner corner is softly rounded. Its color is a dark color taken from the logo itself,
+  // so it always looks like the church's brand. "CS" sits on it in white.
+  const bs = B * 0.47;
   const relLum = (rgb) => { const [R2, G2, B2] = rgb.map((v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; }); return 0.2126 * R2 + 0.7152 * G2 + 0.0722 * B2; };
-  const contrast = (a1, a2) => { const [hi, lo] = [relLum(a1), relLum(a2)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05); };
-  const candidates = [[255, 255, 255], hex(ink), hex(brandColor), [17, 20, 24]];
-  const fill = candidates.find((c) => contrast(c, behind) >= 3) || (relLum(behind) > 0.4 ? [17, 20, 24] : [255, 255, 255]);
+  const contrastWhite = (rgb) => 1.05 / (relLum(rgb) + 0.05);
+  let fill = logo ? darkFromLogo(logo) : null;
+  if (!fill) fill = hex(brandColor);
+  // Darken until white "CS" reads clearly (at least 3:1).
+  for (let i = 0; i < 12 && contrastWhite(fill) < 3; i++) fill = fill.map((v) => v * 0.86);
 
   const badge = document.createElement('canvas'); badge.width = S; badge.height = S;
   const bx = badge.getContext('2d');
   bx.save();
-  bx.shadowColor = 'rgba(0,0,0,.22)'; bx.shadowBlur = 20; bx.shadowOffsetY = 4;
-  bx.beginPath(); bx.roundRect(bx0, by0, bs, bs, bs * 0.26); bx.fillStyle = `rgb(${fill.join(',')})`; bx.fill();
+  squircle(bx); bx.clip();
+  bx.shadowColor = 'rgba(0,0,0,.25)'; bx.shadowBlur = 18; bx.shadowOffsetX = -2; bx.shadowOffsetY = -2;
+  bx.beginPath(); bx.roundRect(O + B - bs, O + B - bs, bs + R, bs + R, bs * 0.2);
+  bx.fillStyle = `rgb(${fill.map((v) => Math.round(v)).join(',')})`; bx.fill();
   bx.restore();
-  bx.font = `700 ${Math.round(bs * 0.62)}px 'Caveat', cursive`;
-  bx.textAlign = 'center'; bx.textBaseline = 'middle';
-  // "CS" in the color behind the badge, so it reads as cut out without showing busy logo details.
-  const whiteBadge = fill[0] === 255 && fill[1] === 255 && fill[2] === 255;
-  bx.fillStyle = whiteBadge ? `rgb(${behind.map((v) => Math.round(v)).join(',')})` : '#FFFFFF';
-  bx.fillText('CS', bx0 + bs / 2, by0 + bs / 2 + bs * 0.02);
+  bx.font = `700 ${Math.round(bs * 0.5)}px 'Caveat', cursive`;
+  bx.textAlign = 'center'; bx.textBaseline = 'middle'; bx.fillStyle = '#FFFFFF';
+  bx.fillText('CS', O + B - bs / 2 + bs * 0.01, O + B - bs / 2 + bs * 0.03);
   ctx.drawImage(badge, 0, 0);
   return c.toDataURL('image/png');
 }

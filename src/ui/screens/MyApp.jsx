@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Lightbulb, Plus, ArrowRight, Check, Layers, MonitorPlay, Palette, Target, Send, Sparkles, FolderHeart, Search } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { api } from '../api.js';
+import Activity from '../components/Activity.jsx';
 
 /** Ideas sourced from what the app can do, personalized with topics from the user's sermons. */
 function ideasFor(topics, sermons) {
@@ -18,7 +19,8 @@ function ideasFor(topics, sermons) {
   ].filter(Boolean);
 }
 
-export default function MyApp() {
+export default function MyApp({ section } = {}) {
+  useEffect(() => { if (section) setTimeout(() => document.getElementById(section)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 400); }, [section]);
   const { config, saveConfig, themes, go, toast } = useApp();
   const [ideas, setIdeas] = useState(null);
   const [ws, setWs] = useState(null);
@@ -84,6 +86,8 @@ export default function MyApp() {
           <div className="stack" style={{ gap: 2 }}><strong>Welcome walkthrough</strong><span className="muted small">See the welcome again and choose the kinds of work you do.</span></div>
           <button className="btn sm" onClick={async () => { await saveConfig({ onboarded: false }); go({ name: 'home' }); }}><Sparkles size={14} />Start the walkthrough</button>
         </section>
+
+        <Activity />
 
         <section className="glass strong panel stack">
           <div className="row between"><h2>Workspaces</h2><span className="muted small">One per brand or ministry</span></div>

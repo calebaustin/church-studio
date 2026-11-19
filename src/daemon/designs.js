@@ -15,7 +15,7 @@ export async function listDesigns() {
     if (!f.endsWith('.json')) continue;
     try {
       const d = JSON.parse(await readFile(path.join(DIR, f), 'utf8'));
-      out.push({ id: d.id, name: d.name, kind: d.kind, size: d.size, pages: d.pages?.length || 0, updated: d.updated, thumb: d.thumb || null });
+      out.push({ id: d.id, name: d.name, kind: d.kind, size: d.size, pages: d.pages?.length || 0, updated: d.updated, thumb: d.thumb || null, source: d.source || null });
     } catch { /* skip broken files */ }
   }
   return out.sort((a, b) => String(b.updated).localeCompare(String(a.updated)));

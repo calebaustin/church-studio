@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useApp } from '../App.jsx';
-import { ArrowRight, Check, MonitorPlay, FolderOpen, Link2, Clapperboard, AudioLines, FileAudio, ScissorsLineDashed } from 'lucide-react';
+import { ArrowRight, Check, MonitorPlay, FolderOpen, Link2, Clapperboard, AudioLines, FileAudio, ScissorsLineDashed, Search } from 'lucide-react';
 import CleanAudioDialog from '../components/CleanAudioDialog.jsx';
+import SermonIndex from '../components/SermonIndex.jsx';
 import { api, desktop, fmt, media } from '../api.js';
 import Modal from '../components/Modal.jsx';
 import AddVideo from '../components/AddVideo.jsx';
@@ -15,6 +16,7 @@ export default function Library({ openPicker = false }) {
   const [picker, setPicker] = useState(openPicker);
   const [adding, setAdding] = useState(null); // { url, title } being looked at before download
   const [cleaning, setCleaning] = useState(false);
+  const [view, setView] = useState('projects');
 
   const load = () => api.get('/api/projects').then((r) => setProjects(r.projects));
   useEffect(() => { load(); }, []);
@@ -46,33 +48,35 @@ export default function Library({ openPicker = false }) {
           <p>Pick a service or open a recording. Get captioned clips of the best moments.</p>
         </div>
         <div className="dropzone">
-          <button className="btn primary lg" onClick={() => setPicker(true)}>
-            <MonitorPlay size={18} />Pick from {config.youtubeChannel ? 'your channel' : 'a channel'}
-          </button>
-          <div className="row">
-            <input className="input" placeholder="…or paste a YouTube link" value={url} onChange={(e) => setUrl(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && url.trim() && setAdding({ url: url.trim() })} />
-            <button className="btn" disabled={!url.trim()} onClick={() => setAdding({ url: url.trim() })}><Link2 size={14} />Add link</button>
+          <div className="row wrap" style={{ gap: 8 }}>
+            <button className="btn primary" onClick={() => setPicker(true)}><MonitorPlay size={16} />Pick from {config.youtubeChannel ? 'your channel' : 'a channel'}</button>
+            <form className="link-field" onSubmit={(e) => { e.preventDefault(); if (url.trim()) setAdding({ url: url.trim() }); }}>
+              <Link2 size={15} className="muted" aria-hidden="true" />
+              <input placeholder="Add YouTube link" value={url} onChange={(e) => setUrl(e.target.value)} aria-label="YouTube link" />
+              <button type="submit" className="link-go" disabled={!url.trim()} aria-label="Look up this link" title="Look up this link"><Search size={14} /></button>
+            </form>
           </div>
           {desktop?.pickVideo && (
             <div className="row wrap" style={{ gap: 8 }}>
-              <button className="btn" onClick={() => openFile('sermon')}><FileAudio size={15} />Transcribe a file from this Mac</button>
-              <button className="btn ghost" onClick={() => setCleaning(true)}><AudioLines size={15} />Clean up a recording</button>
+              <button className="btn sm" onClick={() => openFile('sermon')}><FileAudio size={14} />Transcribe from Mac</button>
+              <button className="btn sm ghost" onClick={() => setCleaning(true)}><AudioLines size={14} />Clean up audio</button>
             </div>
           )}
-          {desktop?.pickVideo && <span className="hint">Audio or video: a class, a podcast, a recording from your phone.</span>}
           {error && <div className="banner">{error}</div>}
         </div>
       </section>
 
-      <MakeGroups openFile={openFile} onPick={() => setPicker(true)} />
+      <MakeGroups openFile={openFile} onPick={() => setPicker(true)} projects={projects} />
 
       <GettingStarted projects={projects} onPick={() => setPicker(true)} />
-      <div className="row between">
-        <h2>Your projects</h2>
-        <span className="muted small">{projects ? `${projects.length} project${projects.length === 1 ? '' : 's'}` : ''}</span>
+      <div className="row between wrap" style={{ gap: 10 }}>
+        <div className="seg">
+          <button className={view === 'projects' ? 'on' : ''} onClick={() => setView('projects')}>Your projects{projects ? ` · ${projects.length}` : ''}</button>
+          <button className={view === 'index' ? 'on' : ''} onClick={() => setView('index')}>Sermon index</button>
+        </div>
       </div>
-      {projects && !projects.length && (
+      {view === 'index' && <SermonIndex />}
+      {view === 'projects' && projects && !projects.length && (
         <div className="glass empty">
           <Clapperboard size={40} />
           <h3>No projects yet</h3>
@@ -80,7 +84,7 @@ export default function Library({ openPicker = false }) {
           <button className="btn primary" onClick={() => setPicker(true)}>Pick from your channel</button>
         </div>
       )}
-      <div className="projects">
+      {view === 'projects' && <div className="projects">
         {projects?.map((p) => (
           <div key={p.id} className="glass card" onClick={() => go({ name: 'project', id: p.id })}>
             <div style={{ padding: 8 }}>
@@ -99,7 +103,7 @@ export default function Library({ openPicker = false }) {
             </div>
           </div>
         ))}
-      </div>
+      </div>}
       {picker && <ChannelPicker onClose={() => setPicker(false)} onAdd={(v) => { setPicker(false); setAdding({ url: v.url, title: v.title }); }} />}
       {cleaning && <CleanAudioDialog onClose={() => setCleaning(false)} />}
       {adding && <AddVideo url={adding.url} title={adding.title} onClose={() => setAdding(null)} onAdd={(body) => { setAdding(null); add(body); }} />}
@@ -189,39 +193,80 @@ function GettingStarted({ projects, onPick }) {
   );
 }
 
-/** Three ways to start: clips from a long video, a wide video, or a single short clip. */
-function MakeGroups({ openFile, onPick }) {
+/**
+ * Three ways to start: clips from a long video, a wide video, or a single short clip.
+ * Each choice then asks where to start: from a source, from a video already here, or from scratch.
+ */
+function MakeGroups({ openFile, onPick, projects }) {
+  const { go, toast } = useApp();
+  const [choosing, setChoosing] = useState(null); // { group, action }
+  const [pickProject, setPickProject] = useState(false);
   const groups = [
     {
-      title: 'Clips from a video', sub: 'Find the best moments in a sermon, class or podcast.', steps: ['Trim', 'Transcribe', 'Clip'], tone: 1, icon: ScissorsLineDashed,
-      actions: [['Sermon clips', 'From your channel or a link', onPick], ['From a file', 'Video or audio on this Mac', () => openFile('sermon')]],
+      id: 'clips', title: 'Clips from a video', sub: 'Find the best moments in a sermon, class or podcast. Make vertical clips from widescreen videos.', steps: ['Trim', 'Transcribe', 'Clip'], tone: 1, icon: ScissorsLineDashed,
+      actions: [{ label: 'Sermon clips', hint: 'From your channel or a link', kind: 'sermon', source: onPick }, { label: 'From a file', hint: 'Video or audio on this Mac', kind: 'sermon', source: () => openFile('sermon') }],
     },
     {
-      title: 'Make a video', sub: 'A wide 16:9 video for YouTube, your website or the screens.', steps: ['Open', 'Transcribe', 'Export'], tone: 2, icon: MonitorPlay,
-      actions: [['Announcement video', 'Captions and your logo', () => openFile('wide')], ['Podcast video', 'Audio with moving color', () => openFile('lyric')]],
+      id: 'video', title: 'Make a video', sub: 'Produce a new 16:9 video for YouTube, your website or the screens.', steps: ['Open', 'Transcribe', 'Export'], tone: 2, icon: MonitorPlay,
+      actions: [{ label: 'Announcement video', hint: 'Captions and your logo', kind: 'wide', source: () => openFile('wide') }, { label: 'Podcast video', hint: 'Audio with moving color', kind: 'lyric', wide: true, source: () => openFile('lyric') }],
     },
     {
-      title: 'Make a clip', sub: 'One short vertical clip for Reels, Shorts and stories.', steps: ['Open', 'Transcribe', 'Polish'], tone: 3, icon: Clapperboard,
-      actions: [['From a short video', 'The whole thing becomes the clip', () => openFile('short')], ['Lyric clip', 'Just audio, with captions on color', () => openFile('lyric')]],
+      id: 'clip', title: 'Make a clip', sub: 'One short vertical clip for Reels, Shorts and stories.', steps: ['Open', 'Transcribe', 'Polish'], tone: 3, icon: Clapperboard,
+      actions: [{ label: 'From a short video', hint: 'The whole thing becomes the clip', kind: 'short', source: () => openFile('short') }, { label: 'Lyric clip', hint: 'Just audio, with captions on color', kind: 'lyric', source: () => openFile('lyric') }],
     },
   ];
+  const usable = (projects || []).filter((p) => p.status === 'transcribed');
+  const fromScratch = async (a) => {
+    try {
+      const { project } = await api.post('/api/projects/blank', { kind: a.wide ? 'wide' : a.kind === 'sermon' ? 'short' : a.kind, title: a.label });
+      go({ name: 'project', id: project.id, clip: project.clips[0].id });
+    } catch (e) { toast({ kind: 'error', text: e.message }); }
+  };
+  const fromExisting = async (a, p) => {
+    setPickProject(false); setChoosing(null);
+    if (a.kind === 'sermon') return go({ name: 'project', id: p.id, step: 'clips' });
+    // A new clip over the sermon (or the whole recording), set up for this kind of video.
+    const { project: full } = await api.get(`/api/projects/${p.id}`);
+    const start = full.sermon?.start ?? 0; const end = Math.min(full.sermon?.end ?? full.media?.duration ?? 60, start + (a.kind === 'short' ? 60 : 600));
+    const { clip } = await api.post(`/api/projects/${p.id}/clips`, { start, end, title: a.label });
+    const crop = a.kind === 'lyric' ? { mode: 'lyric', smooth: 0 } : a.kind === 'wide' ? { mode: 'fit', smooth: 0, bg: { type: 'blur' } } : { mode: 'auto', smooth: 0 };
+    const clips = (await api.get(`/api/projects/${p.id}`)).project.clips.map((c) => (c.id === clip.id ? { ...c, crop, format: a.kind === 'wide' || a.wide ? 'wide' : 'vertical' } : c));
+    await api.patch(`/api/projects/${p.id}`, { clips });
+    go({ name: 'project', id: p.id, clip: clip.id });
+  };
   return (
     <div className="make-groups">
       {groups.map((g) => (
-        <section key={g.title} className="glass make-group">
+        <section key={g.id} className="glass make-group">
           <div className="row between" style={{ alignItems: 'flex-start', gap: 8 }}>
             <span className="type-badge" style={{ width: 38, height: 38, '--t': `var(--tone-${g.tone})` }}><g.icon size={18} /></span>
             <ol className="mini-steps" aria-label="Steps">{g.steps.map((x, i) => <li key={x}><span>{i + 1}</span>{x}</li>)}</ol>
           </div>
           <div className="stack" style={{ gap: 2 }}><h3 style={{ margin: 0 }}>{g.title}</h3><span className="small muted">{g.sub}</span></div>
           <div className="stack" style={{ gap: 6 }}>
-            {g.actions.map(([label, hint, fn]) => (
-              <button key={label} className="make-action" onClick={fn} disabled={!fn}>
-                <span className="stack" style={{ gap: 0 }}><strong>{label}</strong><span className="small muted">{hint}</span></span>
+            {g.actions.map((a) => (
+              <button key={a.label} className={`make-action ${choosing?.action === a ? 'on' : ''}`} onClick={() => { setPickProject(false); setChoosing(choosing?.action === a ? null : { group: g.id, action: a }); }}>
+                <span className="stack" style={{ gap: 0 }}><strong>{a.label}</strong><span className="small muted">{a.hint}</span></span>
                 <ArrowRight size={15} />
               </button>
             ))}
           </div>
+          {choosing?.group === g.id && (
+            <div className="start-from">
+              <span className="eyebrow">Start {choosing.action.label.toLowerCase()} from</span>
+              <div className="row wrap" style={{ gap: 6 }}>
+                <button className="btn sm primary" onClick={() => { setChoosing(null); choosing.action.source?.(); }}>Source content</button>
+                {usable.length > 0 && <button className="btn sm" onClick={() => setPickProject(!pickProject)}>A video already here</button>}
+                {choosing.action.kind !== 'sermon' && <button className="btn sm ghost" onClick={() => { const a = choosing.action; setChoosing(null); fromScratch(a); }}>Scratch</button>}
+              </div>
+              {pickProject && (
+                <div className="pop-list start-list">
+                  {usable.slice(0, 12).map((p) => <button key={p.id} className="pop-item" onClick={() => fromExisting(choosing.action, p)}>{p.title}</button>)}
+                </div>
+              )}
+              <span className="hint">{choosing.action.kind === 'sermon' ? 'Clips need a video to come from.' : 'Starting from scratch opens a blank editor. You can add a video or recording later.'}</span>
+            </div>
+          )}
         </section>
       ))}
     </div>

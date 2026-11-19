@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, X } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { isOn } from '../tools.js';
 
@@ -17,19 +17,32 @@ const CARDS = [
 ];
 const EVERY = 90_000;
 
+const HIDE_KEY = 'cs-sidecard-hidden-until';
+const hiddenUntil = () => { try { return Number(localStorage.getItem(HIDE_KEY) || 0); } catch { return 0; } };
+
 export default function SideCards() {
   const { config, go } = useApp();
   const list = useMemo(() => CARDS.filter((c) => isOn(config, c.tool)), [config?.toolsOff]);
   const [i, setI] = useState(() => { try { return Number(localStorage.getItem('cs-sidecard') || 0); } catch { return 0; } });
+  const [shown, setShown] = useState(true); // false while fading out
+  const [hidden, setHidden] = useState(() => hiddenUntil() > Date.now());
   useEffect(() => {
-    const t = setInterval(() => setI((n) => n + 1), EVERY);
+    // Fade out, change the idea, fade back in.
+    const t = setInterval(() => { setShown(false); setTimeout(() => { setI((n) => n + 1); setShown(true); }, 420); }, EVERY);
     return () => clearInterval(t);
   }, []);
   useEffect(() => { try { localStorage.setItem('cs-sidecard', String((i + 1) % 1000)); } catch { /* fine */ } }, [i]);
-  if (!list.length) return null;
+  useEffect(() => {
+    if (!hidden) return undefined;
+    const t = setInterval(() => { if (hiddenUntil() <= Date.now()) setHidden(false); }, 60_000);
+    return () => clearInterval(t);
+  }, [hidden]);
+  if (!list.length || hidden) return null;
   const c = list[i % list.length];
+  const dismiss = () => { try { localStorage.setItem(HIDE_KEY, String(Date.now() + 3600_000)); } catch { /* fine */ } setHidden(true); };
   return (
-    <div className="side-card" key={c.title}>
+    <div className={`side-card ${shown ? 'in' : 'out'}`}>
+      <button className="side-card-x" aria-label="Hide ideas for an hour" title="Hide ideas for an hour" onClick={dismiss}><X size={13} /></button>
       <strong>{c.title}</strong>
       <span className="small" style={{ opacity: 0.75 }}>{c.body}</span>
       <button className="btn accent sm" onClick={() => go(c.to)}>{c.cta}<ArrowRight size={13} /></button>

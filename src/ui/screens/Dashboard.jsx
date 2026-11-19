@@ -313,29 +313,28 @@ function streak(dates) {
 }
 
 function Streaks({ stats, extra }) {
-  const { config } = useApp();
+  const { config, go } = useApp();
   if (!stats) return <div className="goal-card"><div className="skeleton" style={{ height: 44 }} /></div>;
+  const month = Date.now() - 30 * DAY;
+  const n = (dates) => dates.filter((t) => t && Date.parse(t) > month).length;
   const kinds = [
-    isOn(config, 'library') && ['clips', 'shared clips', streak(stats.exports.map((e) => e.at))],
-    isOn(config, 'social') && ['posts', 'posted on social', streak(stats.posts.filter((p) => p.publishedAt).map((p) => p.publishedAt))],
-    isOn(config, 'writing') && ['blogs', 'written', streak(extra.drafts.map((d) => d.updated))],
-    isOn(config, 'graphics') && ['designs', 'designed', streak(extra.designs.map((d) => d.updated))],
+    isOn(config, 'library') && ['clips', n(stats.exports.map((e) => e.at))],
+    isOn(config, 'social') && ['posts', n(stats.posts.filter((p) => p.publishedAt).map((p) => p.publishedAt))],
+    isOn(config, 'writing') && ['written', n(extra.drafts.map((d) => d.updated))],
+    isOn(config, 'graphics') && ['designs', n(extra.designs.map((d) => d.updated))],
   ].filter(Boolean);
-  const best = [...kinds].sort((a, b) => b[2] - a[2])[0];
-  const msg = !best || best[2] === 0 ? 'Make one thing this week to start a streak.'
-    : best[2] === 1 ? `You ${best[1]} last week. Keep it going.`
-      : `You've ${best[1]} ${best[2]} weeks in a row!`;
+  const total = kinds.reduce((a, k) => a + k[1], 0);
   return (
     <div className="goal-card">
       <div className="row between" style={{ gap: 10 }}>
         <div className="stack" style={{ gap: 2 }}>
-          <strong>{msg}</strong>
-          <span className="muted small">Your streaks</span>
+          <strong>{total ? `${total} things made in the last month` : 'Make one thing this month to get started.'}</strong>
+          <span className="muted small">Your activity</span>
         </div>
-        <span className="goal-icon" aria-hidden="true"><Flame size={18} /></span>
+        <button className="goal-icon" aria-label="See your activity" title="See your activity" onClick={() => go({ name: 'me', section: 'activity' })}><Flame size={18} /></button>
       </div>
       <div className="row wrap" style={{ gap: 6, marginTop: 10 }}>
-        {kinds.map(([k, , n]) => <span key={k} className={`chip ${n ? 'accent' : ''}`}><span className="num">{n}</span> wk {k}</span>)}
+        {kinds.map(([k, v]) => <span key={k} className={`chip ${v ? 'accent' : ''}`}><span className="num">{v}</span> {k}</span>)}
       </div>
     </div>
   );

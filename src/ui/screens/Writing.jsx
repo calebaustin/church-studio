@@ -45,7 +45,8 @@ function SuggestField({ label, hint, value, onChange, items, onOpen, multiline, 
 const KINDS = [
   ['blog', 'Blog post'],
   ['email', 'Email summary'],
-  ['group', 'Small group guide'],
+  ['group', 'Discussion guide'],
+  ['devotional', 'Devotional'],
   ['social', 'Social captions'],
 ];
 
@@ -80,18 +81,18 @@ function Checks({ title, score, list, info }) {
   );
 }
 
-export default function Writing({ project: startProject }) {
+export default function Writing({ project: startProject, kind: startKind }) {
   const [openId, setOpenId] = useState(startProject || null);
   if (!openId) return <WritingHome onOpen={setOpenId} />;
-  return <WritingEditor key={openId} pid={openId} onBack={() => setOpenId(null)} />;
+  return <WritingEditor key={openId} pid={openId} startKind={openId === startProject ? startKind : null} onBack={() => setOpenId(null)} />;
 }
 
-function WritingEditor({ pid, onBack }) {
+function WritingEditor({ pid, onBack, startKind }) {
   const { toast, config, go, showNext } = useApp();
   const [project, setProject] = useState(null);
   const [draft, setDraft] = useState(null);
   const [loaded, setLoaded] = useState(false);
-  const [kind, setKind] = useState('blog');
+  const [kind, setKind] = useState(startKind || 'blog');
   const [busy, setBusy] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [ideas, setIdeas] = useState(null);
@@ -102,6 +103,7 @@ function WritingEditor({ pid, onBack }) {
   const [trashed, setTrashed] = useState(false);
   const [imgPick, setImgPick] = useState(null); // resolve() for the editor's image button
   const standalone = pid.startsWith('w-');
+  const [devoDays, setDevoDays] = useState(5);
 
   useEffect(() => { if (!standalone) api.get(`/api/projects/${pid}`).then((r) => setProject(r.project)).catch(() => setProject(null)); }, [pid]);
   useEffect(() => { api.get(`/api/writing/${pid}`).then((r) => { setDraft(r.draft); setTrashed(Boolean(r.trashed)); setDirty(false); setIdeas(null); setUndoBlog(null); setAngle(r.draft?.angle || 'teaching'); setLoaded(true); }); }, [pid]);
@@ -155,7 +157,7 @@ function WritingEditor({ pid, onBack }) {
     toast({ text: asHtml ? 'Copied with formatting. Paste into your website or email tool.' : 'Copied.' });
   };
   const checks = useMemo(() => (draft && kind === 'blog' ? seoChecks(draft.blog, { keyphrase: draft.keyphrase, title: draft.title, meta: draft.metaDescription, slug: draft.slug }) : null), [draft, kind]);
-  const placeholders = draft ? (draft[kind].match(/\[[A-Z][^\]]*\]/g) || []).length : 0;
+  const placeholders = draft ? ((draft[kind] || '').match(/\[[A-Z][^\]]*\]/g) || []).length : 0;
 
   return (
     <div className="page">
@@ -180,7 +182,7 @@ function WritingEditor({ pid, onBack }) {
       {draft && (
         <>
           <div className="row between wrap">
-            <div className="seg">{KINDS.filter(([k]) => !(standalone && k === 'group' && !draft.group)).map(([k, l]) => <button key={k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>{l}</button>)}</div>
+            <div className="seg">{KINDS.filter(([k]) => !(standalone && (k === 'group' || k === 'devotional') && !draft[k])).map(([k, l]) => <button key={k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>{l}</button>)}</div>
             <div className="row wrap">
               {placeholders > 0 && <span className="chip warn">{placeholders} spot{placeholders > 1 ? 's' : ''} to fill in</span>}
               <button className="btn sm" onClick={() => copy(false)}><Copy size={13} />Copy</button>
@@ -231,11 +233,20 @@ function WritingEditor({ pid, onBack }) {
               )}
               {kind !== 'social' && (
                 <HeaderImage pid={standalone || !project?.media?.width ? null : pid} value={header} onChange={setHeader} brandColors={config.brandColors || []}
-                  title={kind === 'blog' ? draft.title : (draft[kind].match(/^#\s+(.*)/m)?.[1] || draft.title).replace(/^Small group guide:\s*/i, '')}
+                  title={kind === 'blog' ? draft.title : ((draft[kind] || '').match(/^#\s+(.*)/m)?.[1] || draft.title).replace(/^(Small group guide|\d-day devotional):\s*/i, '')}
                   styles={kind === 'group' ? ['full', 'blur', 'color'] : ['full']} />
               )}
+              {kind === 'devotional' && !standalone && (
+                <section className="glass panel row between wrap" style={{ gap: 10 }}>
+                  <div className="stack" style={{ gap: 1 }}><strong>Devotional series</strong><span className="small muted">One reading a day, walking through the sermon in order.</span></div>
+                  <div className="row" style={{ gap: 8 }}>
+                    <div className="seg sm">{[3, 5, 7].map((d) => <button key={d} className={devoDays === d ? 'on' : ''} onClick={() => setDevoDays(d)}>{d} days</button>)}</div>
+                    <button className="btn sm" disabled={busy} onClick={async () => { setBusy(true); try { const r = await api.post(`/api/writing/${pid}/devotional`, { days: devoDays }); set({ devotional: r.text }); toast({ text: `Written as a ${devoDays}-day devotional.` }); } catch (e) { toast({ kind: 'error', text: e.message }); } setBusy(false); }}><RefreshCw size={13} />{draft.devotional ? 'Rewrite' : 'Write it'}</button>
+                  </div>
+                </section>
+              )}
               <section className="glass strong panel rt-panel">
-                <RichEditor key={kind} value={draft[kind]} onChange={(v) => set({ [kind]: v })}
+                <RichEditor key={kind} value={draft[kind] || ''} onChange={(v) => set({ [kind]: v })}
                   onPickImage={kind === 'social' ? undefined : () => new Promise((resolve) => setImgPick(() => resolve))} />
               </section>
             </div>

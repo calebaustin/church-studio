@@ -2,6 +2,32 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## 0.7.0 · November 19, 2026
+
+### New
+- **Content plan.** Every sermon has a plan showing the 15 or so pieces you can make from it (clips, blog, email, discussion guide, devotional, captions, quote graphic, carousel, story, slides, notes, thumbnail, podcast and posts) and which are done. One click makes the next one, and everything links back to the sermon.
+- **Devotional series.** Turn a sermon into a 3, 5 or 7-day devotional, with a reading, a reflection question and a prayer for each day.
+- **Podcast episodes.** The sermon's audio, cleaned up and leveled for podcasts, with intro and outro music from a new Audio folder in your brand library, your logo as cover art, and show notes.
+- **Sermon index.** In Videos: every scripture reference by book, the stories and illustrations you've told (make a clip from any of them), recurring themes, series, and a content gap report you can save and share.
+- **Start from scratch.** Every way to start in Videos can begin from source content, a video you already have, or a blank editor. Add a video or recording later.
+- **Your activity.** My App shows how much you've made in the last week, month, quarter or year, with weekly averages. The dashboard card links there.
+- **Notifications.** Missed a message? The Notifications button above My App shows recent ones as a stack of cards, with Dismiss all.
+
+### Changed
+- Work that's waiting shows as "Up next" under the running task, and the tray can shrink to a progress ring.
+- Idea cards in the sidebar fade between ideas, and can be hidden for an hour.
+- Scrolling pages tuck under a rounded edge instead of running into the top of the window.
+- Caption themes: a podium in the preview, tabs for captions and the hook, and app previews sized to fit.
+- Every switch can be dragged as well as clicked.
+- Social opens on the calendar. The Videos home has a single "Add YouTube link" field and shorter buttons.
+- The Dock badge is a corner tab in a dark color from your logo.
+- Small group guide is now Discussion guide.
+- Encouraging notes are simple spiritual nudges.
+
+### Fixed
+- Logos show at their real shape in the Brand kit.
+- The scene strip stays right under the video while transcribing.
+
 ## 0.6.0 · November 19, 2026
 
 ### New
