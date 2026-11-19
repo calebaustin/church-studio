@@ -1,6 +1,6 @@
 {
   "name": "church-studio",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "updateRepo": "calebaustin/church-studio",
   "private": true,
   "description": "Local desktop app: sermon video -> captioned, auto-centered 9:16 clips. Offline, no LLM required.",
