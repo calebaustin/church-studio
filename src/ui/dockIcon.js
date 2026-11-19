@@ -3,7 +3,8 @@
 // over dark logos and a dark brand color over light ones (at least 3:1 contrast), so it always stands out.
 const S = 1024; const B = 824; const O = (S - B) / 2; const R = B * 0.225;
 
-const load = (src) => new Promise((res, rej) => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = rej; i.src = src; });
+// An SVG with no width or height loads with a size of 0: give it a square size so it can be drawn.
+const load = (src) => new Promise((res, rej) => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => { if (!i.naturalWidth || !i.naturalHeight) { i.width = 512; i.height = 512; } res(i); }; i.onerror = rej; i.src = src; });
 const lum = ([r, g, b]) => (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
 const hex = (h) => { const n = parseInt(String(h).replace('#', '').slice(0, 6), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 

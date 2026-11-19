@@ -354,7 +354,7 @@ export async function applyScan(found, keep) {
       for (let n = 2; existsSync(file); n++) file = path.join(root, 'Logos', `${base} ${n}.${l.ext}`);
       await writeFile(file, Buffer.from(m[1], 'base64'));
       logo = `Logos/${path.basename(file)}`;
-      if (l.ext !== 'svg') patch.appLogo = logo; // the Dock needs a picture, not a drawing file
+      patch.appLogo = logo;
     }
   }
   await saveConfig(patch);

@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { FolderOpen, Plus, Image as ImageIcon, Film, FileText, Shapes, Eye, X, Wand2, Palette, Heart, Trash2, MoreHorizontal, Star, RefreshCw, Search, Globe } from 'lucide-react';
+import { FolderOpen, Plus, Image as ImageIcon, Film, FileText, Shapes, Eye, X, Wand2, Palette, Heart, Trash2, MoreHorizontal, Star, RefreshCw, Search, Globe, Eraser } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { api, desktop, sizeLabel } from '../api.js';
 import { usePoll } from '../poll.js';
 import ColorField from '../components/ColorField.jsx';
 import FontMenu, { useFamilies } from '../components/FontMenu.jsx';
 import { WebsiteSetup } from '../components/Jumpstart.jsx';
+import BackgroundEraser from '../components/BackgroundEraser.jsx';
 import SetupChecklist from '../components/SetupChecklist.jsx';
 import Popover from '../components/Popover.jsx';
 
@@ -39,6 +40,7 @@ const LOGO_KINDS = [['full', 'Full logo'], ['light', 'Light version'], ['dark', 
 function LogoManager({ lib, reload }) {
   const { config, saveConfig, toast, refreshLogo } = useApp();
   const [menu, setMenu] = useState(null);
+  const [erasing, setErasing] = useState(null); // the logo being cleared
   const logos = (lib?.items || []).filter((i) => i.folder === 'Logos' && i.kind === 'image');
   const primary = logos.find((l) => l.rel === config.appLogo) || logos[0];
   const kinds = config.logoKinds || {};
@@ -67,7 +69,7 @@ function LogoManager({ lib, reload }) {
   };
   return (
     <div className="stack" style={{ gap: 8 }}>
-      <span className="field-label">Logos <span className="hint">The primary logo shows in the menu, the Dock and printed pages. Add light, dark and icon versions for other backgrounds.</span></span>
+      <span className="field-label">Logos <span className="hint">The primary logo shows in the menu, the Dock and printed pages. Add light, dark and icon versions for other backgrounds. Best files: SVG, or PNG with a see-through background. A white background can be erased from the ⋯ menu.</span></span>
       <div className="logo-row">
         {logos.map((l) => {
           const k = kindOf(l);
@@ -87,6 +89,7 @@ function LogoManager({ lib, reload }) {
                       <span className="cp-group-name" style={{ padding: '6px 10px 2px' }}>This version is</span>
                       {LOGO_KINDS.map(([x, lbl]) => <button key={x} className={`pop-item ${k === x ? 'on' : ''}`} onClick={() => { setMenu(null); setKind(l, x); }}>{lbl}</button>)}
                       <hr className="hairline" />
+                      {!/\.svg$/i.test(l.rel) && <button className="pop-item" onClick={() => { setMenu(null); setErasing(l); }}><span className="row" style={{ gap: 8 }}><Eraser size={14} />Erase background…</span></button>}
                       {desktop?.pickFiles && <button className="pop-item" onClick={() => { setMenu(null); replace(l); }}><span className="row" style={{ gap: 8 }}><RefreshCw size={14} />Replace…</span></button>}
                       <button className="pop-item" onClick={() => { setMenu(null); api.post('/api/library/reveal', { rel: l.rel }); }}><span className="row" style={{ gap: 8 }}><Search size={14} />Show in Finder</span></button>
                       <button className="pop-item danger-item" onClick={() => { setMenu(null); remove(l); }}><span className="row" style={{ gap: 8 }}><Trash2 size={14} />Move to Trash</span></button>
@@ -99,6 +102,15 @@ function LogoManager({ lib, reload }) {
         })}
         <button className="logo-add" onClick={add}><Plus size={18} /><span className="small">{logos.length ? 'Add a version' : 'Add your logo'}</span></button>
       </div>
+      {erasing && (
+        <BackgroundEraser rel={erasing.rel} onClose={() => setErasing(null)} onSaved={async (out) => {
+          const was = erasing; setErasing(null);
+          const patch = { logoKinds: { ...kinds, [out.rel]: kindOf(was) } };
+          if (was === primary) patch.appLogo = out.rel;
+          await saveConfig(patch); reload(); refreshLogo?.();
+          toast({ text: was === primary ? 'Background erased. The new copy is your primary logo.' : 'Background erased. The new copy is next to the original.' });
+        }} />
+      )}
     </div>
   );
 }
@@ -195,6 +207,7 @@ export default function BrandLibrary({ section }) {
   const addTo = async (target) => { if (!desktop?.pickFiles) return api.post('/api/library/open', { folder: target }); const paths = await desktop.pickFiles(); if (paths.length) { await api.post('/api/library/import', { paths, folder: target }); load(); } };
   const kit = () => document.getElementById('brand-kit')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   const [webSetup, setWebSetup] = useState(false);
+  const [erasingFile, setErasingFile] = useState(null);
   return (
     <div className="page">
       <div className="row between wrap">
@@ -216,9 +229,10 @@ export default function BrandLibrary({ section }) {
         </div>
       )}
       {webSetup && <WebsiteSetup onClose={() => setWebSetup(false)} />}
+      {erasingFile && <BackgroundEraser rel={erasingFile} onClose={() => setErasingFile(null)} onSaved={() => { setErasingFile(null); load(); }} />}
       {lib && (
         <SetupChecklist id="brand-setup" eyebrow="Set up your brand" title={(done, total) => (done === 0 ? 'A few building blocks' : `${done} of ${total} done`)} steps={[
-          { label: 'Add your logo', help: 'A PNG with a clear background works best.', ok: (counts.Logos || 0) >= 1, action: () => addTo('Logos'), cta: 'Add logo' },
+          { label: 'Add your logo', help: 'An SVG, or a PNG with a see-through background, works best.', ok: (counts.Logos || 0) >= 1, action: () => addTo('Logos'), cta: 'Add logo' },
           { label: 'Add a light version', help: 'A white or one-color logo for dark backgrounds and video.', ok: Object.values(config.logoKinds || {}).includes('light') || (counts.Logos || 0) >= 2, action: () => addTo('Logos'), cta: 'Add' },
           { label: 'Set your brand colors', help: 'Pull them from your logo or pick your own.', ok: Boolean(config.brandColorsSet), action: kit, cta: 'Set colors' },
           { label: 'Pick your fonts', help: 'One for headings, one for body text.', ok: Boolean(config.brandFontsSet), action: kit, cta: 'Pick fonts' },
@@ -260,6 +274,7 @@ export default function BrandLibrary({ section }) {
                 <div className="row" style={{ gap: 4 }}>
                   <button className="btn icon sm" title="Show in Finder" aria-label="Show in Finder" onClick={() => api.post('/api/library/reveal', { rel: i.rel })}><Eye size={14} /></button>
                   {i.kind === 'image' && <button className="btn sm" onClick={() => go({ name: 'graphics', image: i.rel })}><Shapes size={13} />Use in a graphic</button>}
+                  {i.kind === 'image' && !/\.svg$/i.test(i.rel) && <button className="btn icon sm" title="Erase background" aria-label="Erase background" onClick={() => setErasingFile(i.rel)}><Eraser size={14} /></button>}
                 </div>
               </div>
             </div>

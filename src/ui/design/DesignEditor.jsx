@@ -9,6 +9,7 @@ import { useApp } from '../App.jsx';
 import { api } from '../api.js';
 import ColorField from '../components/ColorField.jsx';
 import FontMenu, { useFamilies } from '../components/FontMenu.jsx';
+import BackgroundEraser from '../components/BackgroundEraser.jsx';
 import LibraryPicker from '../components/LibraryPicker.jsx';
 import Popover, { PopList } from '../components/Popover.jsx';
 import { DEVICE_ASPECT, KINDS, RESIZE_TARGETS, SHAPES, resizeDesign, blankPage, cohesive, loadAssets, onColor, page as newPage, renderPage, shape as newShape, svgColors, text as newText, uid } from './model.js';
@@ -47,6 +48,7 @@ export default function DesignEditor({ id, onClose }) {
   const [snap, setSnap] = useState(true);
   const [grid, setGrid] = useState(false);
   const [picker, setPicker] = useState(null);
+  const [erasing, setErasing] = useState(null); // library path of the picture being cleared
   const [saved, setSaved] = useState(true);
   const [exportOpen, setExportOpen] = useState(false);
   const [busy, setBusy] = useState(null);
@@ -567,6 +569,7 @@ export default function DesignEditor({ id, onClose }) {
                 </>
               )}
               {item.type === 'image' && <label className="field">Corners · {item.radius || 0}<input type="range" min="0" max="200" value={item.radius || 0} onChange={(e) => setItem({ radius: Number(e.target.value) }, { record: false })} /></label>}
+              {item.type === 'image' && !/\.svg$/i.test(item.rel) && <button className="btn sm" onClick={() => setErasing(item.rel)}><Eraser size={13} />Erase background</button>}
               {item.type === 'image' && /\.svg$/i.test(item.rel) && <SvgColors item={item} cache={cache.current} swatches={colors} onChange={(recolor) => setItem({ recolor }, { record: false })} />}
               {item.type === 'qr' && (
                 <>
@@ -634,6 +637,7 @@ export default function DesignEditor({ id, onClose }) {
         </aside>
       </div>
 
+      {erasing && <BackgroundEraser rel={erasing} onClose={() => setErasing(null)} onSaved={(out) => { setErasing(null); setItem({ rel: out.rel }); toast({ text: 'Background erased. The copy is in your brand library.' }); }} />}
       {picker && (
         <LibraryPicker folder={picker === 'logo' ? 'Logos' : 'All'} title={picker === 'logo' ? 'Pick a logo' : picker === 'bg' ? 'Pick a background photo' : picker === 'frame' ? 'Pick a photo for this shape' : 'Pick a photo'} onClose={() => setPicker(null)}
           onPick={(i) => {
