@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useApp } from '../App.jsx';
 import { api, fmt, openLink } from '../api.js';
+import { usePoll } from '../poll.js';
 import { MessageSquare } from 'lucide-react';
+import { exportDesign } from '../design/exporters.js';
 import { checkCaption } from '../captionCheck.js';
 import Modal from '../components/Modal.jsx';
 import { EventCard, RefreshEvents, eventTime, useChurchEvents } from '../components/ChurchEvents.jsx';
@@ -25,17 +27,14 @@ function useSocial() {
   }, []);
   useEffect(() => { load(); }, [load]);
   const busy = state.posts.some((p) => p.status === 'publishing' || (p.status === 'scheduled' && new Date(p.scheduledAt) - Date.now() < 60_000));
-  useEffect(() => {
-    const id = setInterval(load, busy ? 2000 : 15000);
-    return () => clearInterval(id);
-  }, [busy, load]);
+  usePoll(load, busy ? 2000 : 30000, [busy, load]);
   return { ...state, load };
 }
 
 export default function Social({ compose: initialCompose, caption: initialCaption }) {
   const s = useSocial();
   const [tab, setTab] = useState('calendar');
-  const [composer, setComposer] = useState(initialCompose ? { media: initialCompose } : initialCaption ? { caption: initialCaption } : null);
+  const [composer, setComposer] = useState(initialCompose?.design ? { design: initialCompose.design } : initialCompose?.clipId ? { media: initialCompose } : initialCompose?.projectId ? { projectId: initialCompose.projectId } : initialCaption ? { caption: initialCaption } : null);
   const needsYou = s.posts.filter((p) => p.status === 'needs-you').length;
   const plat = (id) => s.platforms.find((p) => p.id === id);
   return (
@@ -93,7 +92,7 @@ function Posts({ s, plat, onEdit, onConnect }) {
 
 function PostRow({ post, s, plat, onEdit }) {
   const [copied, setCopied] = useState(null);
-  const thumb = s.media.find((m) => m.file === post.media?.file)?.thumb;
+  const thumb = post.media?.kind === 'image' ? post.media.thumb : s.media.find((m) => m.file === post.media?.file)?.thumb;
   const act = async (fn) => { try { await fn(); } catch (e) { alert(e.message); } s.load(); };
   const caption = (d) => {
     const p = plat(d.platform);
@@ -128,7 +127,7 @@ function PostRow({ post, s, plat, onEdit }) {
                 {d.status === 'ready' && (
                   <>
                     <button className="btn sm" onClick={async () => { await navigator.clipboard.writeText(caption(d)); setCopied(d.accountId); }}>{copied === d.accountId ? 'Copied ✓' : '1. Copy caption'}</button>
-                    {post.media?.file && <button className="btn sm" onClick={() => api.post('/api/social/reveal', { path: post.media.file })}>2. Show video</button>}
+                    {post.media?.file && <button className="btn sm" onClick={() => api.post('/api/social/reveal', { path: post.media.file })}>2. Show {post.media.kind === 'image' ? 'design' : 'video'}</button>}
                     {p?.uploadUrl && <button className="btn sm" onClick={() => openLink(p.uploadUrl)}>3. Open {p.name} ↗</button>}
                     <button className="btn primary sm" onClick={() => act(() => api.post(`/api/social/posts/${post.id}/done/${d.accountId}`, {}))}>Mark posted</button>
                   </>
@@ -152,51 +151,64 @@ function PostRow({ post, s, plat, onEdit }) {
 // ------------------------------------------------------------------ calendar (full month)
 function Calendar({ s, plat, onEdit, onNew }) {
   const [offset, setOffset] = useState(0);
+  const [view, setView] = useState('month'); // 'month' | 'weeks' (this week and next)
   const cal = useChurchEvents();
   const [ev, setEv] = useState(null);
-  const month = useMemo(() => { const d = new Date(); d.setDate(1); d.setHours(0, 0, 0, 0); d.setMonth(d.getMonth() + offset); return d; }, [offset]);
-  const start = new Date(month); start.setDate(1 - month.getDay());
-  const days = Array.from({ length: 42 }, (_, i) => new Date(start.getTime() + i * 86400000));
+  const weeks = view === 'weeks';
+  const month = useMemo(() => { const d = new Date(); d.setDate(1); d.setHours(0, 0, 0, 0); d.setMonth(d.getMonth() + (weeks ? 0 : offset)); return d; }, [offset, weeks]);
+  const start = useMemo(() => {
+    if (weeks) { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - d.getDay() + offset * 14); return d; }
+    const d = new Date(month); d.setDate(1 - month.getDay()); return d;
+  }, [month, offset, weeks]);
+  // Step by calendar days, not 24 hours, so a daylight saving change never repeats or skips a date.
+  const days = Array.from({ length: weeks ? 14 : 42 }, (_, i) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + i));
+  const go = (v) => { setView(v); setOffset(0); };
+  const title = weeks
+    ? `${days[0].toLocaleDateString([], { month: 'short', day: 'numeric' })} to ${days[13].toLocaleDateString([], { month: 'short', day: 'numeric' })}`
+    : month.toLocaleDateString([], { month: 'long', year: 'numeric' });
   const when = (p) => new Date(p.scheduledAt || p.publishedAt || p.created);
   const today = new Date().toDateString();
   const todayStart = new Date(new Date().toDateString());
   return (
     <section className="glass strong panel stack">
       <div className="row between">
-        <h3>{month.toLocaleDateString([], { month: 'long', year: 'numeric' })}</h3>
+        <h3>{title}</h3>
         <div className="row">
           <RefreshEvents cal={cal} />
-          <button className="btn icon sm" aria-label="Previous month" onClick={() => setOffset(offset - 1)}>‹</button>
-          <button className="btn sm" onClick={() => setOffset(0)}>This month</button>
-          <button className="btn icon sm" aria-label="Next month" onClick={() => setOffset(offset + 1)}>›</button>
+          <button className="btn icon sm" aria-label={weeks ? 'Previous two weeks' : 'Previous month'} onClick={() => setOffset(offset - 1)}>‹</button>
+          {weeks || offset
+            ? <button className="btn sm" onClick={() => go('month')}>This month</button>
+            : <button className="btn sm" title="Show this week and next with more room" onClick={() => go('weeks')}>This week</button>}
+          <button className="btn icon sm" aria-label={weeks ? 'Next two weeks' : 'Next month'} onClick={() => setOffset(offset + 1)}>›</button>
         </div>
       </div>
-      <div className="month-grid">
+      <div className={`month-grid ${weeks ? 'weeks' : ''}`}>
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => <div key={d} className="month-head">{d}</div>)}
         {days.map((d) => {
           const list = s.posts.filter((p) => p.status !== 'draft' && when(p).toDateString() === d.toDateString()).sort((a, b) => when(a) - when(b));
-          const out = d.getMonth() !== month.getMonth();
+          const out = !weeks && d.getMonth() !== month.getMonth();
+          const evMax = weeks ? 6 : 2; const postMax = weeks ? 8 : 3;
           const past = d < todayStart;
           const evs = cal.events.filter((e) => new Date(e.start).toDateString() === d.toDateString());
           return (
             <div key={d.toISOString()} className={`month-cell ${out ? 'out' : ''} ${d.toDateString() === today ? 'today' : ''}`}>
               <div className="row between">
-                <span className="small num" style={{ fontWeight: 600 }}>{d.getDate()}</span>
+                <span className="small num" style={{ fontWeight: 600 }}>{weeks && (d.getDate() === 1 || d === days[0]) ? d.toLocaleDateString([], { month: 'short', day: 'numeric' }) : d.getDate()}</span>
                 {!past && <button className="btn ghost sm" style={{ minHeight: 20, padding: '0 6px' }} aria-label={`Schedule a post on ${d.toDateString()}`} onClick={() => { const t = new Date(d); t.setHours(12, 0, 0, 0); onNew(t); }}>+</button>}
               </div>
-              {evs.slice(0, 2).map((e) => (
+              {evs.slice(0, evMax).map((e) => (
                 <button key={e.id} className="month-event" onClick={() => setEv(e)} title={`${e.title} · ${eventTime(e)}`}>
                   <span className="truncate">{e.allDay ? '' : `${eventTime(e)} `}{e.title}</span>
                 </button>
               ))}
-              {evs.length > 2 && <span className="muted small">+{evs.length - 2} events</span>}
-              {list.slice(0, 3).map((p) => (
+              {evs.length > evMax && <span className="muted small">+{evs.length - evMax} events</span>}
+              {list.slice(0, postMax).map((p) => (
                 <button key={p.id} className="month-post" onClick={() => ['draft', 'scheduled'].includes(p.status) && onEdit(p)} title={p.title || p.caption}>
                   <span className="row" style={{ gap: 2 }}>{p.destinations.slice(0, 4).map((x) => <span key={x.accountId} className="dot" style={{ color: plat(x.platform)?.color, width: 6, height: 6 }} />)}</span>
                   <span className="truncate">{when(p).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} {p.title || p.caption}</span>
                 </button>
               ))}
-              {list.length > 3 && <span className="muted small">+{list.length - 3} more</span>}
+              {list.length > postMax && <span className="muted small">+{list.length - postMax} more</span>}
             </div>
           );
         })}
@@ -384,6 +396,25 @@ function Composer({ s, plat, init, onClose, onConnect }) {
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [pickMedia, setPickMedia] = useState(!initialMedia);
+  const [pickKind, setPickKind] = useState(init.design || initialMedia?.kind === 'image' ? 'designs' : 'clips');
+  const [designs, setDesigns] = useState(null);
+  const [fromProject, setFromProject] = useState(init.projectId || '');
+  const [preparing, setPreparing] = useState(null);
+  useEffect(() => { if (pickMedia && pickKind === 'designs' && !designs) api.get('/api/designs').then((r) => setDesigns(r.designs)).catch(() => setDesigns([])); }, [pickMedia, pickKind]);
+  // A design becomes PNG pages in the brand library's Graphics folder, then rides along with the post.
+  const chooseDesign = async (d) => {
+    setPreparing(d.id); setError(null);
+    try {
+      const { design } = await api.get(`/api/designs/${d.id}`);
+      const out = await exportDesign(design, 'png-all');
+      choose({ kind: 'image', file: out.file, designId: d.id, projectId: design.source?.projectId || null, pages: design.pages.length, thumb: d.thumb, title: d.name, summary: '' });
+    } catch (e) { setError(e.message); }
+    setPreparing(null);
+  };
+  useEffect(() => { if (init.design && !media) chooseDesign(init.design); }, []);
+  const projects = [...new Map(s.media.map((m) => [m.projectId, m.sermon])).entries()];
+  const clipList = s.media.filter((m) => !fromProject || m.projectId === fromProject);
+  const designList = (designs || []).filter((d) => !fromProject || d.source?.projectId === fromProject);
   const hashtags = tags.split(',').map((t) => t.trim().replace(/^#/, '')).filter(Boolean);
   const fullText = [caption.trim(), hashtags.map((h) => `#${h}`).join(' ')].filter(Boolean).join('\n\n');
 
@@ -402,7 +433,7 @@ function Composer({ s, plat, init, onClose, onConnect }) {
     const body = {
       mode: m, title, caption, hashtags, accountIds: [...picked], captions: overrides,
       scheduledAt: m === 'schedule' ? new Date(when).toISOString() : null,
-      media: media ? { file: media.file, projectId: media.projectId, clipId: media.clipId } : null,
+      media: media ? (media.kind === 'image' ? { kind: 'image', file: media.file, designId: media.designId, projectId: media.projectId, pages: media.pages, thumb: media.thumb } : { file: media.file, projectId: media.projectId, clipId: media.clipId }) : null,
       options: { youtubePrivacy: privacy },
     };
     try {
@@ -414,29 +445,48 @@ function Composer({ s, plat, init, onClose, onConnect }) {
 
   return (
     <Modal onClose={onClose} width={1000} label={editing ? 'Edit post' : 'New post'}>
-        <div className="row between"><h2>{editing ? 'Edit post' : 'New post'}</h2><button className="btn ghost sm" onClick={onClose}>Close</button></div>
+        <h2>{editing ? 'Edit post' : 'New post'}</h2>
         <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: 20, alignItems: 'start' }}>
           <div className="stack">
             <div className="vframe" style={{ width: 200, display: 'grid', placeItems: 'center', color: '#aab', cursor: 'pointer' }} onClick={() => setPickMedia(true)}>
-              {media?.thumb ? <img src={media.thumb} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} /> : <span className="small">No video</span>}
+              {media?.thumb ? <img src={media.thumb} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: media.kind === 'image' ? 'contain' : 'cover' }} /> : <span className="small">{preparing ? 'Preparing…' : 'Nothing attached'}</span>}
             </div>
-            <button className="btn sm" onClick={() => setPickMedia(!pickMedia)}>{media ? 'Change clip' : 'Attach a clip'}</button>
-            {media && <span className="muted small">{fmt(media.length)} · {media.sermon}</span>}
+            <button className="btn sm" onClick={() => setPickMedia(!pickMedia)}>{media ? 'Change' : 'Attach a clip or design'}</button>
+            {media && <span className="muted small">{media.kind === 'image' ? `${media.pages > 1 ? `${media.pages} pages` : 'Image'} · ${media.title || 'Design'}` : `${fmt(media.length)} · ${media.sermon}`}</span>}
           </div>
           <div className="stack">
             {pickMedia && (
-              <div className="keycard">
-                <strong>Exported clips</strong>
-                {!s.media.length && <span className="muted small">Export a clip first.</span>}
+              <div className="keycard stack" style={{ gap: 10 }}>
+                <div className="row between wrap" style={{ gap: 8 }}>
+                  <div className="seg sm">
+                    <button className={pickKind === 'clips' ? 'on' : ''} onClick={() => setPickKind('clips')}>Clips</button>
+                    <button className={pickKind === 'designs' ? 'on' : ''} onClick={() => setPickKind('designs')}>Designs</button>
+                  </div>
+                  {projects.length > 1 && (
+                    <select className="input" style={{ width: 'auto', maxWidth: 260 }} value={fromProject} onChange={(e) => setFromProject(e.target.value)} aria-label="From project">
+                      <option value="">All projects</option>
+                      {projects.map(([id, t]) => <option key={id} value={id}>{t}</option>)}
+                    </select>
+                  )}
+                </div>
+                {pickKind === 'clips' && !clipList.length && <span className="muted small">Export a clip first.</span>}
+                {pickKind === 'designs' && designs && !designList.length && <span className="muted small">No designs yet{fromProject ? ' from this project' : ''}. Make one in Design.</span>}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(92px, 1fr))', gap: 8, maxHeight: 260, overflow: 'auto' }}>
-                  {s.media.map((m) => (
-                    <button key={m.file} title={m.title} onClick={() => choose(m)} style={{ border: media?.file === m.file ? '2px solid var(--accent)' : '1px solid var(--line)', borderRadius: 12, padding: 0, overflow: 'hidden', background: 'var(--surface-solid)', color: 'var(--text)', cursor: 'pointer', textAlign: 'left' }}>
-                      {m.thumb && <img src={m.thumb} alt="" style={{ width: '100%', aspectRatio: '9/16', objectFit: 'cover', display: 'block' }} />}
-                      <span className="small" style={{ display: 'block', padding: '4px 6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.title}</span>
+                  {pickKind === 'clips' && clipList.map((m) => (
+                    <button key={m.file} title={m.title} className={`media-pick ${media?.file === m.file ? 'on' : ''}`} onClick={() => choose(m)}>
+                      {m.thumb && <img src={m.thumb} alt="" style={{ aspectRatio: '9/16' }} />}
+                      <span className="small truncate">{m.title}</span>
+                    </button>
+                  ))}
+                  {pickKind === 'designs' && designList.map((d) => (
+                    <button key={d.id} title={d.name} className={`media-pick ${media?.designId === d.id ? 'on' : ''}`} disabled={Boolean(preparing)} onClick={() => chooseDesign(d)}>
+                      {d.thumb ? <img src={d.thumb} alt="" style={{ aspectRatio: `${d.size.w}/${d.size.h}`, objectFit: 'contain' }} /> : <span className="media-pick-empty" />}
+                      <span className="small truncate">{preparing === d.id ? 'Preparing…' : d.name}</span>
                     </button>
                   ))}
                 </div>
-                {media && <button className="btn ghost sm" style={{ justifySelf: 'start' }} onClick={() => { setMedia(null); setPickMedia(false); }}>Post without video</button>}
+                {pickKind === 'designs' && <span className="hint">Designs save as images in your brand library. Share them to accounts you post to by hand.</span>}
+                {media && <button className="btn ghost sm" style={{ justifySelf: 'start' }} onClick={() => { setMedia(null); setPickMedia(false); }}>Post with nothing attached</button>}
               </div>
             )}
             <label className="field">Title <span className="hint">Used for YouTube and for your own list</span><input className="input" value={title} maxLength={100} onChange={(e) => setTitle(e.target.value)} /></label>
@@ -452,11 +502,11 @@ function Composer({ s, plat, init, onClose, onConnect }) {
                 const text = overrides[a.id] ?? fullText;
                 const over = p?.captionMax && text.length > p.captionMax;
                 const warns = [];
-                if (on && p?.kind === 'api' && media) {
+                if (on && p?.kind === 'api' && media && media.kind !== 'image') {
                   if (media.length > p.maxSeconds) warns.push(`trimmed to ${fmt(p.maxSeconds)}`);
                   if (p.maxBytes && media.bytes > p.maxBytes) warns.push('compressed to fit');
                 }
-                if (on && p?.kind === 'api' && !media) warns.push('needs a video');
+                if (on && p?.kind === 'api' && (!media || media.kind === 'image')) warns.push('needs a video');
                 return (
                   <div key={a.id} className="keycard" style={{ padding: 10, gap: 6, opacity: on ? 1 : 0.75 }}>
                     <label className="row">

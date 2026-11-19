@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Clapperboard, Copy, GalleryHorizontalEnd, Heart, LayoutGrid, MonitorPlay, NotebookPen, Presentation, Printer,
-  Scaling, Search, Smartphone, Sparkles, Trash2, Home as HomeIcon, Wand2, X, BookOpen,
+  Scaling, Search, Smartphone, Sparkles, Trash2, Home as HomeIcon, Wand2, X, BookOpen, Plus, PenTool, Film,
 } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { Masonry } from '../components/Masonry.jsx';
@@ -18,6 +18,8 @@ export { cohesive } from '../design/model.js';
 
 // Tile colors come from the app theme (tone-1 to tone-6 in styles.css), so they follow the user's colors.
 const TILES = [
+  ['design', PenTool, 5],
+  ['videocard', Film, 6],
   ['deck', Wand2, 3],
   ['scripture', BookOpen, 2],
   ['presentation', Presentation, 1],
@@ -147,6 +149,7 @@ export default function Graphics({ image, design, event, eventMode, quote, make 
     if (k === 'deck') return setModal('deck');
     if (k === 'scripture') return setModal('scripture');
     if (k === 'custom') return setModal('custom');
+    if (k === 'design') return create(newDoc('design', null, ctx));
     setKind(kind === k ? null : k); setTab('templates');
   };
 
@@ -166,10 +169,14 @@ export default function Graphics({ image, design, event, eventMode, quote, make 
       </section>
 
       <div className="dz-tiles">
+        <button className="dz-tile dz-create" onClick={() => setModal('new')}>
+          <span className="dz-tile-icon create"><Plus size={28} /></span>
+          <span>Create new</span>
+        </button>
         {TILES.map(([k, Icon, grad]) => (
           <button key={k} className={`dz-tile ${kind === k ? 'on' : ''}`} onClick={() => pick(k)}>
             <span className={`dz-tile-icon ${grad ? `tone tone-${grad}` : 'plain'}`}><Icon size={24} /></span>
-            <span>{k === 'sermon' ? 'From a sermon' : k === 'deck' ? 'Slide deck maker' : k === 'scripture' ? 'Scripture graphic' : KINDS[k].label}</span>
+            <span>{k === 'sermon' ? 'From a sermon' : k === 'deck' ? 'Slide deck maker' : k === 'scripture' ? 'Scripture graphic' : k === 'videocard' ? 'Video cards' : KINDS[k].label}</span>
           </button>
         ))}
       </div>
@@ -247,6 +254,14 @@ export default function Graphics({ image, design, event, eventMode, quote, make 
       {modal === 'scripture' && <ScriptureMaker ctx={ctx} onClose={() => setModal(null)} onCreate={(doc) => { setModal(null); create(doc); }} />}
       {modal === 'deck' && <DeckMaker ctx={ctx} onClose={() => setModal(null)} onCreate={(doc) => { setModal(null); create(doc); }} />}
       {modal === 'sermon' && <FromSermon ctx={ctx} onClose={() => setModal(null)} onCreate={(doc) => { setModal(null); create(doc); }} />}
+      {modal === 'new' && (
+        <CreateNew ctx={ctx} onClose={() => setModal(null)}
+          onBlank={(k) => { setModal(null); create(newDoc(k, null, ctx)); }}
+          onTemplate={(t) => { setModal(null); create(newDoc(t.kind, t, ctx)); }}
+          onBrowse={(k) => { setModal(null); setKind(k); setTab('templates'); }}
+          onMaker={(m) => setModal(m)}
+          onSize={(size) => { setModal(null); const d = newDoc('custom', null, ctx, size); d.name = `Untitled ${size.w}×${size.h}`; create(d); }} />
+      )}
       {modal === 'custom' && <CustomSize onClose={() => setModal(null)} onCreate={(size) => { setModal(null); const d = newDoc('custom', null, ctx, size); d.name = `Untitled ${size.w}×${size.h}`; create(d); }} />}
     </div>
   );
@@ -289,6 +304,73 @@ function FromSermon({ ctx, onClose, onCreate }) {
           <div className="row"><button className="btn primary" disabled={!pid || busy} onClick={go}><Sparkles size={15} />{busy ? 'Building…' : 'Build it'}</button><span className="muted small">You can change everything after.</span></div>
         </div>
       )}
+    </Modal>
+  );
+}
+
+const KIND_ICON = { design: PenTool, videocard: Film, presentation: Presentation, post: Heart, carousel: GalleryHorizontalEnd, story: Smartphone, thumbnail: MonitorPlay, flyer: Printer, notes: NotebookPen };
+const KIND_TONE = { design: 5, videocard: 6, presentation: 1, post: 2, carousel: 3, story: 4, thumbnail: 5, flyer: 6, notes: 4 };
+
+/** Everything you can make in one place: a type, a guided maker, a video card or any size. */
+function CreateNew({ ctx, onClose, onBlank, onTemplate, onBrowse, onMaker, onSize }) {
+  const [w, setW] = useState(1080); const [h, setH] = useState(1080);
+  const ok = w >= 100 && h >= 100 && w <= 6000 && h <= 6000;
+  const cards = ['intro-vertical', 'outro-vertical', 'intro-wide'].map((id) => TEMPLATES.find((t) => t.id === id)).filter(Boolean);
+  const count = (k) => TEMPLATES.filter((t) => t.kind === k).length;
+  return (
+    <Modal label="Create new" onClose={onClose} width={860}>
+      <ModalHead title="Create new" sub="Start blank, use a guided maker, or pick any size." />
+      <div className="stack" style={{ gap: 8 }}>
+        <span className="eyebrow">Guided makers</span>
+        <div className="cn-grid">
+          {[['deck', Wand2, 'Slide deck maker', 'Answer a few questions, get a full deck', 3], ['scripture', BookOpen, 'Scripture graphic', 'A verse in your brand look', 2], ['sermon', Sparkles, 'From a sermon', 'Slides, carousels and stories from its words', 1]].map(([m, Icon, t, d, tone]) => (
+            <button key={m} className="cn-card" onClick={() => onMaker(m)}>
+              <span className={`cn-icon tone tone-${tone}`}><Icon size={18} /></span>
+              <span className="stack" style={{ gap: 0, minWidth: 0 }}><strong className="small">{t}</strong><span className="muted" style={{ fontSize: 12 }}>{d}</span></span>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="stack" style={{ gap: 8 }}>
+        <span className="eyebrow">Clip intro and end cards</span>
+        <div className="cn-grid">
+          {cards.map((t) => (
+            <button key={t.id} className="cn-card tall" onClick={() => onTemplate(t)}>
+              <span className="cn-thumb" style={{ aspectRatio: `${KINDS[t.kind].w}/${KINDS[t.kind].h}` }}><TemplateThumb tpl={t} ctx={ctx} /></span>
+              <strong className="small">{t.name}</strong>
+            </button>
+          ))}
+        </div>
+        <span className="hint">Save one, then pick it in a clip's Graphics tab to show at the start or end.</span>
+      </div>
+      <div className="stack" style={{ gap: 8 }}>
+        <span className="eyebrow">Start blank</span>
+        <div className="cn-grid">
+          {Object.entries(KINDS).filter(([k]) => k !== 'custom').map(([k, K]) => {
+            const Icon = KIND_ICON[k] || Scaling;
+            return (
+              <div key={k} className="cn-card">
+                <span className={`cn-icon tone tone-${KIND_TONE[k] || 1}`}><Icon size={18} /></span>
+                <button className="cn-main" onClick={() => onBlank(k)}>
+                  <strong className="small">{K.label}</strong>
+                  <span className="muted" style={{ fontSize: 12 }}>{K.w}×{K.h}</span>
+                </button>
+                {count(k) > 0 && <button className="btn ghost sm" onClick={() => onBrowse(k)}>{count(k)} templates</button>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div className="stack" style={{ gap: 8 }}>
+        <span className="eyebrow">Any size</span>
+        <div className="angle-row">{SIZE_PRESETS.map(([l, a, b]) => <button key={l} className={`pill-choice ${w === a && h === b ? 'on' : ''}`} onClick={() => { setW(a); setH(b); }}>{l}</button>)}</div>
+        <div className="row wrap" style={{ gap: 10, alignItems: 'end' }}>
+          <label className="field" style={{ width: 130 }}>Width (px)<input className="input num" type="number" value={w} onChange={(e) => setW(Number(e.target.value))} /></label>
+          <label className="field" style={{ width: 130 }}>Height (px)<input className="input num" type="number" value={h} onChange={(e) => setH(Number(e.target.value))} /></label>
+          <button className="btn primary" disabled={!ok} onClick={() => onSize({ w, h })}><Plus size={14} />Create {w}×{h}</button>
+        </div>
+        {!ok && <span className="hint">Sizes run from 100 to 6000 pixels.</span>}
+      </div>
     </Modal>
   );
 }

@@ -15,6 +15,7 @@ import { proposeClips } from './pipeline.js';
 import { exportClip, exportJoined, trackClip, revealInFinder, EXPORT_PRESETS, moveExport, downloadsDir, sampleFrames } from './render.js';
 import * as prefs from './prefs.js';
 import * as workspaces from './workspaces.js';
+import * as jumpstart from './jumpstart.js';
 import * as library from './library.js';
 import * as writing from './writing.js';
 import * as voice from './voice.js';
@@ -384,6 +385,20 @@ route('GET', '/api/social/media', async () => {
     }
   }
   return { media: out.sort((a, b) => String(b.at).localeCompare(String(a.at))) };
+});
+
+// ---------------------------------------------------------------- jumpstart (settings file, website setup)
+route('GET', '/api/jumpstart/parts', () => ({ parts: Object.entries(jumpstart.PARTS).map(([id, p]) => ({ id, label: p.label, about: p.about })) }));
+route('POST', '/api/jumpstart/export', async (_p, b) => { try { return await jumpstart.exportSettings(b); } catch (e) { throw new HttpError(400, e.message); } });
+route('POST', '/api/jumpstart/read', async (_p, b) => { try { return await jumpstart.readPackage(String(b.file || '')); } catch (e) { throw new HttpError(400, e.message); } });
+route('POST', '/api/jumpstart/import', async (_p, b) => { try { return await jumpstart.importPackage(String(b.file || ''), b); } catch (e) { throw new HttpError(400, e.message); } });
+route('POST', '/api/jumpstart/scan', async (_p, b) => { try { return { found: await jumpstart.scanWebsite(b.website) }; } catch (e) { throw new HttpError(400, e.message); } });
+route('POST', '/api/jumpstart/apply', async (_p, b) => jumpstart.applyScan(b.found || {}, b.keep || {}));
+route('POST', '/api/jumpstart/reveal', async (_p, b) => {
+  const f = path.resolve(String(b.file || ''));
+  if (!/Jumpstart.*\.zip$/.test(path.basename(f)) || !existsSync(f)) throw new HttpError(400, 'Not a Jumpstart file');
+  await revealInFinder(f);
+  return { ok: true };
 });
 
 // ---------------------------------------------------------------- workspaces

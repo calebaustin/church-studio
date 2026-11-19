@@ -44,3 +44,13 @@ export function fmtEta(sec) {
   if (sec < 3600) return `About ${Math.round(sec / 60)} min left`;
   return `About ${Math.floor(sec / 3600)} h ${Math.round((sec % 3600) / 60)} min left`;
 }
+
+/** A file size people can read: KB, MB, then GB with one decimal once it passes 1 GB. */
+export function sizeLabel(bytes) {
+  const mb = (bytes || 0) / 1048576;
+  if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
+  if (mb >= 10) return `${Math.round(mb)} MB`;
+  if (mb >= 1) return `${mb.toFixed(1)} MB`;
+  if (bytes > 0 && mb < 1) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return '0 KB';
+}

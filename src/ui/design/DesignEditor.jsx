@@ -3,6 +3,7 @@ import {
   AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical,
   ArrowLeft, BringToFront, Check, ChevronDown, ChevronLeft, ChevronRight, Circle, Copy, Download, Grid3x3, Image as ImageIcon,
   Magnet, Minus, MonitorUp, Hexagon, Scaling, Smartphone, Laptop, Eraser, ImageOff, Play, RefreshCw, Plus, QrCode, Redo2, SendToBack, Shapes, Square, Trash2, Type, Undo2, Shuffle, X,
+  Send,
 } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { api } from '../api.js';
@@ -36,7 +37,7 @@ PageThumb.cache = {};
 
 // ---------------------------------------------------------------- editor
 export default function DesignEditor({ id, onClose }) {
-  const { toast, config, showNext } = useApp();
+  const { toast, config, showNext, go } = useApp();
   const families = useFamilies();
   const [doc, setDoc] = useState(null);
   const [pi, setPi] = useState(0);
@@ -385,6 +386,14 @@ export default function DesignEditor({ id, onClose }) {
               ]} />
             </Popover>
           </div>
+        )}
+        {doc.kind !== 'presentation' && doc.kind !== 'notes' && (
+          <button className="btn sm" title="Plan a post with this design" onClick={async () => {
+            let thumb = null;
+            try { const c = document.createElement('canvas'); await loadAssets(doc.pages[0], cache.current); renderPage(c, doc, doc.pages[0], 360 / doc.size.w, cache.current); thumb = c.toDataURL('image/jpeg', 0.82); } catch { /* no cover */ }
+            await api.put(`/api/designs/${doc.id}`, { ...doc, thumb });
+            go({ name: 'social', compose: { design: { id: doc.id, name: doc.name, thumb, size: doc.size } } });
+          }}><Send size={14} />Plan a post</button>
         )}
         <div style={{ position: 'relative' }}>
           <button className="btn primary sm" data-pop-trigger disabled={Boolean(busy)} onClick={() => setExportOpen(!exportOpen)}><Download size={14} />{busy || 'Export'}<ChevronDown size={14} /></button>

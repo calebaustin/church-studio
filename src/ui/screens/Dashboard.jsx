@@ -5,9 +5,12 @@ import { nextNote } from '../encourage.js';
 import { EventCard, useChurchEvents } from '../components/ChurchEvents.jsx';
 import { useApp } from '../App.jsx';
 import { api, fmt, media } from '../api.js';
+import { usePoll } from '../poll.js';
 import AddVideo from '../components/AddVideo.jsx';
 
 const DAY = 86400000;
+/** Midnight n calendar days after d (daylight saving safe). */
+const dayAt = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n).getTime();
 const startOfDay = (d = new Date()) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
 const startOfWeek = () => { const d = startOfDay(); d.setDate(d.getDate() - d.getDay()); return d; };
 
@@ -27,10 +30,10 @@ function buckets(period) {
   }
   if (period === 'weekly') {
     const s = startOfWeek();
-    return Array.from({ length: 7 }, (_, i) => ({ from: s.getTime() + i * DAY, to: s.getTime() + (i + 1) * DAY, label: 'SMTWTFS'[i] }));
+    return Array.from({ length: 7 }, (_, i) => ({ from: dayAt(s, i), to: dayAt(s, i + 1), label: 'SMTWTFS'[i] }));
   }
   const s = startOfDay(new Date(now.getTime() - 29 * DAY));
-  return Array.from({ length: 30 }, (_, i) => ({ from: s.getTime() + i * DAY, to: s.getTime() + (i + 1) * DAY, label: i % 7 === 0 ? new Date(s.getTime() + i * DAY).getDate() : '' }));
+  return Array.from({ length: 30 }, (_, i) => ({ from: dayAt(s, i), to: dayAt(s, i + 1), label: i % 7 === 0 ? new Date(dayAt(s, i)).getDate() : '' }));
 }
 
 function Ring({ value, max, size = 132 }) {
@@ -63,7 +66,8 @@ export default function Dashboard() {
   const [note] = useState(() => nextNote());
 
   const load = useCallback(() => api.get('/api/stats').then(setStats).catch(() => {}), []);
-  useEffect(() => { load(); const id = setInterval(load, 20000); return () => clearInterval(id); }, [load]);
+  useEffect(() => { load(); }, [load]);
+  usePoll(load, 30000, [load]);
   useEffect(() => onJobFinished(() => load()), [onJobFinished, load]);
 
   const week = startOfWeek().getTime();
@@ -306,9 +310,10 @@ const weekStart = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); x.setD
 function streak(dates) {
   const weeks = new Set(dates.filter(Boolean).map((d) => weekStart(d)));
   let w = weekStart(new Date());
-  if (!weeks.has(w)) w -= 7 * DAY; // this week isn't over yet
+  const back = (t) => weekStart(t - 3 * DAY); // the week before, safe across daylight saving
+  if (!weeks.has(w)) w = back(w); // this week isn't over yet
   let n = 0;
-  while (weeks.has(w)) { n++; w -= 7 * DAY; }
+  while (weeks.has(w)) { n++; w = back(w); }
   return n;
 }
 

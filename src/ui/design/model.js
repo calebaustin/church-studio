@@ -7,6 +7,8 @@ export const uid = () => Math.random().toString(36).slice(2, 10);
 
 // ---------------------------------------------------------------- kinds and sizes
 export const KINDS = {
+  design: { label: 'Design', w: 1080, h: 1080, multi: true, hint: 'A blank canvas to start your own way' },
+  videocard: { label: 'Video card', w: 1080, h: 1920, hint: 'Intro and end cards for clips' },
   presentation: { label: 'Presentation', w: 1920, h: 1080, multi: true, hint: 'Sermon slides, scripture, announcements' },
   post: { label: 'Social post', w: 1080, h: 1350, hint: 'Quote cards, events, verses' },
   carousel: { label: 'Carousel', w: 1080, h: 1350, multi: true, hint: 'Swipeable posts, sermon recaps' },
@@ -156,12 +158,12 @@ export const TEMPLATES = [
     B(ctx, { text: ctx.ev?.when || 'Sunday · 9am and 11am', size: 46, x: 0.5, y: 0.62, w: 0.84 }),
   ] })] },
   // video intro and outro cards (export as PNG, then pick them in a clip's Graphics tab)
-  { id: 'intro-vertical', kind: 'story', name: 'Clip intro card', build: (ctx) => [page({ bg: mesh(21, 0.3), items: [
+  { id: 'intro-vertical', kind: 'videocard', name: 'Clip intro card', build: (ctx) => [page({ bg: mesh(21, 0.3), items: [
     B(ctx, { text: 'SERMON SERIES', size: 40, weight: 700, letter: 8, x: 0.5, y: 0.4, opacity: 0.85 }),
     H(ctx, { text: ctx.o?.title || 'Series Title', size: fit(ctx.o?.title, 150, 90, 14), x: 0.5, y: 0.5, w: 0.84 }),
     shape({ x: 0.5, y: 0.59, w: 0.14, h: 0.004, fill: ctx.c[1] }),
   ] })] },
-  { id: 'outro-vertical', kind: 'story', name: 'Clip end card', build: (ctx) => [page({ bg: solid(ctx.c[0]), items: [
+  { id: 'outro-vertical', kind: 'videocard', name: 'Clip end card', build: (ctx) => [page({ bg: solid(ctx.c[0]), items: [
     H(ctx, { text: 'Join us Sunday', size: 120, x: 0.5, y: 0.44, w: 0.84, color: onColor(ctx.c[0]) }),
     B(ctx, { text: '9 & 11 AM · yourchurch.org', size: 44, x: 0.5, y: 0.56, w: 0.84, color: onColor(ctx.c[0]), opacity: 0.9 }),
   ] })] },

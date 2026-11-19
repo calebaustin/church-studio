@@ -63,7 +63,7 @@ export function ThemePreview({ theme, font, width = 230, hook = null, app = null
   );
 }
 
-function ColorRow({ label, color, opacity, onColor, onOpacity, hint }) {
+export function ColorRow({ label, color, opacity, onColor, onOpacity, hint }) {
   return (
     <div className="stack" style={{ gap: 4 }}>
       <span className="small" style={{ fontWeight: 600, color: 'var(--ink)' }}>{label}</span>

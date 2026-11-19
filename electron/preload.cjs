@@ -5,7 +5,7 @@ contextBridge.exposeInMainWorld('desktop', {
   pickVideo: () => ipcRenderer.invoke('pick-video'),
   pickMedia: () => ipcRenderer.invoke('pick-media'),
   pickFolder: () => ipcRenderer.invoke('pick-folder'),
-  pickFiles: () => ipcRenderer.invoke('pick-files'),
+  pickFiles: (opts) => ipcRenderer.invoke('pick-files', opts || null),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   printDoc: (opts) => ipcRenderer.invoke('print-doc', opts),
   notify: (n) => ipcRenderer.invoke('notify', n),

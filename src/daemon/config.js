@@ -37,6 +37,10 @@ export const DEFAULTS = {
   weeklyGoal: 5, // clips posted per week, shown on the dashboard
   brandColors: ['#2B7F5F', '#D9A441', '#1B2440', '#F4EFE6', '#8FB8A8'], // brand kit, used by Graphics
   brandFonts: { heading: 'Montserrat', body: 'Montserrat' },
+  brandColorsSet: false, // the brand checklist: colors were chosen on purpose
+  brandFontsSet: false,
+  socialLinks: {}, // { facebook, instagram, youtube, ... } found by Jumpstart or added by hand
+  jumpstart: null, // { at, website } when the website setup ran
   dismissed: {}, // setup checklists the user closed
   churchInfo: { name: '', address: '', website: '', phone: '', email: '', times: '' }, // printed footers
   appLogo: '', // brand library path of the logo for the sidebar and Dock; empty means the first in Logos
@@ -48,6 +52,7 @@ export const DEFAULTS = {
   notify: { jobs: true, reminders: true }, // Mac notifications
   toolOrder: [], // sidebar order (tool ids); empty means the default order
   toolsOff: [], // tools the person turned off
+  planHidden: [], // content plan pieces set aside: they stay as ideas but don't count toward the ring
   autoUpdateCheck: true,
   lastUpdateCheck: null,
 };

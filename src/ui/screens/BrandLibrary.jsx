@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { FolderOpen, Plus, Image as ImageIcon, Film, FileText, Shapes, Eye, X, Wand2, Palette, Heart, Trash2, MoreHorizontal, Star, RefreshCw, Search } from 'lucide-react';
+import { FolderOpen, Plus, Image as ImageIcon, Film, FileText, Shapes, Eye, X, Wand2, Palette, Heart, Trash2, MoreHorizontal, Star, RefreshCw, Search, Globe } from 'lucide-react';
 import { useApp } from '../App.jsx';
-import { api, desktop } from '../api.js';
+import { api, desktop, sizeLabel } from '../api.js';
+import { usePoll } from '../poll.js';
 import ColorField from '../components/ColorField.jsx';
 import FontMenu, { useFamilies } from '../components/FontMenu.jsx';
+import { WebsiteSetup } from '../components/Jumpstart.jsx';
 import SetupChecklist from '../components/SetupChecklist.jsx';
 import Popover from '../components/Popover.jsx';
 
@@ -184,13 +186,15 @@ export default function BrandLibrary({ section }) {
   const [folder, setFolder] = useState('All');
   const [q, setQ] = useState('');
   const load = () => api.get('/api/library').then(setLib);
-  useEffect(() => { load(); const id = setInterval(load, 8000); return () => clearInterval(id); }, []);
+  useEffect(() => { load(); }, []);
+  usePoll(load, 30000); // files added in Finder show up; focus also refreshes
   useEffect(() => onJobFinished(() => load()), [onJobFinished]);
   const items = (lib?.items || []).filter((i) => (folder === 'All' || i.folder === folder) && (!q || i.name.toLowerCase().includes(q.toLowerCase())));
   const counts = Object.fromEntries((lib?.folders || []).map((f) => [f, (lib?.items || []).filter((i) => i.folder === f).length]));
-  const { config } = useApp();
+  const { config, saveConfig } = useApp();
   const addTo = async (target) => { if (!desktop?.pickFiles) return api.post('/api/library/open', { folder: target }); const paths = await desktop.pickFiles(); if (paths.length) { await api.post('/api/library/import', { paths, folder: target }); load(); } };
   const kit = () => document.getElementById('brand-kit')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const [webSetup, setWebSetup] = useState(false);
   return (
     <div className="page">
       <div className="row between wrap">
@@ -203,10 +207,15 @@ export default function BrandLibrary({ section }) {
           <button className="btn primary" onClick={() => api.post('/api/library/open', { folder: folder === 'All' ? null : folder })}><FolderOpen size={15} />Open in Finder</button>
         </div>
       </div>
-      <div className="row between wrap">
-        <div className="seg">{['All', ...(lib?.folders || [])].map((f) => <button key={f} className={folder === f ? 'on' : ''} onClick={() => setFolder(f)}>{f}{f !== 'All' && counts[f] ? ` · ${counts[f]}` : ''}</button>)}</div>
-        <input className="input" style={{ maxWidth: 260 }} placeholder="Search files" value={q} onChange={(e) => setQ(e.target.value)} />
-      </div>
+      {lib && !config.jumpstart?.at && !config.dismissed?.['brand-jumpstart'] && (
+        <div className="banner info row wrap" style={{ gap: 10 }}>
+          <Globe size={16} />
+          <span className="grow">Have a church website? Fill most of this in from it in about a minute.</span>
+          <button className="btn primary sm" onClick={() => setWebSetup(true)}>Set up from website</button>
+          <button className="btn ghost sm" onClick={() => saveConfig({ dismissed: { ...config.dismissed, 'brand-jumpstart': true } })}>No thanks</button>
+        </div>
+      )}
+      {webSetup && <WebsiteSetup onClose={() => setWebSetup(false)} />}
       {lib && (
         <SetupChecklist id="brand-setup" eyebrow="Set up your brand" title={(done, total) => (done === 0 ? 'A few building blocks' : `${done} of ${total} done`)} steps={[
           { label: 'Add your logo', help: 'A PNG with a clear background works best.', ok: (counts.Logos || 0) >= 1, action: () => addTo('Logos'), cta: 'Add logo' },
@@ -220,7 +229,16 @@ export default function BrandLibrary({ section }) {
       )}
       {lib && <BrandKit lib={lib} reload={load} />}
       <BrandVoice />
-      {lib && <span className="muted small truncate" title={lib.root}>{lib.root.replace(/^\/Users\/[^/]+/, '~')}</span>}
+      <div className="stack" style={{ gap: 10, marginTop: 8 }}>
+        <div className="row between wrap">
+          <div className="stack" style={{ gap: 2, minWidth: 0 }}>
+            <h2>Brand files</h2>
+            {lib && <span className="muted small truncate" title={lib.root}>{lib.root.replace(/^\/Users\/[^/]+/, '~')}</span>}
+          </div>
+          <input className="input" style={{ maxWidth: 260 }} placeholder="Search files" value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
+        <div className="seg" style={{ justifySelf: 'start', flexWrap: 'wrap' }}>{['All', ...(lib?.folders || [])].map((f) => <button key={f} className={folder === f ? 'on' : ''} onClick={() => setFolder(f)}>{f}{f !== 'All' && counts[f] ? ` · ${counts[f]}` : ''}</button>)}</div>
+      </div>
       {!lib && <div className="lib-grid big">{[0, 1, 2, 3, 4, 5, 6, 7].map((i) => <div key={i} className="skeleton" style={{ aspectRatio: '1' }} />)}</div>}
       {lib && !items.length && (
         <div className="glass empty">
@@ -238,7 +256,7 @@ export default function BrandLibrary({ section }) {
               <div className="lib-thumb">{i.kind === 'image' ? <img src={i.url} alt="" loading="lazy" /> : <I size={36} />}</div>
               <div className="stack" style={{ gap: 4, padding: '8px 10px 10px' }}>
                 <strong className="truncate small" title={i.name}>{i.name}</strong>
-                <span className="muted small">{i.folder} · {i.bytes > 1048576 ? `${(i.bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(i.bytes / 1024))} KB`}</span>
+                <span className="muted small">{i.folder} · {sizeLabel(i.bytes)}</span>
                 <div className="row" style={{ gap: 4 }}>
                   <button className="btn icon sm" title="Show in Finder" aria-label="Show in Finder" onClick={() => api.post('/api/library/reveal', { rel: i.rel })}><Eye size={14} /></button>
                   {i.kind === 'image' && <button className="btn sm" onClick={() => go({ name: 'graphics', image: i.rel })}><Shapes size={13} />Use in a graphic</button>}

@@ -2,6 +2,33 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## 0.9.0 · November 19, 2026
+
+### New
+- **Jumpstart.** In My App. Enter your church website, your YouTube channel and what you want to make first, and Church Studio pulls your logo, colors, fonts, address, phone, email, service times, social links and voice. You see your brand on a post, a clip and an email footer before anything is saved. Skip it any time.
+- **Export and import settings.** Share your brand kit, logos, brand voice, church info, links, themes and preferences as one small .zip, for another Mac or a teammate. Pick what to include and which workspaces. Import into the open workspace or a new one. Projects, videos, passwords and keys are never included.
+- **Create new in Design.** The first button opens everything you can make: guided makers, clip intro and end cards, every design type with its templates, and any custom size. A plain "Design" type starts you on a blank canvas.
+- **Plan a post from a design.** Designs now attach to posts, alongside clips, and the post picker can show one project's clips and designs. From a sermon's content plan, planning a post starts with that project.
+- **Pop-up styling.** Pop-ups get text and background colors, background strength, size, all caps, an accent bar color for lower thirds, and one-click brand looks. The export matches the preview.
+- **Two-week calendar.** On the Social calendar, This week shows this week and next with taller days. This month goes back.
+- **Set aside content plan pieces.** Hide pieces that don't fit your church. They stay as ideas but leave the count, so the ring only tracks what you care about.
+
+### Changed
+- Church Studio rests when you do. Sitting idle used about half a CPU core to keep the background moving behind every glass panel. Now the background stays still and glides when you change screens, so idle use is close to zero. Screens also fade in as you move between them.
+- Background refreshes pause while the window is hidden, and the brand library checks for new files less often.
+- The clip editor stops redrawing its preview while a clip is paused.
+- My App: your activity sits in the right column under the welcome card. Jumpstart sits under Your setup.
+- Brand library: search and folder filters moved down to a new Brand files section.
+- Export options: Remember settings and Export stay at the bottom while the options scroll under them. Every pop-up got the same fix for a gray band at the bottom.
+- File sizes past 1 GB show as GB, like 1.4 GB.
+
+### Fixed
+- Logos in the brand kit fit their tile instead of covering their name.
+- When daylight saving time ended, the calendar showed the same date twice (a Sunday and a Monday both labeled 1).
+- Streaks no longer break at a daylight saving change.
+- A new pop-up started hidden in the preview because it was at the start of its fade. Paused previews now show pop-ups fully.
+- The brand checklist steps for colors and fonts now check off.
+
 ## 0.8.0 · November 19, 2026
 
 ### New

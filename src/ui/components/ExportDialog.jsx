@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Download, FolderOpen, Smartphone, Square, RectangleHorizontal, RectangleVertical } from 'lucide-react';
 import { useApp } from '../App.jsx';
-import { api, desktop, fmt } from '../api.js';
+import { api, desktop, fmt, sizeLabel } from '../api.js';
 import Modal from './Modal.jsx';
 import { NamePattern } from '../screens/Settings.jsx';
 
@@ -59,8 +59,21 @@ export default function ExportDialog({ project, clips, onClose, beforeExport }) 
     } catch (e) { setError(e.message); setBusy(false); }
   };
 
+  const footer = (
+    <>
+      <div className="stack" style={{ gap: 4 }}>
+        {clips.length > 1 && <label className="row small"><input type="checkbox" checked={join} onChange={(e) => setJoin(e.target.checked)} />Join into one video, in this order</label>}
+        <label className="row small"><input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />Remember these settings</label>
+      </div>
+      <div className="row">
+        <button className="btn ghost" onClick={onClose}>Cancel</button>
+        <button className="btn primary lg" disabled={busy} onClick={go}><Download size={16} />{busy ? 'Starting…' : clips.length === 1 ? 'Export clip' : join ? `Join ${clips.length} clips` : `Export ${clips.length} clips`}</button>
+      </div>
+    </>
+  );
+
   return (
-    <Modal onClose={onClose} width={760} label="Export options">
+    <Modal onClose={onClose} width={760} label="Export options" footer={footer}>
       <div className="row between">
         <div className="stack" style={{ gap: 2 }}>
           <span className="eyebrow">Export</span>
@@ -93,7 +106,7 @@ export default function ExportDialog({ project, clips, onClose, beforeExport }) 
           <div className="seg">
             {[['standard', 'Standard'], ['high', 'High'], ['max', 'Best']].map(([q, l]) => <button key={q} className={o.quality === q ? 'on' : ''} onClick={() => set({ quality: q })}>{l}</button>)}
           </div>
-          <span className="hint num">About {est.mb < 1 ? '<1' : Math.round(est.mb)} MB{clips.length > 1 ? ' total' : ''} for {fmt(seconds)}</span>
+          <span className="hint num">About {sizeLabel(est.mb * 1048576)}{clips.length > 1 ? ' total' : ''} for {fmt(seconds)}</span>
         </div>
         <div className="stack" style={{ gap: 6 }}>
           <h3>Frame rate</h3>
@@ -130,16 +143,6 @@ export default function ExportDialog({ project, clips, onClose, beforeExport }) 
       </div>
 
       {error && <div className="banner bad">{error}</div>}
-      <div className="row between wrap" style={{ marginTop: 4 }}>
-        <div className="stack" style={{ gap: 4 }}>
-          {clips.length > 1 && <label className="row small"><input type="checkbox" checked={join} onChange={(e) => setJoin(e.target.checked)} />Join into one video, in this order</label>}
-          <label className="row small"><input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />Remember these settings</label>
-        </div>
-        <div className="row">
-          <button className="btn ghost" onClick={onClose}>Cancel</button>
-          <button className="btn primary lg" disabled={busy} onClick={go}><Download size={16} />{busy ? 'Starting…' : clips.length === 1 ? 'Export clip' : join ? `Join ${clips.length} clips` : `Export ${clips.length} clips`}</button>
-        </div>
-      </div>
     </Modal>
   );
 }

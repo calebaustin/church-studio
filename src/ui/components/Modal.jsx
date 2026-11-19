@@ -13,7 +13,10 @@ export function ModalHead({ title, sub }) {
 }
 
 /** Modal with scrim: closes on Escape and scrim click, keeps focus inside, restores it after. */
-export default function Modal({ onClose, children, width, label }) {
+/**
+ * footer: actions that stay put at the bottom while the body scrolls under them.
+ */
+export default function Modal({ onClose, children, width, label, footer }) {
   const panel = useRef(null);
   useEffect(() => {
     const opener = document.activeElement;
@@ -35,9 +38,10 @@ export default function Modal({ onClose, children, width, label }) {
   // Always on top of the whole app, whatever panel opened it.
   return createPortal(
     <div className="scrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div ref={panel} className="glass strong modal stack" role="dialog" aria-modal="true" aria-label={label} style={width ? { width: `min(${width}px, calc(100vw - 32px))` } : undefined}>
+      <div ref={panel} className="glass strong modal framed" role="dialog" aria-modal="true" aria-label={label} style={width ? { width: `min(${width}px, calc(100vw - 32px))` } : undefined}>
         <button type="button" className="modal-x" aria-label="Close" title="Close (Esc)" onClick={onClose}><X size={16} /></button>
-        {children}
+        <div className="modal-body stack">{children}</div>
+        {footer && <div className="modal-foot">{footer}</div>}
       </div>
     </div>,
     document.body,

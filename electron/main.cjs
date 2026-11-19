@@ -62,8 +62,13 @@ ipcMain.handle('pick-media', async () => {
   const r = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'Audio or video', extensions: ['mp3', 'm4a', 'wav', 'aac', 'flac', 'ogg', 'aiff', 'aif', 'caf', 'opus', 'mp4', 'mov', 'm4v', 'mkv', 'webm'] }] });
   return r.canceled ? null : r.filePaths[0];
 });
-ipcMain.handle('pick-files', async () => {
-  const r = await dialog.showOpenDialog({ properties: ['openFile', 'multiSelections'], filters: [{ name: 'Images and media', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'heic', 'mp4', 'mov', 'pdf'] }] });
+ipcMain.handle('pick-files', async (_e, opts) => {
+  // opts: { name, extensions, multi } for a specific kind of file, like a Jumpstart .zip.
+  const ext = Array.isArray(opts?.extensions) ? opts.extensions.filter((x) => /^[a-z0-9]{1,6}$/i.test(x)) : null;
+  const r = await dialog.showOpenDialog({
+    properties: ['openFile', ...(opts?.multi === false ? [] : ['multiSelections'])],
+    filters: [ext?.length ? { name: String(opts.name || 'Files').slice(0, 40), extensions: ext } : { name: 'Images and media', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'heic', 'mp4', 'mov', 'pdf'] }],
+  });
   return r.canceled ? [] : r.filePaths;
 });
 ipcMain.handle('pick-folder', async () => {

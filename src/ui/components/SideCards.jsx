@@ -28,7 +28,7 @@ export default function SideCards() {
   const [hidden, setHidden] = useState(() => hiddenUntil() > Date.now());
   useEffect(() => {
     // Fade out, change the idea, fade back in.
-    const t = setInterval(() => { setShown(false); setTimeout(() => { setI((n) => n + 1); setShown(true); }, 420); }, EVERY);
+    const t = setInterval(() => { if (document.hidden) return; setShown(false); setTimeout(() => { setI((n) => n + 1); setShown(true); }, 420); }, EVERY);
     return () => clearInterval(t);
   }, []);
   useEffect(() => { try { localStorage.setItem('cs-sidecard', String((i + 1) % 1000)); } catch { /* fine */ } }, [i]);

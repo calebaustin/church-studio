@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Check, Clapperboard, FileText, Headphones, Layers, PenLine, Send, Shapes } from 'lucide-react';
+import { Check, ChevronDown, Clapperboard, FileText, Headphones, Layers, Minus, PenLine, Plus, Send, Shapes } from 'lucide-react';
 import { api } from '../api.js';
 import { useApp } from '../App.jsx';
 import Modal, { ModalHead } from './Modal.jsx';
@@ -8,8 +8,9 @@ const GROUPS = [['Video', Clapperboard], ['Words', PenLine], ['Design', Shapes],
 
 /** One sermon, many pieces: what's made, what's next, one click to make each. */
 export default function ContentPlan({ project, setStep, onChange }) {
-  const { go, toast, trackJob, onJobFinished } = useApp();
+  const { go, toast, trackJob, onJobFinished, config, saveConfig } = useApp();
   const [plan, setPlan] = useState(null);
+  const [showIdeas, setShowIdeas] = useState(false);
   const [podcast, setPodcast] = useState(false);
   const [series, setSeries] = useState(project.series || '');
   const load = () => api.get(`/api/projects/${project.id}/plan`).then(setPlan).catch(() => {});
@@ -23,18 +24,25 @@ export default function ContentPlan({ project, setStep, onChange }) {
     if (p.designId) return go({ name: 'graphics', design: p.designId });
     if (p.group === 'Design') return go({ name: 'graphics', make: { projectId: project.id, template: p.id === 'quote' ? 'post-quote' : p.id } });
     if (p.id === 'podcast') return setPodcast(true);
-    if (p.id === 'posts') return go({ name: 'social' });
+    if (p.id === 'posts') return go({ name: 'social', compose: { projectId: project.id } });
     return null;
   };
-  const pct = plan.done / Math.max(1, plan.total);
+  // Pieces someone sets aside stay as ideas but leave the ring, so it only counts what they care about.
+  const hidden = new Set(config.planHidden || []);
+  const shown = plan.pieces.filter((p) => !hidden.has(p.id));
+  const ideas = plan.pieces.filter((p) => hidden.has(p.id));
+  const total = shown.length;
+  const done = shown.filter((p) => p.done).length;
+  const setAside = (p, off) => saveConfig({ planHidden: off ? [...hidden, p.id] : [...hidden].filter((x) => x !== p.id) });
+  const pct = done / Math.max(1, total);
   return (
     <div className="stack" style={{ gap: 16 }}>
       <section className="glass strong panel plan-head">
-        <span className="plan-ring" style={{ '--p': pct }} aria-hidden="true"><strong className="num">{plan.done}</strong><span>of {plan.total}</span></span>
+        <span className="plan-ring" style={{ '--p': pct }} aria-hidden="true"><strong className="num">{done}</strong><span>of {total}</span></span>
         <div className="stack grow" style={{ gap: 4, minWidth: 0 }}>
           <span className="eyebrow">Content plan</span>
-          <h2 style={{ margin: 0 }}>One sermon, {plan.total} ways to share it</h2>
-          <span className="muted small">{plan.done === 0 ? 'Start anywhere. Every piece links back to this sermon.' : plan.done >= plan.total ? 'Everything is made. Well done.' : `${plan.total - plan.done} more pieces you could make from this message.`}</span>
+          <h2 style={{ margin: 0 }}>One sermon, {total} ways to share it</h2>
+          <span className="muted small">{done === 0 ? 'Start anywhere. Every piece links back to this sermon. Set aside any that don\'t fit your church.' : done >= total ? 'Everything is made. Well done.' : `${total - done} more pieces you could make from this message.`}</span>
         </div>
         <label className="field small" style={{ width: 220 }}><span className="row" style={{ gap: 6 }}><Layers size={13} />Series</span>
           <input className="input" value={series} placeholder="Like Rooted" onChange={(e) => setSeries(e.target.value)}
@@ -43,22 +51,42 @@ export default function ContentPlan({ project, setStep, onChange }) {
       </section>
       <div className="plan-grid">
         {GROUPS.map(([g, Icon]) => {
-          const list = plan.pieces.filter((p) => p.group === g);
+          const list = shown.filter((p) => p.group === g);
           if (!list.length) return null;
           return (
             <section key={g} className="glass panel stack" style={{ gap: 6 }}>
               <span className="eyebrow row" style={{ gap: 6 }}><Icon size={13} />{g}</span>
               {list.map((p) => (
-                <button key={p.id} className={`plan-row ${p.done ? 'done' : ''}`} onClick={() => make(p)}>
-                  <span className="plan-check">{p.done && <Check size={13} />}</span>
-                  <span className="stack grow" style={{ gap: 0, minWidth: 0 }}><strong>{p.label}</strong>{p.note && <span className="small muted truncate">{p.note}</span>}</span>
-                  <span className="plan-go">{p.done ? 'Open' : 'Make'}</span>
-                </button>
+                <div key={p.id} className={`plan-row ${p.done ? 'done' : ''}`}>
+                  <button className="plan-main" onClick={() => make(p)}>
+                    <span className="plan-check">{p.done && <Check size={13} />}</span>
+                    <span className="stack grow" style={{ gap: 0, minWidth: 0 }}><strong>{p.label}</strong>{p.note && <span className="small muted truncate">{p.note}</span>}</span>
+                    <span className="plan-go">{p.done ? 'Open' : 'Make'}</span>
+                  </button>
+                  <button className="rt-btn plan-hide" aria-label={`Set aside ${p.label}`} title="Set aside. It stays below as an idea and leaves the count." onClick={() => setAside(p, true)}><Minus size={14} /></button>
+                </div>
               ))}
             </section>
           );
         })}
       </div>
+      {ideas.length > 0 && (
+        <section className="glass panel stack" style={{ gap: 6 }}>
+          <button className="row between plan-ideas-head" aria-expanded={showIdeas} onClick={() => setShowIdeas(!showIdeas)}>
+            <span className="eyebrow">Set aside · {ideas.length}</span>
+            <span className="row small muted" style={{ gap: 4 }}>{showIdeas ? 'Hide' : 'Show'} ideas<ChevronDown size={14} style={{ transform: showIdeas ? 'rotate(180deg)' : 'none', transition: 'transform var(--fast) var(--ease)' }} /></span>
+          </button>
+          {showIdeas && ideas.map((p) => (
+            <div key={p.id} className="plan-row idea">
+              <button className="plan-main" onClick={() => make(p)}>
+                <span className="stack grow" style={{ gap: 0, minWidth: 0 }}><strong>{p.label}</strong><span className="small muted">{p.group}{p.note ? ` · ${p.note}` : ''}</span></span>
+                <span className="plan-go">Make</span>
+              </button>
+              <button className="btn sm" onClick={() => setAside(p, false)}><Plus size={13} />Add back</button>
+            </div>
+          ))}
+        </section>
+      )}
       {plan.project.refs?.length > 0 && (
         <section className="glass panel row wrap" style={{ gap: 8 }}>
           <span className="eyebrow row" style={{ gap: 6 }}><FileText size={13} />Scripture in this message</span>

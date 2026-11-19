@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, AlertCircle, FolderOpen, FolderInput, Send, X } from 'lucide-react';
-import { api, desktop } from '../api.js';
+import { api, desktop, sizeLabel } from '../api.js';
 import { useApp } from '../App.jsx';
 
 const reduced = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -57,7 +57,7 @@ function Toast({ t, dismiss }) {
     return () => clearTimeout(id);
   }, [hover]);
   const r = t.result || {};
-  const mb = r.bytes ? `${(r.bytes / 1048576).toFixed(1)} MB` : '';
+  const mb = r.bytes ? sizeLabel(r.bytes) : '';
   return (
     <>
       {confetti && <Confetti onDone={() => setConfetti(false)} />}

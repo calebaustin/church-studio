@@ -95,7 +95,11 @@ export async function createPost(body) {
   const dests = (body.accountIds || []).map((id) => accounts.find((a) => a.id === id)).filter(Boolean)
     .map((a) => ({ accountId: a.id, platform: a.platform, status: 'pending', caption: body.captions?.[a.id] ?? null }));
   let media = null;
-  if (body.media?.file) {
+  if (body.media?.file && body.media.kind === 'image') {
+    // A design: one image, or a folder of pages for a carousel. Shared by hand, not uploaded to video platforms.
+    if (!existsSync(body.media.file)) throw new Error('That design file no longer exists. Pick the design again.');
+    media = { kind: 'image', file: body.media.file, designId: body.media.designId || null, projectId: body.media.projectId || null, pages: body.media.pages || 1, thumb: body.media.thumb || null };
+  } else if (body.media?.file) {
     if (!existsSync(body.media.file)) throw new Error('That video file no longer exists. Export the clip again.');
     const info = await probe(body.media.file);
     media = { ...body.media, width: info.width, height: info.height, length: info.duration, bytes: statSync(body.media.file).size };
@@ -103,7 +107,7 @@ export async function createPost(body) {
   const when = body.mode === 'schedule' ? new Date(body.scheduledAt) : null;
   if (body.mode === 'schedule' && (Number.isNaN(when?.getTime()) || when < Date.now() - 60_000)) throw new Error('Pick a time in the future.');
   if (body.mode !== 'draft' && !dests.length) throw new Error('Pick at least one account.');
-  if (body.mode !== 'draft' && dests.some((d) => platform(d.platform).kind === 'api') && !media) throw new Error('Video platforms need a clip attached.');
+  if (body.mode !== 'draft' && dests.some((d) => platform(d.platform).kind === 'api') && (!media || media.kind === 'image')) throw new Error('Video platforms need a clip attached. Designs can go to accounts you post to by hand.');
   const post = {
     id: store.newId(), title: (body.title || '').slice(0, 200), caption: body.caption || '', hashtags: body.hashtags || [],
     media, destinations: dests, options: body.options || {},
@@ -203,6 +207,7 @@ async function publish(id) {
     try {
       const account = await store.getAccount(d.accountId, { withCredentials: true });
       if (!account) throw new Error('This account was disconnected.');
+      if (post.media?.kind === 'image') throw new Error(`${p.name} takes video here. Share this design by hand.`);
       if (!post.media?.file || !existsSync(post.media.file)) throw new Error('The video file is missing. Export the clip again.');
       const file = await fitVideo(post.media.file, p, post.media);
       await setDest(id, d.accountId, { message: `Uploading to ${p.name}…` });

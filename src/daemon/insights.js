@@ -97,7 +97,7 @@ export async function gapReport() {
     if (full.blank) continue;
     const plan = await contentPlan(p.id).catch(() => null);
     if (!plan) continue;
-    rows.push({ id: p.id, title: p.title, date: p.created, done: plan.done, total: plan.total, missing: plan.pieces.filter((x) => !x.done).map((x) => x.label) });
+    rows.push({ id: p.id, title: p.title, date: p.created, done: plan.done, total: plan.total, missing: plan.pieces.filter((x) => !x.done && !x.aside).map((x) => x.label) });
   }
   rows.sort((a, b) => a.done / a.total - b.done / b.total);
   return { rows };

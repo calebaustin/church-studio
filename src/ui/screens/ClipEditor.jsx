@@ -7,7 +7,7 @@ import ExportDialog from '../components/ExportDialog.jsx';
 import Scrubber from '../components/Scrubber.jsx';
 import Modal from '../components/Modal.jsx';
 import LibraryPicker from '../components/LibraryPicker.jsx';
-import { CaptionStyleFields, HookStyleFields } from '../components/VideoThemeEditor.jsx';
+import { CaptionStyleFields, ColorRow, HookStyleFields } from '../components/VideoThemeEditor.jsx';
 import { keepSegments, keptLength } from '../captions.js';
 import { sampleTrack, cueX, clampX } from '../framing.js';
 import ColorField from '../components/ColorField.jsx';
@@ -34,9 +34,13 @@ function CanvasFrame({ video, mode, bg, gap, width, height, colors }) {
   const ref = useRef(null);
   useEffect(() => {
     let raf;
+    let last = null; // the frame time drawn last: while paused, nothing new to draw
     const ctx = ref.current.getContext('2d');
     const draw = () => {
       const v = video.current;
+      const key = v ? `${v.currentTime}:${v.videoWidth}:${v.seeking}:${v.readyState}` : 'none';
+      if (key === last && (!v || v.paused)) { raf = requestAnimationFrame(draw); return; }
+      last = key;
       if (mode === 'lyric') {
         // Slowly moving soft color, matching the export.
         const t = (v?.currentTime || 0);
@@ -220,10 +224,11 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
         setRel(r);
         setPlaying(!v.paused);
       }
-      raf = requestAnimationFrame(tick);
+      // Playing: follow every frame. Paused: check a few times a second, which is plenty for seeks.
+      if (v && v.paused) { raf = setTimeout(() => { raf = requestAnimationFrame(tick); }, 120); } else raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return () => { cancelAnimationFrame(raf); clearTimeout(raf); };
   }, [clip.start, clip.end, keep]);
   useEffect(() => { if (video.current) video.current.currentTime = clip.start + (keep[0]?.[0] || 0); }, [clip.id]);
   const seekRel = (t) => { if (video.current) video.current.currentTime = clip.start + Math.max(0, Math.min(len, t)); };
@@ -416,7 +421,7 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
             <video ref={video} src={media(project.id, project.sourceFile)} preload="auto" playsInline
               style={canvasMode ? { opacity: 0, width: 2, height: 2 } : { height: FH, width: VW, left }} />
             {canvasMode && <CanvasFrame video={video} mode={project.media?.width ? mode : 'lyric'} colors={config.brandColors} bg={crop.bg} gap={crop.gap} width={FRAME_W} height={Math.round(FH)} />}
-            {(clip.popups || []).map((p) => <PopupPreview key={p.id} p={p} t={outTime} frameWidth={FRAME_W} accent={config.brandColors?.[1]} />)}
+            {(clip.popups || []).map((p) => <PopupPreview key={p.id} p={p} t={outTime} still={!playing} frameWidth={FRAME_W} accent={config.brandColors?.[1]} />)}
             {themeDraft && (
               <CaptionOverlay theme={themeDraft} font={font} words={clip.captions !== false ? capWords : []} t={rel} frameWidth={FRAME_W}
                 hook={clip.hook} showHook={outTime < (themeDraft.hookDuration ?? 3.5) || tab === 'text'} hookY={clip.hookY} onHookDrag={(y) => set({ hookY: +y.toFixed(3) })} />
@@ -728,6 +733,7 @@ function WordsTab({ words, clip, set, cut, rel, outLen, seek }) {
 }
 
 // ---------------------------------------------------------------- text pop-ups
+const onColorHex = (hex) => { const h = String(hex).replace('#', ''); const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255); return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.6 ? '#141821' : '#FFFFFF'; };
 const PSTYLES = [['pill', 'Pill'], ['lower', 'Lower third'], ['plain', 'Plain']];
 const PPOS = [['top', 'Top'], ['middle', 'Middle'], ['lower', 'Lower']];
 const PTRANS = [['fade', 'Fade'], ['slide', 'Slide up'], ['pop', 'Pop']];
@@ -740,16 +746,29 @@ function popupState(p, t) {
   return { r, dy: p.transition === 'slide' ? (1 - r) * 46 : 0, scale: p.transition === 'pop' ? 0.85 + 0.15 * r : 1 };
 }
 
-function PopupPreview({ p, t, frameWidth, accent }) {
+/** Each shape's starting colors. A pop-up's own colors and size override these. Mirrors popup_image() in render_clip.py. */
+export const POPUP_LOOK = {
+  pill: { color: '#141821', bg: '#FFFFFF', bgOpacity: 0.92, size: 50 },
+  lower: { color: '#FFFFFF', bg: '#0C0E14', bgOpacity: 0.78, size: 44 },
+  plain: { color: '#FFFFFF', bg: null, bgOpacity: 0, size: 50 },
+};
+const hexA = (hex, a) => { const h = String(hex || '#000000').replace('#', '').padEnd(6, '0'); return `rgba(${parseInt(h.slice(0, 2), 16)}, ${parseInt(h.slice(2, 4), 16)}, ${parseInt(h.slice(4, 6), 16)}, ${a})`; };
+
+function PopupPreview({ p, t, frameWidth, accent, still }) {
   const st = popupState(p, t);
   if (!st) return null;
+  // Paused: show it fully, so a new pop-up never looks hidden at the start of its fade.
+  const s = still ? { r: 1, dy: 0, scale: 1 } : st;
   const k = frameWidth / 1080;
   const top = { top: '12%', middle: '44%', lower: '70%' }[p.position || 'lower'];
   const style = p.style || 'pill';
+  const base = POPUP_LOOK[style] || POPUP_LOOK.pill;
+  const bg = style === 'plain' ? undefined : hexA(p.bg || base.bg, p.bgOpacity ?? base.bgOpacity);
   return (
     <div className={`popup-prev ${style}`} style={{
-      top, opacity: st.r, transform: `translate(${style === 'lower' ? '0' : '-50%'}, ${st.dy * k}px) scale(${st.scale})`,
-      left: style === 'lower' ? '6%' : '50%', fontSize: (style === 'lower' ? 44 : 50) * k, '--pa': accent || 'var(--accent-2)',
+      top, opacity: s.r, transform: `translate(${style === 'lower' ? '0' : '-50%'}, ${s.dy * k}px) scale(${s.scale})`,
+      left: style === 'lower' ? '6%' : '50%', fontSize: (p.size || base.size) * k, '--pa': p.accent || accent || 'var(--accent-2)',
+      color: p.color || base.color, background: bg, textTransform: p.uppercase ? 'uppercase' : undefined,
     }}>{String(p.text || '').split('\n').map((l, i) => <div key={i}>{l}</div>)}</div>
   );
 }
@@ -801,6 +820,33 @@ function PopupsTab({ clip, set, now, len }) {
             <div className="seg sm">{PPOS.map(([k, l]) => <button key={k} className={(p.position || 'lower') === k ? 'on' : ''} onClick={() => up(p.id, { position: k })}>{l}</button>)}</div>
             <div className="seg sm">{PTRANS.map(([k, l]) => <button key={k} className={(p.transition || 'fade') === k ? 'on' : ''} onClick={() => up(p.id, { transition: k })}>{l}</button>)}</div>
           </div>
+          <details className="pop-style">
+            <summary className="small">Colors and size</summary>
+            {(() => {
+              const base = POPUP_LOOK[p.style || 'pill'] || POPUP_LOOK.pill;
+              const brand = config.brandColors || [];
+              return (
+                <div className="stack" style={{ gap: 10, paddingTop: 10 }}>
+                  {brand.length > 0 && (
+                    <div className="row wrap" style={{ gap: 6 }}>
+                      <span className="small muted">Brand looks</span>
+                      {brand.slice(0, 5).map((c) => (
+                        <button key={c} className="swatch-btn" title={`Background ${c}`} style={{ background: c }} onClick={() => up(p.id, { bg: c, bgOpacity: 0.94, color: onColorHex(c), style: p.style === 'plain' ? 'pill' : p.style })} />
+                      ))}
+                    </div>
+                  )}
+                  <div className="token-grid">
+                    <ColorRow label="Text" color={p.color || base.color} onColor={(v) => up(p.id, { color: v })} />
+                    {(p.style || 'pill') !== 'plain' && <ColorRow label="Background" color={p.bg || base.bg} opacity={p.bgOpacity ?? base.bgOpacity} onColor={(v) => up(p.id, { bg: v })} onOpacity={(v) => up(p.id, { bgOpacity: v })} />}
+                    {p.style === 'lower' && <ColorRow label="Accent bar" color={p.accent || brand[1] || '#D9A441'} onColor={(v) => up(p.id, { accent: v })} />}
+                    <label className="field">Size · {p.size || base.size}<input type="range" min="28" max="110" value={p.size || base.size} onChange={(e) => up(p.id, { size: Number(e.target.value) })} /></label>
+                    <label className="row small" style={{ alignSelf: 'end' }}><input type="checkbox" checked={Boolean(p.uppercase)} onChange={(e) => up(p.id, { uppercase: e.target.checked })} />ALL CAPS</label>
+                  </div>
+                  {(p.color || p.bg || p.size || p.uppercase || p.accent) && <button className="btn ghost sm" onClick={() => up(p.id, { color: null, bg: null, bgOpacity: null, size: null, uppercase: false, accent: null })}>Reset look</button>}
+                </div>
+              );
+            })()}
+          </details>
           {p.end <= p.start && <span className="small" style={{ color: 'var(--bad)' }}>End needs to be after the start.</span>}
         </div>
       ))}

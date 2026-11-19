@@ -22,6 +22,8 @@ import JobsTray from './components/JobsTray.jsx';
 import { Toasts } from './components/Toasts.jsx';
 import Modal from './components/Modal.jsx';
 
+// Where the background color sits on each screen. It glides between spots as you move around.
+const SCENES = { home: 0, library: 1, project: 1, projects: 2, social: 3, writing: 2, graphics: 3, assets: 1, me: 2, settings: 0 };
 const Ctx = createContext(null);
 export const useApp = () => useContext(Ctx);
 
@@ -134,7 +136,7 @@ export default function App() {
       seenNotice.current = st.notice?.id ?? 0;
     }).catch(() => {});
     poll();
-    const id = setInterval(poll, 20000);
+    const id = setInterval(() => { if (!document.hidden) poll(); }, 60000);
     const off = (() => { listeners.current.add(poll); return () => listeners.current.delete(poll); })();
     return () => { live = false; clearInterval(id); off(); };
   }, [config?.llmProvider, toast]);
@@ -195,7 +197,7 @@ export default function App() {
       if (!seenDue.current.size) seenDue.current.add('_');
     }).catch(() => {});
     load();
-    const id = setInterval(load, 20000);
+    const id = setInterval(load, 30000);
     return () => clearInterval(id);
   }, [route.name]);
 
@@ -286,7 +288,7 @@ export default function App() {
 
   return (
     <Ctx.Provider value={value}>
-      <div className="backdrop" aria-hidden="true"><i /><i /><i /></div>
+      <div className="backdrop" aria-hidden="true" data-scene={SCENES[route.name] ?? 0}><i /><i /><i /></div>
       <div className={`shell ${config?.refraction === false ? '' : 'refract'}`}>
         <aside className="sidebar glass">
           <div className="side-drag" />
@@ -322,7 +324,7 @@ export default function App() {
         <main className="main">
           <div className="top-drag" />
           {!config ? null : route.name === 'settings' ? <Settings section={route.section} key={route.section || 's'} />
-            : route.name === 'social' ? <Social compose={route.compose} caption={route.caption} key={route.compose?.clipId || route.caption || 'social'} />
+            : route.name === 'social' ? <Social compose={route.compose} caption={route.caption} key={route.compose?.clipId || route.compose?.design?.id || route.compose?.projectId || route.caption || 'social'} />
               : route.name === 'project' ? <Project id={route.id} initialStep={route.clip ? 'edit' : route.step} initialClip={route.clip} key={route.id + (route.step || '') + (route.clip || '')} />
                 : route.name === 'library' ? <Library openPicker={route.pick} key={route.pick ? 'pick' : 'lib'} />
                   : route.name === 'writing' ? <Writing project={route.project} kind={route.kind} key={(route.project || 'w') + (route.kind || '')} />

@@ -520,29 +520,48 @@ class Lyric:
         return cv2.resize(small.clip(0, 255).astype(np.uint8), (self.W, self.H), interpolation=cv2.INTER_CUBIC)
 
 
+def _rgba(hexstr, alpha: float):
+    b, g, r = hex_bgr(hexstr)
+    return (int(r), int(g), int(b), int(max(0.0, min(1.0, float(alpha))) * 255))
+
+
+# Each shape's starting look. A pop-up's own colors and size override these (mirrors POPUP_LOOK in the clip editor).
+POPUP_LOOK = {
+    "pill": {"color": "#141821", "bg": "#FFFFFF", "bgOpacity": 0.92, "size": 50},
+    "lower": {"color": "#FFFFFF", "bg": "#0C0E14", "bgOpacity": 0.78, "size": 44},
+    "plain": {"color": "#FFFFFF", "bg": None, "bgOpacity": 0, "size": 50},
+}
+
+
 def popup_image(p: dict, W: int, H: int, font_path, style_name, font_index, accent: str) -> np.ndarray:
     """One text pop-up drawn once: a pill, a lower third, or plain text with a shadow."""
     k = W / 1080
     style = p.get("style", "pill")
-    size = int((44 if style == "lower" else 50) * k)
+    look = POPUP_LOOK.get(style, POPUP_LOOK["pill"])
+    size = int(float(p.get("size") or look["size"]) * k)
     font = load_font(font_path, style_name, size, font_index)
     text = str(p.get("text", "")).strip() or " "
+    if p.get("uppercase"):
+        text = text.upper()
+    fg = _rgba(p.get("color") or look["color"], 1)
+    bg_op = p.get("bgOpacity")
+    bg = _rgba(p.get("bg") or look["bg"] or "#000000", look["bgOpacity"] if bg_op is None else bg_op)
     lines = text.split("\n")[:3]
     probe = ImageDraw.Draw(Image.new("RGBA", (10, 10)))
     widths = [probe.textlength(l, font=font) for l in lines]
     lh = int(size * 1.25)
-    pad_x, pad_y = int(30 * k), int(18 * k)
+    pad_x, pad_y = int(size * 0.6), int(size * 0.36)
     tw = int(min(W * 0.86, max(widths)))
     th = lh * len(lines)
     if style == "lower":
-        bw, bh = tw + pad_x * 2 + int(10 * k), th + pad_y * 2
+        bar = max(4, int(size * 0.22))
+        bw, bh = tw + pad_x * 2 + bar, th + pad_y * 2
         img = Image.new("RGBA", (bw, bh), (0, 0, 0, 0))
         d = ImageDraw.Draw(img)
-        d.rounded_rectangle([0, 0, bw - 1, bh - 1], radius=int(14 * k), fill=(12, 14, 20, 200))
-        ac = hex_bgr(accent)[::-1].astype(int)
-        d.rectangle([0, 0, int(10 * k), bh], fill=(int(ac[0]), int(ac[1]), int(ac[2]), 255))
+        d.rounded_rectangle([0, 0, bw - 1, bh - 1], radius=int(size * 0.3), fill=bg)
+        d.rectangle([0, 0, bar, bh], fill=_rgba(p.get("accent") or accent, 1))
         for i, l in enumerate(lines):
-            d.text((pad_x + int(10 * k), pad_y + i * lh), l, font=font, fill=(255, 255, 255, 255))
+            d.text((pad_x + bar, pad_y + i * lh), l, font=font, fill=fg)
     elif style == "plain":
         bw, bh = tw + pad_x * 2, th + pad_y * 2
         img = Image.new("RGBA", (bw, bh), (0, 0, 0, 0))
@@ -550,15 +569,15 @@ def popup_image(p: dict, W: int, H: int, font_path, style_name, font_index, acce
         for i, l in enumerate(lines):
             x = (bw - probe.textlength(l, font=font)) / 2
             d.text((x + 3 * k, pad_y + i * lh + 3 * k), l, font=font, fill=(0, 0, 0, 150))
-            d.text((x, pad_y + i * lh), l, font=font, fill=(255, 255, 255, 255))
+            d.text((x, pad_y + i * lh), l, font=font, fill=fg)
     else:
         bw, bh = tw + pad_x * 2, th + pad_y * 2
         img = Image.new("RGBA", (bw, bh), (0, 0, 0, 0))
         d = ImageDraw.Draw(img)
-        d.rounded_rectangle([0, 0, bw - 1, bh - 1], radius=int(min(bh / 2, 40 * k)), fill=(255, 255, 255, 235))
+        d.rounded_rectangle([0, 0, bw - 1, bh - 1], radius=int(min(bh / 2, size * 1.2)), fill=bg)
         for i, l in enumerate(lines):
             x = (bw - probe.textlength(l, font=font)) / 2
-            d.text((x, pad_y + i * lh), l, font=font, fill=(20, 24, 33, 255))
+            d.text((x, pad_y + i * lh), l, font=font, fill=fg)
     return np.array(img)
 
 

@@ -3,6 +3,7 @@ import { Lightbulb, Plus, ArrowRight, Check, Layers, MonitorPlay, Palette, Targe
 import { useApp } from '../App.jsx';
 import { api } from '../api.js';
 import Activity from '../components/Activity.jsx';
+import JumpstartCard from '../components/Jumpstart.jsx';
 
 /** Ideas sourced from what the app can do, personalized with topics from the user's sermons. */
 function ideasFor(topics, sermons) {
@@ -70,7 +71,8 @@ export default function MyApp({ section } = {}) {
         <span className="muted">Your settings at a glance, and ideas for what to make next.</span>
       </div>
 
-      <div className="grid2" style={{ alignItems: 'start' }}>
+      <div className="myapp-cols">
+        <div className="stack">
         <section className="glass strong panel stack">
           <h2>Your setup</h2>
           {rows.map(([I, label, value, onClick]) => (
@@ -82,12 +84,7 @@ export default function MyApp({ section } = {}) {
           ))}
         </section>
 
-        <section className="glass panel row between wrap" style={{ gap: 12 }}>
-          <div className="stack" style={{ gap: 2 }}><strong>Welcome walkthrough</strong><span className="muted small">See the welcome again and choose the kinds of work you do.</span></div>
-          <button className="btn sm" onClick={async () => { await saveConfig({ onboarded: false }); go({ name: 'home' }); }}><Sparkles size={14} />Start the walkthrough</button>
-        </section>
-
-        <Activity />
+        <JumpstartCard />
 
         <section className="glass strong panel stack">
           <div className="row between"><h2>Workspaces</h2><span className="muted small">One per brand or ministry</span></div>
@@ -105,6 +102,15 @@ export default function MyApp({ section } = {}) {
           </div>
           <span className="hint">Switching restarts the app engine. It takes a couple of seconds.</span>
         </section>
+        </div>
+
+        <div className="stack">
+          <section className="glass panel row between wrap" style={{ gap: 12 }}>
+            <div className="stack" style={{ gap: 2 }}><strong>Welcome walkthrough</strong><span className="muted small">See the welcome again and choose the kinds of work you do.</span></div>
+            <button className="btn sm" onClick={async () => { await saveConfig({ onboarded: false }); go({ name: 'home' }); }}><Sparkles size={14} />Start the walkthrough</button>
+          </section>
+          <Activity />
+        </div>
       </div>
 
       <section className="stack">
