@@ -1,5 +1,5 @@
 // Electron shell: own window, starts the local daemon, loads the UI from it.
-const { app, BrowserWindow, dialog, ipcMain, nativeImage, Notification, screen, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, Notification, screen, shell } = require('electron');
 const { fork } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -116,12 +116,6 @@ ipcMain.handle('present-open', async (_e, { displayId } = {}) => {
   } catch (e) { return { ok: false, error: e.message }; }
 });
 ipcMain.handle('present-close', () => { if (presentWindow && !presentWindow.isDestroyed()) presentWindow.destroy(); presentWindow = null; });
-// The Dock shows the church's logo while the app runs (drawn by the UI). null puts the app icon back.
-ipcMain.handle('set-dock-icon', (_e, dataUrl) => {
-  if (process.platform !== 'darwin') return;
-  if (dataUrl) app.dock.setIcon(nativeImage.createFromDataURL(dataUrl));
-  else app.dock.setIcon(nativeImage.createFromPath(app.isPackaged ? path.join(process.resourcesPath, 'assets', 'build', 'icon.png') : path.join(ROOT, 'assets', 'build', 'icon.png')));
-});
 // Mac notifications for finished work and posts that are due. Clicking one brings the app forward.
 ipcMain.handle('notify', (_e, { title, body } = {}) => {
   if (!Notification.isSupported()) return false;

@@ -23,7 +23,7 @@ const FORMAT = 1;
 
 /** What can be shared, and the settings each part carries. */
 export const PARTS = {
-  brand: { label: 'Brand kit', about: 'Colors, fonts and logos', keys: ['brandColors', 'brandFonts', 'brandColorsSet', 'brandFontsSet', 'logoKinds', 'appLogo', 'dockLogo'] },
+  brand: { label: 'Brand kit', about: 'Colors, fonts and logos', keys: ['brandColors', 'brandFonts', 'brandColorsSet', 'brandFontsSet', 'logoKinds', 'appLogo'] },
   voice: { label: 'Brand voice', about: 'Mission, website copy, themes and writing samples', keys: [] },
   church: { label: 'Church info', about: 'Name, address, phone, email and service times', keys: ['churchInfo'] },
   links: { label: 'Links and connections', about: 'YouTube channel, calendar links and social links. No passwords or keys.', keys: ['youtubeChannel', 'calendarFeeds', 'socialLinks'] },

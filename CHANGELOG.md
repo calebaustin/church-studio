@@ -2,6 +2,14 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## Unreleased
+
+### Better
+- **A calmer standard look.** The new Olive palette is the default: a warm off-white leaning olive, leaf green and a soft clay accent, with Olive Night for dark mode. The background is one still color with a faint frosted grain instead of moving color blobs, and panels sit on top as mostly solid cards. Moving between screens also uses less of your Mac. If you picked another theme on purpose, you keep it; the other themes are still in My App.
+
+### Removed
+- **Church logo in the Dock.** The Dock always shows the Church Studio icon now. Your logo still shows at the top of the menu.
+
 ## 0.12.0 · November 19, 2026
 
 ### New

@@ -38,7 +38,7 @@ export function AppLogo() {
   return (
     <section className="glass panel stack" style={{ gap: 12 }}>
       <h3>Your logo in the app</h3>
-      <p className="muted small" style={{ margin: 0 }}>Shows at the top of the menu and in the Dock, with a small CS badge in the corner.</p>
+      <p className="muted small" style={{ margin: 0 }}>Shows at the top of the menu.</p>
       {logos && !logos.length && <div className="row between wrap"><span className="small muted">Add your logo to Logos in the brand library first.</span><button className="btn sm" onClick={() => go({ name: 'assets' })}>Open brand library</button></div>}
       {logos?.length > 0 && (
         <div className="row wrap" style={{ gap: 8 }}>
@@ -49,7 +49,6 @@ export function AppLogo() {
           ))}
         </div>
       )}
-      <label className="switch"><input type="checkbox" checked={config.dockLogo !== false} onChange={(e) => saveConfig({ dockLogo: e.target.checked })} />Show my logo in the Dock</label>
     </section>
   );
 }

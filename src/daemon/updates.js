@@ -126,6 +126,23 @@ const MIGRATIONS = [
       }
     },
   },
+  {
+    // Olive is the new standard palette. Anyone on the old default themes moves to it; a theme picked
+    // on purpose stays. The Dock logo setting is gone.
+    to: '0.13.0',
+    run: async (home) => {
+      const files = [path.join(home, 'config.local.json')];
+      for (const w of await readdir(path.join(home, 'workspaces')).catch(() => [])) files.push(path.join(home, 'workspaces', w, 'config.local.json'));
+      for (const f of files) {
+        if (!existsSync(f)) continue;
+        const c = JSON.parse(await readFile(f, 'utf8'));
+        if (!c.appTheme || c.appTheme === 'sermon-light') c.appTheme = 'olive';
+        if (!c.appThemeDark || c.appThemeDark === 'midnight-glass') c.appThemeDark = 'olive-night';
+        delete c.dockLogo;
+        await writeFile(f, JSON.stringify(c, null, 2));
+      }
+    },
+  },
 ];
 
 async function backupSmallData(from) {

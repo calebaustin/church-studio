@@ -48,7 +48,7 @@ function LogoManager({ lib, reload }) {
   const kinds = config.logoKinds || {};
   const kindOf = (l) => kinds[l.rel] || (l === primary ? 'full' : null);
   const setKind = (l, k) => saveConfig({ logoKinds: { ...kinds, [l.rel]: k } });
-  const makePrimary = async (l) => { await saveConfig({ appLogo: l.rel }); refreshLogo?.(); toast({ text: `${l.name} is now your primary logo. The menu and Dock use it.` }); };
+  const makePrimary = async (l) => { await saveConfig({ appLogo: l.rel }); refreshLogo?.(); toast({ text: `${l.name} is now your primary logo. The menu uses it.` }); };
   const add = async () => {
     if (!desktop?.pickFiles) return api.post('/api/library/open', { folder: 'Logos' });
     const paths = await desktop.pickFiles();
@@ -71,7 +71,7 @@ function LogoManager({ lib, reload }) {
   };
   return (
     <div className="stack" style={{ gap: 8 }}>
-      <span className="field-label">Logos <span className="hint">The primary logo shows in the menu, the Dock and printed pages. Add light, dark and icon versions for other backgrounds. Best files: SVG, or PNG with a see-through background. A white background can be erased from the ⋯ menu.</span></span>
+      <span className="field-label">Logos <span className="hint">The primary logo shows in the menu and on printed pages. Add light, dark and icon versions for other backgrounds. Best files: SVG, or PNG with a see-through background. A white background can be erased from the ⋯ menu.</span></span>
       <div className="logo-row">
         {logos.map((l) => {
           const k = kindOf(l);

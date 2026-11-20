@@ -2,7 +2,10 @@
 
 ## Look and feel
 - Light by default, with a full dark mode. Soft shadows, generous radius.
-- Glass panels are CSS (backdrop blur and saturation) with an optional refraction filter.
+- The standard palette is **Olive** (light) and **Olive Night** (dark): a warm off-white leaning olive, leaf
+  green `#4A7C59`, and a clay accent `#C08A4E`. Natural and calm.
+- The background is one still color with a faint frosted grain and a soft light from the top. No moving
+  color blobs. Panels sit on it as mostly solid cards (glass blur stays for menus and pop-ups over content).
 - Motion is subtle and respects `prefers-reduced-motion`.
 
 ## Tokens

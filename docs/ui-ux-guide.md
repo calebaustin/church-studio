@@ -15,9 +15,9 @@ Change these first. Everything else is built on them.
 | App name and how it's written | "Minister To Minister" in full first, "M to M" after; lowercase in browser tabs and emails | "Church Studio" everywhere |
 | Who it's for | Tired ministers who've been marketed to too much | Church media volunteers and pastors with a few minutes a week |
 | One-sentence promise | "You have something to share. Share it here, minister to minister." | "Pick a service. Get captioned vertical clips of the best moments." |
-| Primary color | Violet `#5b3df5` | Per theme: `--accent` (Sermon Light `#3D6BFF`) |
-| Accent color | Gold `#ffb21e` | Per theme: `--accent-2` (Sermon Light `#FF8A5B`) |
-| Ink (dark text and dark panels) | `#16132b` | `--ink` (Sermon Light `#141821`) |
+| Primary color | Violet `#5b3df5` | Per theme: `--accent` (Olive `#4A7C59`) |
+| Accent color | Gold `#ffb21e` | Per theme: `--accent-2` (Olive `#C08A4E`) |
+| Ink (dark text and dark panels) | `#16132b` | `--ink` (Olive `#20251D`) |
 | Background / surface | `#ffffff` / `#f6f4ff` (faint lavender) | `--bg` / glass from `--glass-rgb` |
 | Heading font / body font | Space Grotesk / Inter | Avenir Next / SF Pro (system) |
 | Corner radius / base text size | 16px / 17px | 20px / 15px (desktop app) |

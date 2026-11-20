@@ -110,6 +110,19 @@ const VIDEO_BUILTINS = [
 // (see docs/ui-ux-guide.md §4). `mode` decides which slot a theme fills: light or dark.
 const sans = "-apple-system, 'SF Pro Text', 'Inter', system-ui, sans-serif";
 const APP_BUILTINS = [
+  // The standard palette: a warm off-white leaning olive, leaf green, and a clay accent. Natural and calm.
+  {
+    id: 'olive', name: 'Olive', mode: 'light', builtin: true,
+    tokens: { '--bg': '#ECEBDF', '--bg-2': '#E2E2D0', '--ink': '#20251D', '--accent': '#4A7C59', '--accent-2': '#C08A4E',
+      '--glass-rgb': '252, 252, 246', '--radius': '18px', '--glass-blur': '14px', '--glass-tint': '0.9',
+      '--font-sans': sans, '--font-display': "'Avenir Next', -apple-system, system-ui, sans-serif" },
+  },
+  {
+    id: 'olive-night', name: 'Olive Night', mode: 'dark', builtin: true,
+    tokens: { '--bg': '#171A15', '--bg-2': '#1E221B', '--ink': '#ECEDE3', '--accent': '#93C29B', '--accent-2': '#E2AE72',
+      '--glass-rgb': '37, 42, 34', '--radius': '18px', '--glass-blur': '14px', '--glass-tint': '0.9',
+      '--font-sans': sans, '--font-display': "'Avenir Next', -apple-system, system-ui, sans-serif" },
+  },
   {
     id: 'sermon-light', name: 'Sermon Light', mode: 'light', builtin: true,
     tokens: { '--bg': '#EEF2F8', '--bg-2': '#F8F4EE', '--ink': '#141821', '--accent': '#3D6BFF', '--accent-2': '#FF8A5B',

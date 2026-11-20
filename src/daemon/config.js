@@ -28,8 +28,8 @@ export const DEFAULTS = {
   exportFolder: '',
   exportPattern: '{date} - {title}',
   appearance: 'system', // light | dark | system
-  appTheme: 'sermon-light',
-  appThemeDark: 'midnight-glass',
+  appTheme: 'olive',
+  appThemeDark: 'olive-night',
   refraction: true, // liquid-glass displacement on panels
   videoTheme: 'soft-pill',
   exportOptions: { preset: 'vertical', resolution: '1080', quality: 'high', fps: 30, codec: 'h264', captions: true, hook: true, after: 'reveal' },
@@ -51,8 +51,7 @@ export const DEFAULTS = {
   dismissed: {}, // setup checklists the user closed
   toolIntros: {}, // tools whose first-visit hello was put away
   churchInfo: { name: '', pastor: '' /* the minister's name */, address: '', website: '', phone: '', email: '', times: '' }, // printed footers
-  appLogo: '', // brand library path of the logo for the sidebar and Dock; empty means the first in Logos
-  dockLogo: true, // show the church logo in the Dock
+  appLogo: '', // brand library path of the logo for the sidebar; empty means the first in Logos
   logoKinds: {}, // { 'Logos/file.png': 'full' | 'light' | 'dark' | 'icon' | 'wordmark' }
   calendarFeeds: [], // church calendar links (.ics): [{ id, name, url }] from Planning Center, Subsplash, Tithe.ly, Google...
   calendarIcal: '', // older single link; moved into calendarFeeds by the 0.4.1 migration

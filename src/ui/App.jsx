@@ -1,7 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Settings as SettingsIcon, HardDrive, LayoutDashboard, MonitorPlay, UserRound, Search } from 'lucide-react';
 import { enabledTools, isOn } from './tools.js';
-import { makeDockIcon } from './dockIcon.js';
 import SideCards from './components/SideCards.jsx';
 import { maybeNote } from './encourage.js';
 import NextSteps from './components/NextSteps.jsx';
@@ -25,7 +24,6 @@ import { Toasts } from './components/Toasts.jsx';
 import Modal from './components/Modal.jsx';
 
 // Where the background color sits on each screen. It glides between spots as you move around.
-const SCENES = { home: 0, library: 1, project: 1, projects: 2, social: 3, writing: 2, graphics: 3, assets: 1, me: 2, settings: 0, inspiration: 3, calendar: 3 };
 const Ctx = createContext(null);
 export const useApp = () => useContext(Ctx);
 
@@ -47,7 +45,7 @@ export function activeAppTheme(config, themes) {
   return themes.app.find((t) => t.id === id) || fallback;
 }
 
-/** The church's logo for the sidebar and Dock: the one picked in Settings, else the first in Logos. */
+/** The church's logo for the sidebar: the one picked in Settings, else the first in Logos. */
 export function useChurchLogo(config) {
   const [logo, setLogo] = useState(null);
   useEffect(() => {
@@ -260,21 +258,15 @@ export default function App() {
     return r.config;
   }, []);
 
-  // Their church, front and center: logo in the sidebar and in the Dock.
+  // Their church, front and center: logo in the sidebar.
   const [logoTick, setLogoTick] = useState(0);
   const logo = useChurchLogo(config ? { ...config, _t: logoTick } : null);
-  useEffect(() => {
-    if (!config || !window.desktop?.setDockIcon) return;
-    if (config.dockLogo === false || !logo) { window.desktop.setDockIcon(null); return; }
-    makeDockIcon({ logoUrl: logo.url, brandColor: config.brandColors?.[0], ink: config.brandColors?.[2] })
-      .then((png) => window.desktop.setDockIcon(png)).catch(() => {});
-  }, [logo?.url, config?.dockLogo, config?.brandColors?.[0]]);
 
   const value = { route, go, showNext, logo, refreshLogo: () => setLogoTick((n) => n + 1), setGuard, confirmLeave, config, saveConfig, reloadConfig, keyGuide, themes, reloadThemes, jobs, trackJob, onJobFinished, toast };
 
   if (error) {
     return (
-      <div className="app"><div className="backdrop"><i /><i /><i /></div>
+      <div className="app"><div className="backdrop" />
         <div className="main" style={{ display: 'grid', placeItems: 'center' }}>
           <div className="glass strong panel stack" style={{ maxWidth: 520 }}>
             <h2>The local engine isn't answering</h2>
@@ -297,7 +289,7 @@ export default function App() {
 
   return (
     <Ctx.Provider value={value}>
-      <div className="backdrop" aria-hidden="true" data-scene={SCENES[route.name] ?? 0}><i /><i /><i /></div>
+      <div className="backdrop" aria-hidden="true" />
       <div className={`shell ${config?.refraction === false ? '' : 'refract'}`}>
         <aside className="sidebar glass">
           <div className="side-drag" />
