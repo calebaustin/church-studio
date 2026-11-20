@@ -22,3 +22,4 @@ version.json
 
 # Local AI model (CS Helper), downloaded in the app
 models/
+docs/download/download.html

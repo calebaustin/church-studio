@@ -1,10 +1,13 @@
-// Makes docs/download/Download-Church-Studio.pdf, a one-page guide for sharing the app.
+// Makes docs/download/Download-Church-Studio.pdf: page 1 downloads and installs the app, page 2 shows it.
+// Screenshots come from docs/download/capture.cjs (docs/images/share-*.png).
 // Run: npx electron docs/download/make-pdf.cjs
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, nativeImage } = require('electron');
 const fs = require('fs'); const path = require('path');
 const ROOT = path.resolve(__dirname, '..', '..');
 const b64 = (f) => fs.readFileSync(path.join(ROOT, f)).toString('base64');
 const REPO = require(path.join(ROOT, 'package.json')).updateRepo;
+// Screenshots, shrunk to JPEG so the PDF stays small enough to email.
+const shot = (name) => nativeImage.createFromPath(path.join(ROOT, 'docs', 'images', `share-${name}.png`)).resize({ width: 1200 }).toJPEG(82).toString('base64');
 const link = (arch) => `https://github.com/${REPO}/releases/latest/download/Church-Studio-Mac-${arch}.dmg`;
 
 const html = `<!doctype html><html><head><meta charset="utf-8"><style>
@@ -15,7 +18,7 @@ const html = `<!doctype html><html><head><meta charset="utf-8"><style>
 @page { size: letter; margin: 0; }
 * { box-sizing: border-box; }
 body { margin: 0; font-family: Montserrat, sans-serif; color: #1B2440; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-.page { width: 8.5in; height: 11in; padding: 0.5in 0.6in 0.4in; display: flex; flex-direction: column; gap: 0.2in; background: linear-gradient(170deg, #F4F8F5 0%, #FBF7EF 100%); }
+.page { break-after: page; width: 8.5in; height: 11in; overflow: hidden; padding: 0.5in 0.6in 0.4in; display: flex; flex-direction: column; gap: 0.2in; background: linear-gradient(170deg, #F4F8F5 0%, #FBF7EF 100%); }
 .hero { display: flex; align-items: center; gap: 0.25in; }
 .hero img { width: 1.15in; height: 1.15in; }
 h1 { font-family: Caveat, cursive; font-size: 46pt; line-height: .9; margin: 0; color: #1F6048; }
@@ -38,6 +41,11 @@ li { margin: 2pt 0; }
 .note { font-family: Caveat, cursive; font-size: 19pt; color: #1F6048; text-align: center; margin-top: auto; }
 .foot { font-size: 8.5pt; color: #5E6676; text-align: center; }
 .foot a { color: #2B7F5F; }
+.look h1 { font-size: 40pt; }
+.shots { display: grid; grid-template-columns: 1fr 1fr; gap: 0.16in 0.2in; }
+.shot img { display: block; width: 100%; border-radius: 9pt; box-shadow: 0 0 0 1px rgba(27,36,64,.1), 0 6pt 14pt -8pt rgba(27,36,64,.35); }
+.shot b { display: block; margin-top: 6pt; font-size: 10.5pt; color: #1F6048; }
+.shot span { display: block; font-size: 9pt; line-height: 1.4; color: #2E3A55; margin-top: 1pt; }
 </style></head><body><div class="page">
   <div class="hero">
     <img src="data:image/png;base64,${b64('assets/build/icon.png')}" alt="">
@@ -73,17 +81,18 @@ li { margin: 2pt 0; }
       <h2>What you can make</h2>
       <ul>
         <li>Captioned vertical clips that follow the speaker</li>
-        <li>Transcripts of sermons, classes and podcasts</li>
+        <li>A Sermon page that ties every piece to its sermon</li>
         <li>Blog posts, emails and small group guides</li>
-        <li>Social graphics, slide decks and event flyers</li>
-        <li>A social calendar next to your church's events</li>
+        <li>Graphics, slide decks and event flyers</li>
+        <li>Posts and campaigns next to your church's events</li>
+        <li>An optional AI helper that runs on your Mac</li>
       </ul>
     </div>
     <div class="card">
       <h2>Staying up to date</h2>
       <ol>
-        <li>In the app, open <b>Settings › Updates</b>.</li>
-        <li>Press <b>Download update</b>.</li>
+        <li>When the app says an update is ready, press <b>Download</b> (or open <b>Settings › Updates</b>).</li>
+        <li>When it's downloaded, press <b>Quit Church Studio</b>.</li>
         <li><b>Drag Church Studio into Applications and choose Replace.</b></li>
       </ol>
       <p style="font-size:9.5pt;margin:6pt 0 0;color:#5E6676">Your videos, designs and writing stay where they are.</p>
@@ -92,6 +101,23 @@ li { margin: 2pt 0; }
 
   <div class="note">Go into all the world and share the good news.</div>
   <div class="foot">Church Studio is free and runs entirely on your Mac. Updates and source: <a href="https://github.com/${REPO}">github.com/${REPO}</a></div>
+</div>
+<div class="page look">
+  <div class="hero" style="gap:0.2in">
+    <div>
+      <h1>A look inside</h1>
+      <p class="lead">One Sunday sermon becomes clips, a blog post, graphics and a week of posts, all from one app. These screens show a real service from Peachtree City Church of Christ.</p>
+    </div>
+  </div>
+  <div class="shots">
+    <div class="shot"><img src="data:image/jpeg;base64,${shot('sermon')}" alt=""><b>The Sermon page</b><span>The sermon at a glance, its plan, and every clip, post and design made from it.</span></div>
+    <div class="shot"><img src="data:image/jpeg;base64,${shot('clip')}" alt=""><b>Captioned clips</b><span>Pick the best moments, then trim, caption and frame them. A quick lighting pass is built in.</span></div>
+    <div class="shot"><img src="data:image/jpeg;base64,${shot('writing')}" alt=""><b>Writing from the sermon</b><span>A blog post, email, small group guide and captions, from what was actually said.</span></div>
+    <div class="shot"><img src="data:image/jpeg;base64,${shot('design')}" alt=""><b>Design, with a helper</b><span>Templates in your colors. The helper knows your church and suggests headlines.</span></div>
+    <div class="shot"><img src="data:image/jpeg;base64,${shot('dashboard')}" alt=""><b>Your week at a glance</b><span>What's coming up, what to finish, and ideas for what to make next.</span></div>
+    <div class="shot"><img src="data:image/jpeg;base64,${shot('ai')}" alt=""><b>AI is optional</b><span>Use Apple Intelligence or a helper that runs on your Mac, or leave it off. Everything works either way.</span></div>
+  </div>
+  <div class="foot" style="margin-top:auto">Download free: <a href="${link('arm64')}">github.com/${REPO}/releases/latest</a></div>
 </div></body></html>`;
 
 app.whenReady().then(async () => {

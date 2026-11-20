@@ -38,3 +38,6 @@ never give a button `width: 100%` or put it where a grid stretches it). Large si
 - Updates must never break saved work: new settings need defaults, and storage changes need a migration in
   `src/daemon/updates.js`. Add a CHANGELOG.md entry for every release.
 - Reference material and outside tools are kept outside this folder, never in the repo.
+- Test data lives in `../Church Studio Test Data` (real Peachtree City Church of Christ sermons, designs, writing):
+  run `scripts/dev-test.sh` (or `scripts/dev-test.sh app`). It's for development and mock-ups only, never shipped.
+  Share PDF: `npx electron docs/download/capture.cjs` (screenshots), then `npx electron docs/download/make-pdf.cjs`.

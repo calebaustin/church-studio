@@ -11,7 +11,8 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const H = `
   window.__nav = (name) => [...document.querySelectorAll('.side-nav button')].find((b) => b.textContent.trim().startsWith(name))?.click();
   window.__btn = (text) => [...document.querySelectorAll('button')].find((b) => b.textContent.includes(text))?.click();
-  window.__card = (text) => { const e = [...document.querySelectorAll('.main *')].find((x) => x.children.length === 0 && x.textContent.trim().startsWith(text)); (e?.closest('.card, button, [role=button]') || e)?.click(); };
+  // Click a card the way a person does: on its picture, just above its name.
+  window.__card = (text) => { const e = [...document.querySelectorAll('.main *')].find((x) => x.children.length === 0 && x.textContent.trim().startsWith(text)); if (!e) return; const r = e.getBoundingClientRect(); const t = document.elementFromPoint(r.left + r.width / 2, r.top - 70); (t || e).click(); };
   window.__until = async (sel, ms = 30000) => { const t = Date.now(); while (!document.querySelector(sel) && Date.now() - t < ms) await new Promise((r) => setTimeout(r, 250)); };
 `;
 const SHOTS = [
@@ -24,13 +25,13 @@ const SHOTS = [
 ];
 
 app.whenReady().then(async () => {
-  const win = new BrowserWindow({ width: 1440, height: 900, show: false, webPreferences: { offscreen: true } });
-  win.webContents.setFrameRate(30);
+  // A real window, parked off-screen, captures reliably (hidden or offscreen windows can stall).
+  const win = new BrowserWindow({ width: 1440, height: 900, x: -4000, y: 0, show: true, frame: false, focusable: false, skipTaskbar: true });
   await win.loadURL(URL);
   await wait(3000);
-  await win.webContents.executeJavaScript(H);
+  await win.webContents.executeJavaScript(`${H}; true`); // return something simple, not a function
   for (const [name, js, settle] of SHOTS) {
-    try { await win.webContents.executeJavaScript(`(async () => { ${js} })()`); } catch (e) { console.log(name, 'step failed:', e.message); }
+    try { await win.webContents.executeJavaScript(`(async () => { ${js}; return true; })()`); } catch (e) { console.log(name, 'step failed:', e.message); }
     await wait(settle);
     const img = await win.webContents.capturePage();
     fs.writeFileSync(path.join(OUT, `${name}.png`), img.toPNG());
