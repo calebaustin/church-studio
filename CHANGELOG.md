@@ -2,6 +2,14 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## Unreleased
+
+### New
+- **Six new template packs.** Sanctuary (a quiet monograph serif), Table (one warm ink, like a supper-club poster), Vesper (soft and literary), Daisy (sunny and friendly, for kids and family), Poster (loud and quotable) and Quarterly (a considered editorial). Each has an event post and story, a welcome, an announcement, a sermon quote, a verse and a series slide, with your church's details filled in. They use fonts built into your Mac, so they work offline, and "My brand colors" switches them to your colors.
+- **Font pairing in Design.** One pick in the page settings restyles every heading and body line in a design, starting with your brand fonts.
+- **Content ideas from the helper.** Ask what to post or plan and the helper brings in ideas that fit the moment: the month's natural focus and invite moment, a recurring series to try (like Ask a Minister or Sunday in 60 Seconds), a good balance of helpful, community and event posts, and when to start promoting what's coming up. Suggestions, never rules. "What to work on today" now ends with one fresh idea to try.
+- **Design tips from the helper.** In a design, it can mention a tip when it helps, like keeping a social graphic to a few words or keeping text clear of a story's edges.
+
 ## 0.16.1 · November 20, 2026
 
 ### Better

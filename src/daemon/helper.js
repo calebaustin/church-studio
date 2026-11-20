@@ -17,6 +17,8 @@ import { gapReport, sermonIndex } from './insights.js';
 import { listChannel } from './youtube.js';
 import { lookup, refsIn, topicWords, TRANSLATION, versesAbout } from './bible.js';
 import { sermonLinks } from './links.js';
+import { asksForIdeas, ideasFor, SERIES } from './playbook.js';
+import * as socialStore from './social/store.js';
 import { toSentences } from './text.js';
 import { stat } from 'node:fs/promises';
 import { file as projectFile } from './projects.js';
@@ -115,6 +117,8 @@ export async function focusOf(focus = {}, budget = 8000) {
         sel ? `Selected right now: ${sel.label}${sel.text ? ` reading "${clip(sel.text, 120)}"` : ''}. When they say "this" or "it", they mean this.` : 'Nothing is selected, so "this" means the whole design.',
         pics.length && `Pictures in their Brand library (when you suggest one, use its exact name): ${pics.map((im) => `"${im.name}"${im.alt ? ` (${clip(im.alt, 70)})` : ''}`).join('; ')}`,
         camp && `Part of the campaign "${camp.name}" for ${day(camp.date)}${camp.event ? `: ${camp.event.title}${camp.event.location ? ` at ${camp.event.location}` : ''}` : ''}.`];
+      // Design tips the helper may mention in passing when they ask for help with a design.
+      lines.push(`Design tips you can mention lightly if they help: one main idea per graphic; a clear order (headline, then details, then where and when); about 10 words or fewer on a social graphic; two fonts at most; strong contrast between text and background; leave space around the edges${d.kind === 'story' ? ', and keep words out of the top and bottom 250 pixels of a story, where the app covers them' : ''}; use brand colors for consistency; a real photo of people beats a stock image.`);
       const from = d.source?.projectId ? await getProject(d.source.projectId).catch(() => null) : null;
       if (from) lines.push(`Made from the sermon "${from.title}".`);
       return { label: d.name, chips: [`Design: ${d.name}`, from && `Sermon: ${from.title}`, camp && `Campaign: ${camp.name}`].filter(Boolean), text: lines.filter(Boolean).join('\n'), passes: PASS_LIST.design };
@@ -195,21 +199,35 @@ HOW CHURCH STUDIO IS LAID OUT
 - Settings: Your tools, Connections, YouTube channel, AI helper, Transcription & clips, Exports, App theme, Caption themes, Church info (name, minister, service times, address, website), Helper programs, Backups and sharing, Updates, Send feedback.`;
 }
 
-async function systemFor(cfg, focus) {
+async function systemFor(cfg, focus, { ideas = false } = {}) {
   const budget = budgetFor(cfg.llmProvider);
   const f = await focusOf(focus, budget);
   const facts = await churchFacts(cfg, budget);
   const trimmed = facts.length > budget * 0.6 ? `${facts.slice(0, budget * 0.6)}…` : facts;
-  return { system: `${rules(cfg.llmProvider, cfg)}\n\nWHAT YOU KNOW ABOUT ${String(cfg.churchInfo?.name || 'THE CHURCH').toUpperCase()}\n${trimmed}\n\nWHAT THEY'RE WORKING ON NOW\n${f.text}`, focus: f };
+  let system = `${rules(cfg.llmProvider, cfg)}\n\nWHAT YOU KNOW ABOUT ${String(cfg.churchInfo?.name || 'THE CHURCH').toUpperCase()}\n${trimmed}\n\nWHAT THEY'RE WORKING ON NOW\n${f.text}`;
+  // Marketing ideas, offered lightly when they're planning or asking what to make.
+  if (ideas || ['social', 'calendar', 'home'].includes(focus?.screen)) system += `\n\n${await ideasBlock(budget)}`;
+  return { system, focus: f };
+}
+
+/** A few church-marketing ideas for right now, framed as suggestions the helper can mention in passing. */
+async function ideasBlock(budget) {
+  const posts = (await socialStore.listPosts().catch(() => [])).sort((a, b) => String(b.updated || '').localeCompare(String(a.updated || ''))).slice(0, 12);
+  const promo = (p) => Boolean(p.campaignId) || /\b(join us|register|sign up|signup|this (sunday|saturday|friday)|tickets|rsvp)\b/i.test(`${p.title} ${p.caption}`);
+  const recent = posts.length ? { total: posts.length, promos: posts.filter(promo).length } : null;
+  const { events } = await cachedEvents();
+  const soon = (events || []).filter((e) => Date.parse(e.start) > Date.now() && Date.parse(e.start) < Date.now() + 56 * 86400_000).sort((a, b) => a.start.localeCompare(b.start))[0];
+  const lines = ideasFor({ recent, soonEvent: soon ? `${soon.title} (${day(soon.start)})` : null, budget: budget < 6000 ? 'small' : 'big' });
+  return `IDEAS YOU CAN SUGGEST (lightly, only when they fit)\nWhen they ask what to make or post, you may mention one of these naturally, like "Why not try a…? Here are a couple of ideas: …". They are suggestions, never rules. Don't list them all, and don't lecture.\n${lines.map((l) => `- ${l}`).join('\n')}`;
 }
 
 /** The chat. Streams the answer through onDelta(text) or onReplace(full). */
 export async function helperChat({ focus, messages, onDelta, signal }) {
   const cfg = await loadConfig();
   if (!cfg.llmProvider || cfg.llmProvider === 'none') throw new Error('Turn on an AI helper in Settings first.');
-  let { system } = await systemFor(cfg, focus);
   const clean0 = (messages || []).filter((m) => m?.role === 'user');
   const lastQ = String(clean0[clean0.length - 1]?.content || '');
+  let { system } = await systemFor(cfg, focus, { ideas: asksForIdeas(lastQ) });
   let moments = [];
   if (isBeliefQuestion(lastQ)) {
     moments = await sermonMoments(lastQ);
@@ -382,7 +400,7 @@ const PASS_LIST = {
 export async function runPass({ focus, pass }) {
   const cfg = await loadConfig();
   if (!cfg.llmProvider || cfg.llmProvider === 'none') throw new Error('Turn on an AI helper in Settings first.');
-  const { system, focus: f } = await systemFor(cfg, focus);
+  const { system, focus: f } = await systemFor(cfg, focus, { ideas: ['ideas', 'week', 'plan', 'captions', 'next', 'make'].includes(pass) });
   const p = f.passes.find((x) => x.id === pass);
   if (!p) throw new Error('That helper pass isn\'t available here.');
   const shape = 'Answer with JSON only: {"options":["...","..."]}. Each option is plain text, ready to use, without numbering or quotes around it.';
@@ -484,7 +502,9 @@ export async function whatToday() {
       if (v) picks.push({ why: `Your channel has a new video, "${v.title}", that isn't in Church Studio yet.`, label: 'Bring in your latest service', go: { name: 'library', pick: true } });
     } catch { /* offline or slow: skip */ }
   }
-  if (!picks.length) picks.push({ why: 'Nothing is waiting on you right now.', label: 'Look at Inspiration for ideas', go: { name: 'inspiration' } });
+  // One fresh idea from the church marketing playbook, rotating daily.
+  const series = SERIES[Math.floor(now / 86400_000) % SERIES.length];
+  picks.push({ why: `Something new to try: a "${series.name}" post, ${series.idea}.`, label: `Plan a "${series.name}" post`, go: { name: 'social', caption: `${series.name}: ` } });
   const top = picks.slice(0, 4);
   let text = `Here's where I'd start today:\n\n${top.map((p) => `- ${p.why}`).join('\n')}`;
   if (cfg.llmProvider && cfg.llmProvider !== 'none') {

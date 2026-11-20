@@ -41,6 +41,18 @@ function PageThumb({ doc, pg, width = 132 }) {
 PageThumb.cache = {};
 
 // ---------------------------------------------------------------- editor
+/** Font pairings that work offline (built into macOS), with the church's brand fonts first. */
+const PAIRINGS = (config) => [
+  { id: 'brand', label: `Your brand: ${config.brandFonts?.heading || 'Montserrat'} + ${config.brandFonts?.body || 'Montserrat'}`, h: config.brandFonts?.heading || 'Montserrat', b: config.brandFonts?.body || 'Montserrat' },
+  { id: 'monograph', label: 'Quiet serif: Bodoni 72 + Avenir Next', h: 'Bodoni 72', b: 'Avenir Next', hw: 400 },
+  { id: 'poster', label: 'Supper club: Futura + Hoefler Text', h: 'Futura', b: 'Hoefler Text', hw: 700 },
+  { id: 'literary', label: 'Literary: Baskerville + Baskerville', h: 'Baskerville', b: 'Baskerville', hw: 600 },
+  { id: 'friendly', label: 'Friendly: Arial Rounded + Avenir Next', h: 'Arial Rounded MT Bold', b: 'Avenir Next', hw: 700 },
+  { id: 'slab', label: 'Loud poster: Rockwell + Georgia', h: 'Rockwell', b: 'Georgia', hw: 700 },
+  { id: 'editorial', label: 'Editorial: Iowan Old Style + Avenir Next', h: 'Iowan Old Style', b: 'Avenir Next', hw: 600 },
+  { id: 'classic', label: 'Classic: Georgia + Avenir Next', h: 'Georgia', b: 'Avenir Next', hw: 700 },
+];
+
 export default function DesignEditor({ id, onClose }) {
   const { toast, config, showNext, go, aiWorking } = useApp();
   const families = useFamilies();
@@ -156,6 +168,19 @@ export default function DesignEditor({ id, onClose }) {
   }, []);
 
   const item = pg?.items.find((x) => x.id === sel) || null;
+  // One pick restyles the whole design: big text gets the heading font, smaller text the body font.
+  const applyPairing = (pr) => {
+    update((d) => {
+      for (const pg2 of d.pages) for (const it of pg2.items) {
+        if (it.type !== 'text') continue;
+        const heading = it.size >= d.size.w * 0.05;
+        it.font = heading ? pr.h : pr.b;
+        if (heading && pr.hw) it.weight = pr.hw;
+      }
+      return d;
+    });
+    toast({ text: `Fonts set to ${pr.label}. Undo puts them back.` });
+  };
   const setItem = (p, opts) => update((d) => { const it = d.pages[pi].items.find((x) => x.id === sel); Object.assign(it, p); return d; }, opts);
   // The helper chat sees this design and what's selected. A picked headline replaces the selected text;
   // a picked photo fills the selected photo spot or picture, or is added to the page.
@@ -682,6 +707,13 @@ export default function DesignEditor({ id, onClose }) {
               {(pg.bg?.type || 'mesh') === 'mesh' && <button className="btn sm" onClick={() => setPage({ bg: { ...pg.bg, seed: Math.floor(Math.random() * 9999) } })}><Shuffle size={13} />Shuffle gradient</button>}
               <label className="field">Darken · {Math.round((pg.bg?.darken || 0) * 100)}%<input type="range" min="0" max="0.8" step="0.05" value={pg.bg?.darken || 0} onChange={(e) => setPage({ bg: { ...pg.bg, darken: Number(e.target.value) } }, { record: false })} /></label>
               <hr className="hairline" />
+              <label className="field small">
+                <span className="eyebrow" style={{ margin: 0 }}>Font pairing</span>
+                <select className="input" value="" onChange={(e) => { const pr = PAIRINGS(config).find((x) => x.id === e.target.value); if (pr) applyPairing(pr); }}>
+                  <option value="">Choose a pairing…</option>
+                  {PAIRINGS(config).map((pr) => <option key={pr.id} value={pr.id}>{pr.label}</option>)}
+                </select>
+              </label>
               <span className="eyebrow">Design colors</span>
               <div className="row wrap" style={{ gap: 8 }}>
                 {doc.palette.map((c, i) => <ColorField key={i} value={c} onChange={(v) => update((d) => { d.palette[i] = v; return d; }, { record: false })} />)}
