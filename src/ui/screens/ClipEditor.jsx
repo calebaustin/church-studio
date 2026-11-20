@@ -30,7 +30,7 @@ function useHistory(initial) {
 }
 
 /** Whole-frame and three-stack previews: draw the video into a canvas over a blurred or solid background. */
-function CanvasFrame({ video, mode, bg, gap, width, height, colors }) {
+function CanvasFrame({ video, mode, bg, gap, width, height, colors, split }) {
   const ref = useRef(null);
   useEffect(() => {
     let raf;
@@ -54,6 +54,16 @@ function CanvasFrame({ video, mode, bg, gap, width, height, colors }) {
           ctx.fillStyle = g; ctx.fillRect(0, 0, width, height);
         });
         ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(0, 0, width, height);
+      } else if (v && v.videoWidth && mode === 'split') {
+        // Two speakers, matching the export: one crop on top, one below.
+        const W = width; const H = height; const g = (gap ?? 8) * (W / 1080);
+        const ph = (H - g) / 2; const vw = v.videoWidth; const vh = v.videoHeight;
+        const cw = Math.min(vw, (vh * W) / ph);
+        ctx.filter = 'none'; ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+        (split || [0.3, 0.7]).forEach((cx, k) => {
+          const x0 = Math.max(0, Math.min(vw - cw, cx * vw - cw / 2));
+          ctx.drawImage(v, x0, 0, cw, vh, 0, k ? ph + g : 0, W, ph);
+        });
       } else if (v && v.videoWidth) {
         const W = width;
         const H = height;
@@ -83,7 +93,7 @@ function CanvasFrame({ video, mode, bg, gap, width, height, colors }) {
     };
     draw();
     return () => cancelAnimationFrame(raf);
-  }, [mode, bg?.type, bg?.color, bg?.blur, gap, width, height, colors?.join()]);
+  }, [mode, bg?.type, bg?.color, bg?.blur, gap, width, height, colors?.join(), split?.join()]);
   return <canvas ref={ref} className="preview-canvas" width={width} height={height} />;
 }
 
@@ -272,7 +282,7 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
   }
   x = clampX(x, frac);
   const left = Math.min(0, Math.max(-(VW - FRAME_W), -(x * VW - FRAME_W / 2)));
-  const canvasMode = mode === 'fit' || mode === 'stack3' || mode === 'lyric' || !project.media?.width;
+  const canvasMode = mode === 'fit' || mode === 'stack3' || mode === 'split' || mode === 'lyric' || !project.media?.width;
   const setCrop = (p) => set({ crop: { ...crop, ...p } });
   const addCue = () => {
     const t = Math.round(rel * 10) / 10;
@@ -420,7 +430,7 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
             title={canDrag ? 'Drag sideways to aim the frame. Click to play or pause.' : 'Click to play or pause'}>
             <video ref={video} src={media(project.id, project.sourceFile)} preload="auto" playsInline
               style={canvasMode ? { opacity: 0, width: 2, height: 2 } : { height: FH, width: VW, left }} />
-            {canvasMode && <CanvasFrame video={video} mode={project.media?.width ? mode : 'lyric'} colors={config.brandColors} bg={crop.bg} gap={crop.gap} width={FRAME_W} height={Math.round(FH)} />}
+            {canvasMode && <CanvasFrame video={video} mode={project.media?.width ? mode : 'lyric'} colors={config.brandColors} bg={crop.bg} gap={crop.gap} split={crop.split} width={FRAME_W} height={Math.round(FH)} />}
             {(clip.popups || []).map((p) => <PopupPreview key={p.id} p={p} t={outTime} still={!playing} frameWidth={FRAME_W} accent={config.brandColors?.[1]} />)}
             {themeDraft && (
               <CaptionOverlay theme={themeDraft} font={font} words={clip.captions !== false ? capWords : []} t={rel} frameWidth={FRAME_W}
@@ -585,6 +595,7 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
                   ['manual', 'Fixed', 'One steady frame.'],
                   ['fit', 'Whole frame', 'Full shot on a background.'],
                   ['stack3', 'Three stack', 'The full shot, three times.'],
+                  ['split', 'Two speakers', 'One person on top, one below.'],
                   ['lyric', 'Moving color', 'No video. Captions on your brand colors.']].filter(([m]) => project.media?.width || m === 'lyric').map(([m, t, d]) => (
                   <button key={m} className={`choice ${mode === m ? 'on' : ''}`} onClick={() => setCrop({ mode: m, ...(m === 'manual' && crop.x == null ? { x } : {}) })}>
                     <span className="t"><span className="radio" />{t}</span><span className="d">{d}</span>
@@ -659,6 +670,21 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
                   {crop.bg?.type === 'color'
                     ? <ColorField label="Background color" value={crop.bg.color || '#111111'} onChange={(c) => setCrop({ bg: { ...crop.bg, color: c } })} />
                     : <label className="field">Blur · {Math.round((crop.bg?.blur ?? 0.6) * 100)}%<input type="range" min="0.1" max="1" step="0.05" value={crop.bg?.blur ?? 0.6} onChange={(e) => setCrop({ bg: { ...(crop.bg || { type: 'blur' }), blur: Number(e.target.value) } })} /></label>}
+                  {mode === 'split' && (
+                    <div className="keycard stack" style={{ gap: 8 }}>
+                      <strong className="small">Who goes where</strong>
+                      {[0, 1].map((k) => (
+                        <label key={k} className="field small">{k ? 'Bottom person' : 'Top person'} · {Math.round((crop.split?.[k] ?? [0.3, 0.7][k]) * 100)}% across
+                          <input type="range" min="0" max="1" step="0.01" value={crop.split?.[k] ?? [0.3, 0.7][k]} onChange={(e) => { const sp = [...(crop.split || [0.3, 0.7])]; sp[k] = Number(e.target.value); setCrop({ split: sp }); }} />
+                        </label>
+                      ))}
+                      <div className="row wrap" style={{ gap: 6 }}>
+                        <button className="btn sm" onClick={() => setCrop({ split: [...(crop.split || [0.3, 0.7])].reverse() })}>Swap top and bottom</button>
+                        <label className="field small" style={{ minWidth: 160 }}>Line between · {crop.gap ?? 8}px<input type="range" min="0" max="40" value={crop.gap ?? 8} onChange={(e) => setCrop({ gap: Number(e.target.value) })} /></label>
+                      </div>
+                      <span className="hint">Great for interviews, panels and two hosts. Slide each one until that person is centered.</span>
+                    </div>
+                  )}
                   {mode === 'stack3' && <label className="field">Space between · {crop.gap ?? 18}px<input type="range" min="0" max="60" value={crop.gap ?? 18} onChange={(e) => setCrop({ gap: Number(e.target.value) })} /></label>}
                 </div>
               )}

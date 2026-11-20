@@ -613,6 +613,21 @@ class Popups:
         return out
 
 
+
+def split_frame(frame, src_w, src_h, W, H, split, gap, interp):
+    """Stack two crops of one shot: the person at split[0] on top, split[1] below, with a thin gap."""
+    g = int(round((gap if gap is not None else 8) * W / 1080)) // 2 * 2
+    ph = (H - g) // 2
+    out = np.zeros((H, W, 3), dtype=np.uint8)
+    cw = min(src_w, int(src_h * W / ph) // 2 * 2)  # crop width that fills each half at full height
+    for k, cx in enumerate(split):
+        x0 = int(round(cx * src_w - cw / 2))
+        x0 = max(0, min(src_w - cw, x0))
+        part = cv2.resize(frame[:, x0:x0 + cw], (W, ph), interpolation=interp)
+        y = 0 if k == 0 else ph + g
+        out[y:y + ph] = part
+    return out
+
 # ---------------------------------------------------------------- render
 
 def encoder_args(preview: bool, codec: str = "h264", mbps: float = 12.0) -> list[str]:
@@ -676,6 +691,8 @@ def main() -> None:
         path = np.full(n_frames, 0.5)
     half = crop_frac / 2
     path = np.clip(path, half, 1 - half)
+    # Two speakers: where each person sits across the shot (0 left .. 1 right), top first.
+    split = [float(v) for v in (crop.get("split") or [0.3, 0.7])][:2]
 
     if job.get("trackOut"):
         step = max(1, int(fps / 6))
@@ -829,6 +846,9 @@ def main() -> None:
                     y0 = (H - fg_h) // 2
                     bg[y0:y0 + fg_h] = fg
                 img = bg
+            elif mode == "split":
+                # Two speakers: one on top, one below, each cropped from the same shot.
+                img = split_frame(frame, src_w, src_h, W, H, split, float(crop.get("gap", 8)), interp)
             else:
                 cx = path[min(n - 1, len(path) - 1)] * src_w
                 x0 = int(round(cx - crop_w / 2))

@@ -8,6 +8,7 @@ import { Masonry } from '../components/Masonry.jsx';
 import { api } from '../api.js';
 import Modal, { ModalHead } from '../components/Modal.jsx';
 import DesignEditor from '../design/DesignEditor.jsx';
+import { useChurchEvents } from '../components/ChurchEvents.jsx';
 import LibraryPicker from '../components/LibraryPicker.jsx';
 import { KINDS, SIZE_PRESETS, TEMPLATES as BASE_TEMPLATES, blankPage, copyForDate, fillChurch, countdownPages, loadAssets, page as newPage, renderPage, scripturePage, uid } from '../design/model.js';
 import { PACKS as PACKS1, PACK_TEMPLATES } from '../design/packs.js';
@@ -24,20 +25,14 @@ export const TEMPLATES = [...PACK2_TEMPLATES, ...BASE_TEMPLATES.map((t) => (EVEN
 export { cohesive } from '../design/model.js';
 
 // Tile colors come from the app theme (tone-1 to tone-6 in styles.css), so they follow the user's colors.
-const TILES = [
-  ['design', PenTool, 5],
-  ['videocard', Film, 6],
-  ['deck', Wand2, 3],
-  ['scripture', BookOpen, 2],
-  ['presentation', Presentation, 1],
-  ['post', Heart, 2],
-  ['carousel', GalleryHorizontalEnd, 3],
-  ['story', Smartphone, 4],
-  ['thumbnail', MonitorPlay, 5],
-  ['flyer', Printer, 6],
-  ['notes', NotebookPen, 4],
-  ['sermon', Sparkles, 1],
-  ['custom', Scaling, 0],
+// The Design bar: a few categories, each opening the kinds of design inside it.
+// Tile colors come from the app theme (tone-1 to tone-6 in styles.css), so they follow the user's colors.
+const CATEGORIES = [
+  ['design', 'Design', PenTool, 5, [['design', 'Blank design', 'A square canvas to start your own way', PenTool], ['presentation', 'Presentation', 'Slides you can present', Presentation], ['deck', 'Slide deck maker', 'A full deck from a few answers', Wand2], ['scripture', 'Scripture graphic', 'A verse in your brand look', BookOpen], ['sermon', 'From a sermon', 'Slides, carousels and stories from its words', Sparkles], ['import', 'Bring in your own', 'A design from Canva, Photoshop or anywhere', Laptop]]],
+  ['video', 'Video', Film, 6, [['videocard', 'Clip intro and end cards', 'For the start or end of a clip', Film], ['thumbnail', 'YouTube thumbnail', 'A cover for your video', MonitorPlay]]],
+  ['social', 'Social', Heart, 2, [['post', 'Social post', 'Quote cards, events, verses', Heart], ['story', 'Story', 'Instagram and Facebook stories', Smartphone], ['carousel', 'Carousel', 'Swipeable posts and recaps', GalleryHorizontalEnd], ['event', 'For an event', 'Pick a church event and a template', CalendarClock]]],
+  ['print', 'Print', Printer, 3, [['flyer', 'Flyer', 'Letter size, print or share', Printer], ['notes', 'Sermon notes', 'Fill-in-the-blank handouts', NotebookPen], ['print-sizes', 'Posters and more', 'Half letter, 11x17, 18x24', Scaling]]],
+  ['custom', 'Custom', Scaling, 0, null],
 ];
 const SERMON_OUTPUTS = [
   ['deck-sermon', 'Sermon slides', 'Title, passages, main points, quotes and next steps'],
@@ -112,6 +107,7 @@ export default function Graphics({ image, design, event, eventMode, quote, make 
   const [modal, setModal] = useState(null); // 'sermon' | 'custom'
   const [redate, setRedate] = useState(null); // a design to copy for a new date
   const [pickFor, setPickFor] = useState(null); // a calendar event to pick a template for
+  const [cat, setCat] = useState(null); // the open category in the Design bar
   const load = () => api.get('/api/designs').then((r) => setDesigns(r.designs)).catch(() => setDesigns([]));
   useEffect(() => { if (!open) load(); }, [open]);
 
@@ -163,6 +159,9 @@ export default function Graphics({ image, design, event, eventMode, quote, make 
   const tpls = TEMPLATES.filter((t) => (!kind || t.kind === kind) && (!pack || t.pack === pack) && (!ql || `${t.name} ${KINDS[t.kind].label}`.toLowerCase().includes(ql)));
   const mine = (designs || []).filter((d) => !ql || d.name.toLowerCase().includes(ql));
   const pick = (k) => {
+    if (k === 'import') return setModal('import');
+    if (k === 'print-sizes') return setModal('custom');
+    if (k === 'event') return setModal('events');
     if (k === 'sermon') return setModal('sermon');
     if (k === 'deck') return setModal('deck');
     if (k === 'scripture') return setModal('scripture');
@@ -191,13 +190,23 @@ export default function Graphics({ image, design, event, eventMode, quote, make 
           <span className="dz-tile-icon create"><Plus size={28} /></span>
           <span>Create new</span>
         </button>
-        {TILES.map(([k, Icon, grad]) => (
-          <button key={k} className={`dz-tile ${kind === k ? 'on' : ''}`} onClick={() => pick(k)}>
-            <span className={`dz-tile-icon ${grad ? `tone tone-${grad}` : 'plain'}`}><Icon size={24} /></span>
-            <span>{k === 'sermon' ? 'From a sermon' : k === 'deck' ? 'Slide deck maker' : k === 'scripture' ? 'Scripture graphic' : k === 'videocard' ? 'Video cards' : KINDS[k].label}</span>
+        {CATEGORIES.map(([id, label, Icon, tone, subs]) => (
+          <button key={id} className={`dz-tile ${cat === id ? 'on' : ''}`} aria-expanded={subs ? cat === id : undefined} onClick={() => (subs ? setCat(cat === id ? null : id) : setModal('custom'))}>
+            <span className={`dz-tile-icon ${tone ? `tone tone-${tone}` : 'plain'}`}><Icon size={24} /></span>
+            <span>{label}</span>
           </button>
         ))}
       </div>
+      {cat && (
+        <div className="dz-subs">
+          {CATEGORIES.find((c) => c[0] === cat)[4].map(([k, label, about, Icon]) => (
+            <button key={k} className="cn-card" onClick={() => pick(k)}>
+              <span className="cn-icon tone tone-1"><Icon size={17} /></span>
+              <span className="stack" style={{ gap: 0, minWidth: 0 }}><strong className="small">{label}</strong><span className="muted" style={{ fontSize: 12 }}>{about}</span></span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {tab === 'home' && !ql && (
         <section className="stack" style={{ gap: 12 }}>
@@ -281,6 +290,7 @@ export default function Graphics({ image, design, event, eventMode, quote, make 
           onMaker={(m) => setModal(m)}
           onSize={(size) => { setModal(null); const d = newDoc('custom', null, ctx, size); d.name = `Untitled ${size.w}×${size.h}`; create(d); }} />
       )}
+      {modal === 'events' && <PickEvent onClose={() => setModal(null)} onPick={(e) => { setModal(null); setPickFor(e); }} />}
       {pickFor && <EventTemplates event={pickFor} ctx={ctx} onClose={() => setPickFor(null)} onPick={(doc) => { setPickFor(null); create({ ...doc, firstPhoto: true }); }} />}
       {redate && <Redate design={redate} onClose={() => setRedate(null)} onDone={(id, changed) => { setRedate(null); load(); toast({ text: changed ? `Copy made with ${changed} date${changed === 1 ? '' : 's'} updated. Check the times too.` : 'Copy made. No dates were found in its text, so check it over.', action: { label: 'Open', run: () => setOpen(id) } }); }} />}
       {modal === 'import' && (
@@ -409,6 +419,26 @@ function CreateNew({ ctx, onClose, onBlank, onTemplate, onBrowse, onMaker, onSiz
   );
 }
 
+/** Pick which upcoming church event a design is for. */
+function PickEvent({ onClose, onPick }) {
+  const cal = useChurchEvents();
+  const upcoming = (cal.events || []).filter((e) => new Date(e.end || e.start) >= new Date()).slice(0, 30);
+  return (
+    <Modal label="Pick an event" onClose={onClose} width={520}>
+      <ModalHead title="Which event is it for?" sub="Templates fill in its name, day, time and place." />
+      {!cal.linked && <div className="keycard small muted">Link your church calendar in Settings › Connections to see events here.</div>}
+      {cal.linked && !upcoming.length && <span className="muted small">No upcoming events.</span>}
+      <div className="stack" style={{ gap: 6 }}>
+        {upcoming.map((e) => (
+          <button key={e.id} className="insp-row" style={{ border: 0, cursor: 'pointer', font: 'inherit', textAlign: 'left' }} onClick={() => onPick(e)}>
+            <div className="stack grow" style={{ gap: 0, minWidth: 0 }}><strong className="small truncate">{e.title}</strong><span className="muted small">{new Date(e.start).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}{e.location ? ` · ${e.location.split(',')[0]}` : ''}</span></div>
+          </button>
+        ))}
+      </div>
+    </Modal>
+  );
+}
+
 /** Pick a template for a church event. Every option already shows the event's details. */
 function EventTemplates({ event, ctx, onClose, onPick }) {
   const ev = useMemo(() => eventForDesign(event), [event]);
@@ -459,16 +489,28 @@ function Redate({ design, onClose, onDone }) {
 function CustomSize({ onClose, onCreate }) {
   const [w, setW] = useState(1080); const [h, setH] = useState(1080);
   const ok = w >= 100 && h >= 100 && w <= 6000 && h <= 6000;
+  const preset = SIZE_PRESETS.find(([, a, b]) => a === w && b === h);
+  // The preview keeps the real shape inside a fixed box.
+  const box = 200; const k = ok ? Math.min(box / w, box / h) : 0;
+  const inches = w % 75 === 0 && h % 75 === 0 && (w >= 600 || h >= 600) ? ` · ${(w / 150).toFixed(2).replace(/\.?0+$/, '')} x ${(h / 150).toFixed(2).replace(/\.?0+$/, '')} in printed` : '';
   return (
-    <Modal label="Custom size" onClose={onClose} width={480}>
-      <ModalHead title="Custom size" onClose={onClose} />
-      <div className="stack" style={{ gap: 14 }}>
-        <div className="angle-row">{SIZE_PRESETS.map(([l, a, b]) => <button key={l} className={`pill-choice ${w === a && h === b ? 'on' : ''}`} onClick={() => { setW(a); setH(b); }}>{l}</button>)}</div>
-        <div className="token-grid">
-          <label className="field">Width (px)<input className="input num" type="number" value={w} onChange={(e) => setW(Number(e.target.value))} /></label>
-          <label className="field">Height (px)<input className="input num" type="number" value={h} onChange={(e) => setH(Number(e.target.value))} /></label>
+    <Modal label="Custom size" onClose={onClose} width={640}
+      footer={<><span className="hint">Any size from 100 to 6000 pixels.</span><button className="btn primary" disabled={!ok} onClick={() => onCreate({ w, h })}><Plus size={14} />Create {w}×{h}</button></>}>
+      <ModalHead title="Custom size" />
+      <div className="size-pick">
+        <div className="stack" style={{ gap: 14, minWidth: 0 }}>
+          <div className="angle-row">{SIZE_PRESETS.map(([l, a, b]) => <button key={l} className={`pill-choice ${w === a && h === b ? 'on' : ''}`} onClick={() => { setW(a); setH(b); }}>{l}</button>)}</div>
+          <div className="token-grid">
+            <label className="field">Width (px)<input className="input num" type="number" value={w} onChange={(e) => setW(Number(e.target.value))} /></label>
+            <label className="field">Height (px)<input className="input num" type="number" value={h} onChange={(e) => setH(Number(e.target.value))} /></label>
+          </div>
+          <button className="btn ghost sm" style={{ justifySelf: 'start' }} onClick={() => { setW(h); setH(w); }}>Swap width and height</button>
         </div>
-        <button className="btn primary" disabled={!ok} onClick={() => onCreate({ w, h })}>Create design</button>
+        <div className="size-preview" aria-live="polite">
+          <div className="size-stage">{ok && <div className="size-canvas" style={{ width: w * k, height: h * k }}><span className="num small">{w}×{h}</span></div>}</div>
+          <strong className="small">{preset ? preset[0] : w === h ? 'Square' : w > h ? 'Wide' : 'Tall'}</strong>
+          <span className="muted small">{ok ? `${(w / h).toFixed(2)} : 1${inches}` : 'Pick a size'}</span>
+        </div>
       </div>
     </Modal>
   );

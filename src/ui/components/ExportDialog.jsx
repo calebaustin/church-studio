@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Download, FolderOpen, Smartphone, Square, RectangleHorizontal, RectangleVertical } from 'lucide-react';
+import { Download, Film, FolderOpen, Smartphone, Square, RectangleHorizontal, RectangleVertical } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { api, desktop, fmt, sizeLabel } from '../api.js';
 import Modal from './Modal.jsx';
@@ -24,7 +24,7 @@ function estimate(o, seconds) {
 }
 
 export default function ExportDialog({ project, clips, onClose, beforeExport }) {
-  const { config, saveConfig, trackJob } = useApp();
+  const { config, saveConfig, trackJob, toast } = useApp();
   const [o, setO] = useState({ preset: 'vertical', resolution: '1080', quality: 'high', fps: 30, codec: 'h264', captions: true, hook: true, ...(config.exportOptions || {}), ...(clips.length && clips.every((c) => c.format === 'wide') ? { preset: 'landscape' } : {}) });
   const [folder, setFolder] = useState(config.exportFolder || '');
   const [fileName, setFileName] = useState(config.exportPattern || '{date} - {title}');
@@ -142,6 +142,12 @@ export default function ExportDialog({ project, clips, onClose, beforeExport }) 
         </div>
       </div>
 
+      {clips.length === 1 && project.media?.width > 0 && (
+        <div className="keycard row between wrap" style={{ gap: 8 }}>
+          <span className="small"><strong>Finishing in Premiere Pro, Final Cut or DaVinci?</strong> <span className="muted">Get the edit as a project file with captions, using your original video.</span></span>
+          <button className="btn sm" onClick={async () => { try { await beforeExport?.(); const r = await api.post(`/api/projects/${project.id}/clips/${clips[0].id}/editors`, {}); toast({ text: `Saved to Downloads: ${r.folder.split('/').pop()}` }); } catch (e) { setError(e.message); } }}><Film size={14} />Editor files</button>
+        </div>
+      )}
       {error && <div className="banner bad">{error}</div>}
     </Modal>
   );

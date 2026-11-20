@@ -1311,3 +1311,9 @@ div.cn-card { cursor: default; }
 .look-grid { display: flex; flex-wrap: wrap; gap: 6px; }
 .dz-ico { font-size: 20px; line-height: 1; }
 .evt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; align-items: start; }
+.dz-subs { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; animation: rise var(--fast) var(--ease); }
+.size-pick { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 18px; align-items: start; }
+@media (max-width: 640px) { .size-pick { grid-template-columns: minmax(0, 1fr); } }
+.size-preview { display: grid; justify-items: center; gap: 4px; text-align: center; }
+.size-stage { width: 200px; height: 200px; display: grid; place-items: center; border-radius: var(--radius-sm); background: var(--field); box-shadow: inset 0 0 0 1px var(--line); }
+.size-canvas { display: grid; place-items: center; border-radius: 6px; background: var(--surface-solid); box-shadow: var(--shadow), inset 0 0 0 1px var(--line-strong); color: var(--muted); transition: width var(--fast) var(--ease), height var(--fast) var(--ease); }
