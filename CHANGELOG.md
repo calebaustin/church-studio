@@ -2,7 +2,7 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
-## Unreleased
+## 0.17.0 · November 20, 2026
 
 ### New
 - **Six new template packs.** Sanctuary (a quiet monograph serif), Table (one warm ink, like a supper-club poster), Vesper (soft and literary), Daisy (sunny and friendly, for kids and family), Poster (loud and quotable) and Quarterly (a considered editorial). Each has an event post and story, a welcome, an announcement, a sermon quote, a verse and a series slide, with your church's details filled in. They use fonts built into your Mac, so they work offline, and "My brand colors" switches them to your colors.
