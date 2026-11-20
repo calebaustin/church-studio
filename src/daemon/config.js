@@ -48,7 +48,7 @@ export const DEFAULTS = {
   blogFeed: '', // the church blog's RSS or Atom feed, for Inspiration
   jumpstart: null, // { at, website } when the website setup ran
   dismissed: {}, // setup checklists the user closed
-  churchInfo: { name: '', address: '', website: '', phone: '', email: '', times: '' }, // printed footers
+  churchInfo: { name: '', pastor: '', address: '', website: '', phone: '', email: '', times: '' }, // printed footers
   appLogo: '', // brand library path of the logo for the sidebar and Dock; empty means the first in Logos
   dockLogo: true, // show the church logo in the Dock
   logoKinds: {}, // { 'Logos/file.png': 'full' | 'light' | 'dark' | 'icon' | 'wordmark' }

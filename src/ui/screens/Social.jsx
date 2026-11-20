@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useApp } from '../App.jsx';
 import { api, desktop, fmt, openLink } from '../api.js';
 import { usePoll } from '../poll.js';
-import { Laptop, MessageSquare, Repeat2 } from 'lucide-react';
+import { Laptop, MessageSquare, Repeat2, Shapes } from 'lucide-react';
 import { exportDesign } from '../design/exporters.js';
 import { checkCaption } from '../captionCheck.js';
 import Modal from '../components/Modal.jsx';
@@ -234,7 +234,7 @@ export function Calendar({ s, plat, onEdit, onNew }) {
           : <span className="small muted">Add your church calendar's iCal link in Settings › Connections to see events here.</span>}
         {s.posts.some((p) => p.status === 'draft' && p.plannedAt) && <span className="row small muted"><span className="month-planned-key" />Planned campaign posts, not scheduled yet</span>}
       </div>
-      {ev && <EventCard event={ev} onClose={() => setEv(null)} onPlanPost={(e) => { const t = new Date(e.start); t.setDate(t.getDate() - 2); t.setHours(12, 0, 0, 0); onNew(t < new Date() ? new Date(Date.now() + 3600_000) : t); }} />}
+      {ev && <EventCard event={ev} onClose={() => setEv(null)} onPlanPost={(e) => { const t = new Date(e.start); t.setDate(t.getDate() - 2); t.setHours(12, 0, 0, 0); onNew(t < new Date() ? new Date(Date.now() + 3600_000) : t, e); }} />}
     </section>
   );
 }
@@ -398,6 +398,7 @@ const pad = (n) => String(n).padStart(2, '0');
 const localInput = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
 export function Composer({ s, plat, init, onClose, onConnect }) {
+  const { go } = useApp();
   const editing = init.post || null;
   const initialMedia = editing?.media || (init.media && s.media.find((m) => m.clipId === init.media.clipId)) || init.media || null;
   const [media, setMedia] = useState(initialMedia);
@@ -499,6 +500,7 @@ export function Composer({ s, plat, init, onClose, onConnect }) {
                       <button className={pickKind === 'designs' ? 'on' : ''} onClick={() => setPickKind('designs')}>Designs</button>
                     </div>
                     <button className="btn sm" disabled={Boolean(preparing)} onClick={fromComputer}><Laptop size={13} />From your computer</button>
+                    {init.event && <button className="btn sm primary" onClick={() => { onClose(); go({ name: 'graphics', event: init.event, eventMode: 'pick' }); }}><Shapes size={13} />Make from template</button>}
                   </div>
                   {projects.length > 1 && (
                     <select className="input" style={{ width: 'auto', maxWidth: 260 }} value={fromProject} onChange={(e) => setFromProject(e.target.value)} aria-label="From project">

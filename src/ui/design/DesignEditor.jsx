@@ -12,8 +12,10 @@ import FontMenu, { useFamilies } from '../components/FontMenu.jsx';
 import BackgroundEraser from '../components/BackgroundEraser.jsx';
 import LibraryPicker from '../components/LibraryPicker.jsx';
 import Popover, { PopList } from '../components/Popover.jsx';
-import { DEVICE_ASPECT, KINDS, RESIZE_TARGETS, SHAPES, resizeDesign, blankPage, cohesive, loadAssets, onColor, page as newPage, renderPage, shape as newShape, svgColors, text as newText, uid } from './model.js';
+import { DEVICE_ASPECT, KINDS, PATTERNS, RESIZE_TARGETS, SHAPES, resizeDesign, blankPage, cohesive, loadAssets, onColor, page as newPage, renderPage, shape as newShape, svgColors, text as newText, uid } from './model.js';
 import { snapMove } from './snap.js';
+import PhotoEdits from './PhotoEdits.jsx';
+import Layers from './Layers.jsx';
 import { exportDesign } from './exporters.js';
 import { BLACK_KEYS, NEXT_KEYS, PREV_KEYS, PresentHere, PresenterConsole, openChannel } from './Presenter.jsx';
 
@@ -69,7 +71,19 @@ export default function DesignEditor({ id, onClose }) {
   const clip = useRef(null);
   const [, force] = useState(0);
 
-  useEffect(() => { api.get(`/api/designs/${id}`).then((r) => setDoc(r.design)).catch((e) => { toast({ kind: 'error', text: e.message }); onClose(); }); }, [id]);
+  useEffect(() => {
+    api.get(`/api/designs/${id}`).then((r) => {
+      const d = r.design;
+      // Fresh from a template: select its photo spot so adding a photo is the one thing left to do.
+      if (d.firstPhoto) {
+        delete d.firstPhoto;
+        const spot = d.pages[0]?.items.find((x) => x.type === 'shape' && x.frame && !x.photo);
+        if (spot) { setSel(spot.id); toast({ text: 'Add your photo to finish. Press Replace with a photo on the right.' }); }
+        setSaved(false);
+      }
+      setDoc(d);
+    }).catch((e) => { toast({ kind: 'error', text: e.message }); onClose(); });
+  }, [id]);
 
   // History
   const update = useCallback((fn, { record = true } = {}) => {
@@ -430,11 +444,15 @@ export default function DesignEditor({ id, onClose }) {
             <button aria-label="Hexagon" title="Hexagon" onClick={() => addItem(newShape({ shape: 'hexagon', w: 0.3, h: 0.26 * (doc.size.w / doc.size.h), fill: colors[0] }))}><Hexagon size={22} /></button>
             <button aria-label="Arch" title="Arch" onClick={() => addItem(newShape({ shape: 'arch', w: 0.3, h: 0.42 * (doc.size.w / doc.size.h), fill: colors[4] || colors[1] }))}><span className="dz-arch" /></button>
             <button aria-label="Blob" title="Blob" onClick={() => addItem(newShape({ shape: 'blob', w: 0.34, h: 0.3 * (doc.size.w / doc.size.h), fill: colors[1] }))}><span className="dz-blob" /></button>
+            <button aria-label="Badge" title="Badge" onClick={() => addItem(newShape({ shape: 'scallop', w: 0.2, h: 0.2 * (doc.size.w / doc.size.h), fill: colors[1] }))}><span className="dz-ico">✿</span></button>
+            <button aria-label="Starburst" title="Starburst" onClick={() => addItem(newShape({ shape: 'burst', w: 0.16, h: 0.16 * (doc.size.w / doc.size.h), fill: colors[1] }))}><span className="dz-ico">✺</span></button>
+            <button aria-label="Window card" title="Window card" onClick={() => addItem(newShape({ shape: 'window', w: 0.56, h: 0.3 * (doc.size.w / doc.size.h), fill: '#FFFFFF' }))}><span className="dz-ico">▭</span></button>
             <button aria-label="Line" title="Line" onClick={() => addItem(newShape({ w: 0.5, h: 3 / doc.size.h, fill: onColor(fill) }))}><Minus size={22} /></button>
           </div>
           <span className="eyebrow">Frames</span>
           <div className="row wrap" style={{ gap: 6 }}>
             <button className="btn sm" onClick={() => addItem(newShape({ frame: true, w: 0.44, h: 0.32 * (doc.size.w / doc.size.h), radius: 24, fill: colors[2] || '#555' }))}><ImageIcon size={13} />Photo frame</button>
+            <button className="btn sm" onClick={() => addItem(newShape({ shape: 'wave', frame: true, w: 0.5, h: 0.4 * (doc.size.w / doc.size.h), fill: colors[0] }))}><ImageIcon size={13} />Wavy frame</button>
             <button className="btn sm" onClick={() => addItem(newShape({ shape: 'iphone', frame: true, w: 0.22, h: (0.22 * doc.size.w) / doc.size.h / DEVICE_ASPECT.iphone, fill: colors[0] }))}><Smartphone size={13} />iPhone</button>
             <button className="btn sm" onClick={() => addItem(newShape({ shape: 'macbook', frame: true, w: 0.56, h: (0.56 * doc.size.w) / doc.size.h / DEVICE_ASPECT.macbook, fill: colors[0] }))}><Laptop size={13} />MacBook</button>
           </div>
@@ -448,8 +466,8 @@ export default function DesignEditor({ id, onClose }) {
         </aside>
 
         {/* canvas */}
-        <div className="dz-center">
-          <div ref={stageRef} className="dz-stage">
+        <div className="dz-center" onPointerDown={(e) => { if (e.target === e.currentTarget && !editing) setSel(null); }}>
+          <div ref={stageRef} className="dz-stage" onPointerDown={(e) => { if (e.target === e.currentTarget && !editing) setSel(null); }}>
             <div className="dz-canvas" style={{ width: dispW, height: dispH }}>
               <canvas ref={canvas} style={{ width: dispW, height: dispH }} aria-label="Page" />
               <div className="dz-overlay" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp}
@@ -560,16 +578,31 @@ export default function DesignEditor({ id, onClose }) {
                       {item.frame && !item.photo && <span className="hint">The pattern only shows while you edit. Exports show the color.</span>}
                     </div>
                   )}
+                  {item.photo && !item.erase && <PhotoEdits value={item.adjust} colors={colors} onChange={(adjust) => setItem({ adjust }, { record: false })} />}
                   {!item.photo && !item.erase && <div className="row" style={{ gap: 10 }}><ColorField label={DEVICE_ASPECT[item.shape] ? 'Screen color' : 'Fill'} value={item.fill} onChange={(c) => setItem({ fill: c }, { record: false })} swatches={colors} /></div>}
                   {(item.shape || 'rect') === 'rect' && <label className="field">Corners · {item.radius || 0}<input type="range" min="0" max="200" value={item.radius || 0} onChange={(e) => setItem({ radius: Number(e.target.value) }, { record: false })} /></label>}
                   {!DEVICE_ASPECT[item.shape] && (
                     <label className="switch"><input type="checkbox" checked={Boolean(item.erase)} onChange={(e) => setItem({ erase: e.target.checked })} /><Eraser size={14} />Use as an eraser</label>
                   )}
-                  {item.erase && <span className="hint">Cuts a see-through hole in everything behind it. Move it up or down to choose what it erases.</span>}
+                  {item.erase && (
+                    <div className="stack" style={{ gap: 6 }}>
+                      <span className="small" style={{ fontWeight: 600 }}>Erases</span>
+                      <div className="seg sm">
+                        <button className={!item.depth ? 'on' : ''} onClick={() => setItem({ depth: 0 })}>Everything under it</button>
+                        <button className={item.depth > 0 ? 'on' : ''} onClick={() => setItem({ depth: item.depth || 1 })}>Some layers</button>
+                      </div>
+                      {item.depth > 0 && (() => {
+                        const below = pg.items.findIndex((x) => x.id === item.id);
+                        return <label className="field small">Layers under it · {Math.min(item.depth, Math.max(1, below))}<input type="range" min="1" max={Math.max(1, below)} value={Math.min(item.depth, Math.max(1, below))} onChange={(e) => setItem({ depth: Number(e.target.value) }, { record: false })} /></label>;
+                      })()}
+                      <span className="hint">{item.depth > 0 ? 'Cuts only the layers right under it. The background and anything lower stay.' : 'Cuts a see-through hole in everything behind it, background included.'} See the layers list to check what’s under it.</span>
+                    </div>
+                  )}
                 </>
               )}
               {item.type === 'image' && <label className="field">Corners · {item.radius || 0}<input type="range" min="0" max="200" value={item.radius || 0} onChange={(e) => setItem({ radius: Number(e.target.value) }, { record: false })} /></label>}
               {item.type === 'image' && !/\.svg$/i.test(item.rel) && <button className="btn sm" onClick={() => setErasing(item.rel)}><Eraser size={13} />Erase background</button>}
+              {item.type === 'image' && !/\.svg$/i.test(item.rel) && <PhotoEdits value={item.adjust} colors={colors} onChange={(adjust) => setItem({ adjust }, { record: false })} />}
               {item.type === 'image' && /\.svg$/i.test(item.rel) && <SvgColors item={item} cache={cache.current} swatches={colors} onChange={(recolor) => setItem({ recolor }, { record: false })} />}
               {item.type === 'qr' && (
                 <>
@@ -594,15 +627,29 @@ export default function DesignEditor({ id, onClose }) {
                 <button className="btn sm" onClick={duplicateItem}><Copy size={13} />Duplicate</button>
                 <button className="btn sm ghost danger" onClick={removeItem}><Trash2 size={13} />Delete</button>
               </div>
+              <hr className="hairline" />
+              <Layers items={pg.items} sel={sel} onSelect={setSel} onMove={(from, to) => update((d) => { const list = d.pages[pi].items; const [x] = list.splice(from, 1); list.splice(to, 0, x); return d; })} onDelete={(id) => { update((d) => { d.pages[pi].items = d.pages[pi].items.filter((x) => x.id !== id); return d; }); if (id === sel) setSel(null); }} />
             </>
           ) : (
             <>
               <span className="eyebrow">Page {pi + 1}</span>
               <div className="seg sm">
-                {[['mesh', 'Gradient'], ['solid', 'Solid'], ['gradient', 'Blend'], ['image', 'Photo']].map(([k, l]) => (
-                  <button key={k} className={(pg.bg?.type || 'mesh') === k ? 'on' : ''} onClick={() => (k === 'image' ? setPicker('bg') : setPage({ bg: { ...pg.bg, type: k, color: pg.bg?.color || colors[0] } }))}>{l}</button>
+                {[['mesh', 'Gradient'], ['solid', 'Solid'], ['gradient', 'Blend'], ['pattern', 'Pattern'], ['image', 'Photo']].map(([k, l]) => (
+                  <button key={k} className={(pg.bg?.type || 'mesh') === k ? 'on' : ''} onClick={() => (k === 'image' ? setPicker('bg') : setPage({ bg: { ...pg.bg, type: k, color: pg.bg?.color || (k === 'pattern' ? colors[3] : colors[0]), pattern: pg.bg?.pattern || 'checker' } }))}>{l}</button>
                 ))}
               </div>
+              {pg.bg?.type === 'pattern' && (
+                <div className="stack" style={{ gap: 8 }}>
+                  <div className="row wrap" style={{ gap: 6 }}>{PATTERNS.map(([k, l]) => <button key={k} className={`pill-choice ${pg.bg.pattern === k ? 'on' : ''}`} onClick={() => setPage({ bg: { ...pg.bg, pattern: k } })}>{l}</button>)}</div>
+                  <div className="row wrap" style={{ gap: 12 }}>
+                    <ColorField label="Base" value={pg.bg.color || colors[3]} onChange={(c) => setPage({ bg: { ...pg.bg, color: c } }, { record: false })} swatches={colors} />
+                    <ColorField label="Pattern" value={pg.bg.color2 || colors[0]} onChange={(c) => setPage({ bg: { ...pg.bg, color2: c } }, { record: false })} swatches={colors} align="right" />
+                  </div>
+                  <label className="field">Size · {Math.round((pg.bg.scale || 0.08) * 100)}<input type="range" min="0.02" max="0.25" step="0.01" value={pg.bg.scale || 0.08} onChange={(e) => setPage({ bg: { ...pg.bg, scale: Number(e.target.value) } }, { record: false })} /></label>
+                </div>
+              )}
+              {pg.bg?.type === 'image' && <PhotoEdits value={pg.bg.adjust} colors={colors} onChange={(adjust) => setPage({ bg: { ...pg.bg, adjust } }, { record: false })} />}
+              {['mesh', 'gradient', 'pattern', undefined].includes(pg.bg?.type) && <label className="field">Grain · {Math.round((pg.bg?.grain || 0) * 100)}%<input type="range" min="0" max="0.5" step="0.02" value={pg.bg?.grain || 0} onChange={(e) => setPage({ bg: { ...pg.bg, grain: Number(e.target.value) } }, { record: false })} /></label>}
               {pg.bg?.type === 'solid' && <ColorField label="Background" value={pg.bg.color || colors[0]} onChange={(c) => setPage({ bg: { ...pg.bg, color: c } }, { record: false })} swatches={colors} />}
               {pg.bg?.type === 'gradient' && (
                 <div className="row wrap" style={{ gap: 12 }}>
@@ -625,12 +672,14 @@ export default function DesignEditor({ id, onClose }) {
                 </label>
               </div>
               <button className="btn ghost sm" onClick={() => update((d) => { d.palette = [...(config.brandColors || d.palette)].slice(0, 5); while (d.palette.length < 5) d.palette.push('#888888'); return d; })}>Use my brand colors</button>
-              {multi && (
+              {doc.kind === 'presentation' && (
                 <>
                   <hr className="hairline" />
-                  <label className="field">Speaker notes<textarea className="input" rows={4} value={pg.notes || ''} placeholder="Notes for this page. They go into PowerPoint too." onChange={(e) => setPage({ notes: e.target.value }, { record: false })} /></label>
+                  <label className="field">Speaker notes<textarea className="input" rows={4} value={pg.notes || ''} placeholder="Notes for this slide. You see them while presenting, and they go into PowerPoint." onChange={(e) => setPage({ notes: e.target.value }, { record: false })} /></label>
                 </>
               )}
+              <hr className="hairline" />
+              <Layers items={pg.items} sel={sel} onSelect={setSel} onMove={(from, to) => update((d) => { const list = d.pages[pi].items; const [x] = list.splice(from, 1); list.splice(to, 0, x); return d; })} onDelete={(id) => update((d) => { d.pages[pi].items = d.pages[pi].items.filter((x) => x.id !== id); return d; })} />
               <span className="hint">Click an item to edit it. Double-click text to type on the page. Drag to move; guides show when things line up.</span>
             </>
           )}

@@ -45,7 +45,7 @@ export function EventCard({ event, onClose, onPlanPost }) {
         <span className="hint">From {event.source}</span>
       </div>
       <div className="row wrap" style={{ gap: 8 }}>
-        <button className="btn primary sm" onClick={() => { onClose(); go({ name: 'graphics', event }); }}><Shapes size={14} />Make a graphic</button>
+        <button className="btn primary sm" onClick={() => { onClose(); go({ name: 'graphics', event, eventMode: 'pick' }); }}><Shapes size={14} />Make from template</button>
         <button className="btn sm" onClick={() => { onClose(); go({ name: 'graphics', event, eventMode: 'flyer' }); }}>Flyer</button>
         <button className="btn sm" onClick={() => { onClose(); go({ name: 'graphics', event, eventMode: 'countdown' }); }}>Countdown</button>
         {onPlanPost && <button className="btn sm" onClick={() => { onClose(); onPlanPost(event); }}><Send size={14} />Plan a post</button>}

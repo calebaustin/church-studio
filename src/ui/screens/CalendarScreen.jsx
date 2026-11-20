@@ -27,7 +27,7 @@ export default function CalendarScreen({ tab: startTab, campaign }) {
       <div className="seg" style={{ justifySelf: 'start' }}>
         {TABS.map(([k, l, Icon]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}><Icon size={14} />{l}</button>)}
       </div>
-      {tab === 'calendar' && <Calendar s={s} plat={plat} onEdit={(p) => setComposer({ post: p })} onNew={(d) => setComposer({ when: d })} />}
+      {tab === 'calendar' && <Calendar s={s} plat={plat} onEdit={(p) => setComposer({ post: p })} onNew={(d, e) => setComposer({ when: d, event: e || null })} />}
       {tab === 'campaigns' && <Campaigns s={s} start={campaign} onEdit={(p) => setComposer({ post: p })} />}
       {tab === 'inspiration' && <Inspiration embedded />}
       {composer && <Composer s={s} plat={plat} init={composer} onClose={() => { setComposer(null); s.load(); }} onConnect={() => { setComposer(null); go({ name: 'social' }); }} />}

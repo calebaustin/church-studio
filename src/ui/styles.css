@@ -1296,3 +1296,18 @@ div.cn-card { cursor: default; }
 .side-search { display: flex; align-items: center; gap: 8px; margin: 0 4px 6px; padding: 7px 10px; border: 0; border-radius: var(--radius-sm); background: var(--field); box-shadow: inset 0 0 0 1px var(--line); color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
 .side-search:hover { color: var(--ink); }
 .tag-chip { font-size: 11px; padding: 1px 7px; }
+
+/* Designer: layers and photo edits */
+.layers { display: grid; gap: 2px; max-height: 260px; overflow: auto; }
+.layer { display: flex; align-items: center; gap: 6px; padding: 5px 6px; border-radius: 8px; cursor: pointer; color: var(--text); }
+.layer:hover { background: var(--hover); }
+.layer.on { background: var(--accent-soft); }
+.layer.over { box-shadow: inset 0 2px 0 var(--accent); }
+.layer-icon { width: 20px; height: 20px; flex: none; display: grid; place-items: center; border-radius: 5px; background: var(--field); box-shadow: inset 0 0 0 1px var(--line); font-size: 11px; }
+.layer-icon i { width: 12px; height: 12px; border-radius: 3px; display: block; box-shadow: inset 0 0 0 1px var(--line); }
+.layer-del { opacity: 0; }
+.layer:hover .layer-del, .layer.on .layer-del { opacity: 1; }
+.photo-edits-head { border: 0; background: transparent; font: inherit; color: inherit; cursor: pointer; padding: 0; }
+.look-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.dz-ico { font-size: 20px; line-height: 1; }
+.evt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; align-items: start; }

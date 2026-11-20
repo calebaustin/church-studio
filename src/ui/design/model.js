@@ -301,7 +301,8 @@ export function recolorSvg(txt, map) {
 
 // ---------------------------------------------------------------- shapes, photo frames and devices
 export const SHAPES = [
-  ['rect', 'Square'], ['ellipse', 'Circle'], ['hexagon', 'Hexagon'], ['arch', 'Arch'], ['blob', 'Blob'], ['iphone', 'iPhone'], ['macbook', 'MacBook'],
+  ['rect', 'Square'], ['ellipse', 'Circle'], ['hexagon', 'Hexagon'], ['arch', 'Arch'], ['blob', 'Blob'], ['wave', 'Wavy frame'], ['scallop', 'Badge'],
+  ['burst', 'Starburst'], ['window', 'Window card'], ['iphone', 'iPhone'], ['macbook', 'MacBook'],
 ];
 export const DEVICE_ASPECT = { iphone: 0.49, macbook: 1.55 }; // width / height
 function shapePath(ctx, kind, x, y, w, h, r) {
@@ -322,8 +323,115 @@ function shapePath(ctx, kind, x, y, w, h, r) {
     for (let i = 0; i < p.length; i++) { const a = p[i]; const b = p[(i + 1) % p.length]; ctx.quadraticCurveTo(a[0], a[1], (a[0] + b[0]) / 2, (a[1] + b[1]) / 2); }
     ctx.closePath(); return;
   }
+  if (kind === 'wave') {
+    // A frame with soft wavy edges, like a cut-out sticker: trace the edge with a gentle wobble.
+    const a = Math.min(w, h) * 0.03; const wave = Math.max(30, Math.min(w, h) / 5);
+    const per = 2 * (w + h); const steps = 260;
+    for (let i = 0; i <= steps; i++) {
+      const d = (i / steps) * per;
+      let px; let py; let nx; let ny;
+      if (d < w) { px = x + d; py = y; nx = 0; ny = 1; }
+      else if (d < w + h) { px = x + w; py = y + (d - w); nx = -1; ny = 0; }
+      else if (d < 2 * w + h) { px = x + w - (d - w - h); py = y + h; nx = 0; ny = -1; }
+      else { px = x; py = y + h - (d - 2 * w - h); nx = 1; ny = 0; }
+      const off = a + a * Math.sin((d / wave) * Math.PI * 2);
+      if (!i) ctx.moveTo(px + nx * off, py + ny * off); else ctx.lineTo(px + nx * off, py + ny * off);
+    }
+    ctx.closePath(); return;
+  }
+  if (kind === 'scallop' || kind === 'burst') {
+    // A round badge with scalloped edges, or a pointed starburst.
+    const cx = x + w / 2; const cy = y + h / 2; const n = kind === 'scallop' ? 14 : 12;
+    for (let i = 0; i <= n * 2; i++) {
+      const t = (i / (n * 2)) * Math.PI * 2 - Math.PI / 2;
+      const k = i % 2 ? (kind === 'scallop' ? 0.9 : 0.62) : 1;
+      const px = cx + Math.cos(t) * (w / 2) * k; const py = cy + Math.sin(t) * (h / 2) * k;
+      if (!i) ctx.moveTo(px, py);
+      else if (kind === 'scallop') { const tm = ((i - 0.5) / (n * 2)) * Math.PI * 2 - Math.PI / 2; ctx.quadraticCurveTo(cx + Math.cos(tm) * (w / 2) * 1.04, cy + Math.sin(tm) * (h / 2) * 1.04, px, py); }
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath(); return;
+  }
+  if (kind === 'window') { const rr2 = Math.min(w, h) * 0.04; ctx.roundRect ? ctx.roundRect(x, y, w, h, rr2) : ctx.rect(x, y, w, h); return; }
   const rr = Math.max(0, Math.min(r, w / 2, h / 2));
   ctx.roundRect ? ctx.roundRect(x, y, w, h, rr) : ctx.rect(x, y, w, h);
+}
+/** The little title bar on a "window card": a strip with three dots and an outline. */
+function drawWindowChrome(ctx, x, y, w, h, color) {
+  const bar = Math.min(h * 0.16, w * 0.09);
+  ctx.save();
+  shapePath(ctx, 'window', x, y, w, h, 0); ctx.clip();
+  ctx.fillStyle = color || '#1B2033'; ctx.globalAlpha *= 0.12; ctx.fillRect(x, y, w, bar);
+  ctx.restore();
+  ctx.save();
+  ctx.strokeStyle = color || '#1B2033'; ctx.lineWidth = Math.max(1.5, w * 0.006);
+  shapePath(ctx, 'window', x, y, w, h, 0); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x, y + bar); ctx.lineTo(x + w, y + bar); ctx.stroke();
+  for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(x + bar * (0.55 + i * 0.5), y + bar / 2, bar * 0.13, 0, Math.PI * 2); ctx.stroke(); }
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------- photo edits
+/** Edits on a photo: { brightness, contrast, saturate (100 = as is), warmth (-100..100), blur, gray, wash: { color, amount, mode } } */
+export const NO_EDITS = { brightness: 100, contrast: 100, saturate: 100, warmth: 0, blur: 0, gray: 0, wash: null };
+const hasEdits = (a) => a && (a.brightness !== 100 || a.contrast !== 100 || a.saturate !== 100 || a.warmth || a.blur || a.gray || (a.wash && a.wash.amount > 0));
+/** The photo with its edits applied, drawn once and kept until the edits change. */
+function edited(img, adjust, key, cache) {
+  const a = { ...NO_EDITS, ...(adjust || {}) };
+  if (!img || !hasEdits(a)) return img;
+  const id = `edit:${key}:${JSON.stringify(a)}`;
+  if (cache[id]) return cache[id];
+  const k = Math.min(1, 1800 / Math.max(img.width, img.height));
+  const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
+  const g = c.getContext('2d');
+  g.filter = `brightness(${a.brightness}%) contrast(${a.contrast}%) saturate(${a.saturate}%) grayscale(${a.gray}%) blur(${(a.blur * c.width) / 1000}px)`;
+  g.drawImage(img, 0, 0, c.width, c.height);
+  g.filter = 'none';
+  if (a.warmth) { g.globalCompositeOperation = 'soft-light'; g.globalAlpha = Math.min(1, Math.abs(a.warmth) / 100) * 0.7; g.fillStyle = a.warmth > 0 ? '#FF8A2A' : '#3D8BFF'; g.fillRect(0, 0, c.width, c.height); }
+  if (a.wash?.amount > 0) { g.globalCompositeOperation = a.wash.mode || 'color'; g.globalAlpha = Math.min(1, a.wash.amount); g.fillStyle = a.wash.color || '#2B7F5F'; g.fillRect(0, 0, c.width, c.height); }
+  // Keep the photo's own see-through edges (a logo stays a logo).
+  g.globalAlpha = 1; g.globalCompositeOperation = 'destination-in'; g.drawImage(img, 0, 0, c.width, c.height);
+  // Forget older versions of this photo so sliding a control doesn't pile them up.
+  for (const old of Object.keys(cache)) if (old.startsWith(`edit:${key}:`) && old !== id) delete cache[old];
+  cache[id] = c;
+  return c;
+}
+
+// ---------------------------------------------------------------- pattern backgrounds
+export const PATTERNS = [['checker', 'Checker'], ['grid', 'Grid'], ['dots', 'Dots'], ['stripes', 'Stripes']];
+function drawPattern(ctx, W, H, bg, colors) {
+  const a = bg.color || colors[3] || '#F4EFE6'; const b = bg.color2 || colors[0] || '#2B7F5F';
+  ctx.fillStyle = a; ctx.fillRect(0, 0, W, H);
+  const s = Math.max(8, (bg.scale || 0.08) * Math.min(W, H) * 1.6);
+  ctx.save();
+  if (bg.pattern === 'checker') {
+    ctx.fillStyle = b;
+    for (let y = 0, r = 0; y < H; y += s, r++) for (let x = (r % 2) * s; x < W; x += s * 2) ctx.fillRect(x, y, s, s);
+  } else if (bg.pattern === 'grid') {
+    ctx.strokeStyle = b; ctx.globalAlpha = 0.35; ctx.lineWidth = Math.max(1, s / 40);
+    for (let x = 0; x <= W; x += s) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+    for (let y = 0; y <= H; y += s) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  } else if (bg.pattern === 'dots') {
+    ctx.fillStyle = b; ctx.globalAlpha = 0.5;
+    for (let y = s / 2; y < H; y += s) for (let x = s / 2; x < W; x += s) { ctx.beginPath(); ctx.arc(x, y, s * 0.09, 0, Math.PI * 2); ctx.fill(); }
+  } else if (bg.pattern === 'stripes') {
+    ctx.fillStyle = b;
+    for (let x = 0; x < W; x += s * 2) ctx.fillRect(x, 0, s, H);
+  }
+  ctx.restore();
+}
+let grainTile = null;
+/** Fine film grain over gradients, like printed paper. */
+function drawGrain(ctx, W, H, amount) {
+  if (!grainTile) {
+    grainTile = document.createElement('canvas'); grainTile.width = 160; grainTile.height = 160;
+    const g = grainTile.getContext('2d'); const d = g.createImageData(160, 160);
+    for (let i = 0; i < d.data.length; i += 4) { const v = Math.random() * 255; d.data[i] = v; d.data[i + 1] = v; d.data[i + 2] = v; d.data[i + 3] = 255; }
+    g.putImageData(d, 0, 0);
+  }
+  ctx.save(); ctx.globalAlpha = Math.min(0.5, amount); ctx.globalCompositeOperation = 'overlay';
+  ctx.fillStyle = ctx.createPattern(grainTile, 'repeat'); ctx.fillRect(0, 0, W, H);
+  ctx.restore();
 }
 function drawCover(ctx, img, x, y, w, h) {
   const r = Math.max(w / img.width, h / img.height);
@@ -345,10 +453,13 @@ function drawPlaceholder(ctx, x, y, w, h, color) {
 /** Fill a shape: a photo, an empty photo spot, or a solid color. */
 function fillShape(ctx, it, kind, x, y, w, h, r, cache, placeholders) {
   shapePath(ctx, kind, x, y, w, h, r);
-  const img = it.photo ? cache[it.photo] : null;
+  const img = it.photo ? edited(cache[it.photo], it.adjust, it.photo, cache) : null;
   if (img) { ctx.save(); ctx.clip(); drawCover(ctx, img, x, y, w, h); ctx.restore(); }
   else if (it.frame && placeholders) drawPlaceholder(ctx, x, y, w, h, it.fill || '#8A94A6');
-  else { ctx.fillStyle = it.fill || '#FFFFFF'; ctx.fill(); }
+  else if (it.fill !== 'none') { ctx.fillStyle = it.fill || '#FFFFFF'; ctx.fill(); }
+  // An outline: a border around a photo (like a printed sticker) or an outlined tag.
+  if (it.line > 0) { shapePath(ctx, kind, x, y, w, h, r); ctx.strokeStyle = it.stroke || '#FFFFFF'; ctx.lineWidth = it.line * (w / Math.max(1, it.w * 1000)); ctx.stroke(); }
+  if (kind === 'window') drawWindowChrome(ctx, x, y, w, h, it.stroke || '#1B2033');
 }
 function drawDevice(ctx, it, x, y, w, h, cache, placeholders) {
   if (it.shape === 'iphone') {
@@ -373,6 +484,9 @@ function drawDevice(ctx, it, x, y, w, h, cache, placeholders) {
 
 /** Load photos, logos and QR codes a page needs into the cache. */
 export async function loadAssets(pg, cache) {
+  // Fonts a canvas uses aren't fetched until something asks for them: ask for each one first.
+  const fonts = new Set(pg.items.filter((i) => i.type === 'text').map((i) => `${i.italic ? 'italic ' : ''}${i.weight || 600} 64px ${fontCss(i.font)}`));
+  await Promise.all([...fonts].map((f) => (document.fonts?.load ? document.fonts.load(f).catch(() => null) : null)));
   const need = [...(pg.bg?.type === 'image' && pg.bg.image ? [pg.bg.image] : []), ...pg.items.filter((i) => i.type === 'image').map((i) => i.rel),
     ...pg.items.filter((i) => i.type === 'shape' && i.photo).map((i) => i.photo)];
   for (const rel of need) if (!(rel in cache)) cache[rel] = await loadImage(libUrl(rel)).catch(() => null);
@@ -403,7 +517,8 @@ export function renderPage(canvas, doc, pg, scale, cache, { skip, placeholders =
   const W = Math.max(1, Math.round(doc.size.w * scale)); const H = Math.max(1, Math.round(doc.size.h * scale));
   if (canvas.width !== W) canvas.width = W;
   if (canvas.height !== H) canvas.height = H;
-  const ctx = canvas.getContext('2d');
+  const main = canvas.getContext('2d');
+  let ctx = main;
   ctx.clearRect(0, 0, W, H);
   const colors = cohesive(doc.palette || ['#2B7F5F', '#D9A441', '#1B2440', '#F4EFE6', '#8FB8A8'], doc.tint?.color || '#FF9A62', doc.tint?.amount || 0);
   const bg = pg.bg || {};
@@ -413,16 +528,28 @@ export function renderPage(canvas, doc, pg, scale, cache, { skip, placeholders =
     const g = ctx.createLinearGradient(W / 2 - Math.cos(a) * r, H / 2 - Math.sin(a) * r, W / 2 + Math.cos(a) * r, H / 2 + Math.sin(a) * r);
     g.addColorStop(0, bg.from || colors[0]); g.addColorStop(1, bg.to || colors[2]);
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  } else if (bg.type === 'pattern') {
+    drawPattern(ctx, W, H, bg, colors);
   } else if (bg.type === 'image' && cache[bg.image]) {
-    const img = cache[bg.image];
+    const img = edited(cache[bg.image], bg.adjust, bg.image, cache);
     const r = Math.max(W / img.width, H / img.height);
     ctx.drawImage(img, (W - img.width * r) / 2, (H - img.height * r) / 2, img.width * r, img.height * r);
   } else drawMesh(ctx, W, H, bg.colors || colors, bg.seed || 1);
+  if (bg.grain) drawGrain(ctx, W, H, bg.grain);
   if (bg.darken) { ctx.fillStyle = `rgba(0,0,0,${bg.darken})`; ctx.fillRect(0, 0, W, H); }
 
   const boxes = {};
   const k = scale;
-  for (const it of pg.items) {
+  // An eraser with a depth only cuts through that many layers right under it. Those layers are drawn
+  // on their own sheet, cut, then laid back on the page, so the background and lower layers stay.
+  const groupAt = new Map();
+  pg.items.forEach((it, e) => { if (it.type === 'shape' && it.erase && it.depth > 0) groupAt.set(Math.max(0, e - it.depth), e); });
+  let sheet = null;
+  pg.items.forEach((it, i) => {
+    if (!sheet && groupAt.has(i)) {
+      sheet = document.createElement('canvas'); sheet.width = W; sheet.height = H;
+      ctx = sheet.getContext('2d');
+    }
     ctx.save();
     ctx.globalAlpha = it.opacity ?? 1;
     if (it.type === 'shape') {
@@ -433,7 +560,7 @@ export function renderPage(canvas, doc, pg, scale, cache, { skip, placeholders =
       else fillShape(ctx, it, it.shape, x, y, w, h, (it.radius || 0) * k, cache, placeholders);
       boxes[it.id] = { x0: it.x - it.w / 2, x1: it.x + it.w / 2, y0: it.y - it.h / 2, y1: it.y + it.h / 2 };
     } else if (it.type === 'image' || it.type === 'qr') {
-      const img = it.type === 'qr' ? cache[qrKey(it)] : (it.recolor && cache[svgKey(it)]) || cache[it.rel];
+      const img = it.type === 'qr' ? cache[qrKey(it)] : edited((it.recolor && cache[svgKey(it)]) || cache[it.rel], it.adjust, it.rel, cache);
       const w = it.w * W; const h = img ? (img.height / img.width) * w : w;
       const x = it.x * W - w / 2; const y = it.y * H - h / 2;
       if (img && it.id !== skip) {
@@ -458,7 +585,9 @@ export function renderPage(canvas, doc, pg, scale, cache, { skip, placeholders =
       boxes[it.id] = { x0: left / W, x1: (left + boxW) / W, y0: top / H, y1: (top + h) / H };
     }
     ctx.restore();
-  }
+    if (sheet && it.erase && it.depth > 0) { main.drawImage(sheet, 0, 0); sheet = null; ctx = main; }
+  });
+  if (sheet) main.drawImage(sheet, 0, 0);
   return boxes;
 }
 
@@ -569,4 +698,26 @@ export function copyForDate(doc, when, name) {
     return { ...it, id: uid(), text: next };
   }) }));
   return { doc: { ...doc, id: uid(), name: name || `${doc.name} (${MONTHS[when.getMonth()].slice(0, 3)} ${when.getDate()})`, pages, thumb: null }, changed };
+}
+
+// ---------------------------------------------------------------- church details in templates
+/**
+ * Swap the sample church details in a template for the real ones from Settings › Church info:
+ * the name, lead pastor, website, address and service times. Anything not filled in stays as is.
+ */
+export function fillChurch(pages, info = {}) {
+  const site = String(info.website || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
+  const times = String(info.times || '').trim();
+  const swaps = [
+    info.name && [/\b(Church Name|Your Church|Business Name)\b/g, info.name],
+    info.name && [/\bCHURCH NAME\b/g, info.name.toUpperCase()],
+    info.pastor && [/\bPastor Name\b/g, info.pastor],
+    site && [/\byourchurch\.org\b/g, site],
+    info.address && [/\b123 Main St\b/g, info.address.split(',')[0]],
+    times && [/\bSundays at (9 & 11|9 and 11|10am)\b/g, times],
+    times && [/\bSUNDAYS · 9 & 11 AM\b/g, times.toUpperCase()],
+    info.phone && [/\(770\) 555-0100/g, info.phone],
+  ].filter(Boolean);
+  if (!swaps.length) return pages;
+  return pages.map((pg) => ({ ...pg, items: pg.items.map((it) => (it.type === 'text' ? { ...it, text: swaps.reduce((t, [re, to]) => t.replace(re, to), it.text) } : it)) }));
 }

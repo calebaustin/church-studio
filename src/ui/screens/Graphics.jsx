@@ -9,11 +9,17 @@ import { api } from '../api.js';
 import Modal, { ModalHead } from '../components/Modal.jsx';
 import DesignEditor from '../design/DesignEditor.jsx';
 import LibraryPicker from '../components/LibraryPicker.jsx';
-import { KINDS, SIZE_PRESETS, TEMPLATES as BASE_TEMPLATES, blankPage, copyForDate, countdownPages, loadAssets, page as newPage, renderPage, scripturePage, uid } from '../design/model.js';
-import { PACKS, PACK_TEMPLATES } from '../design/packs.js';
+import { KINDS, SIZE_PRESETS, TEMPLATES as BASE_TEMPLATES, blankPage, copyForDate, fillChurch, countdownPages, loadAssets, page as newPage, renderPage, scripturePage, uid } from '../design/model.js';
+import { PACKS as PACKS1, PACK_TEMPLATES } from '../design/packs.js';
+import { PACKS2, PACK2_TEMPLATES, inBrandColors } from '../design/packs2.js';
+
+// Every template pack: the newer plug-and-play packs first.
+export const PACKS = { ...PACKS2, ...PACKS1 };
 import { buildDeck, parseNotes } from '../design/deckBuilder.js';
 
-const TEMPLATES = [...BASE_TEMPLATES, ...PACK_TEMPLATES];
+// Event-ready templates fill in an event's details by themselves.
+const EVENT_READY = new Set(['post-event', 'flyer-event', ...Object.keys(PACKS1).map((k) => `${k}-event`)]);
+export const TEMPLATES = [...PACK2_TEMPLATES, ...BASE_TEMPLATES.map((t) => (EVENT_READY.has(t.id) ? { ...t, event: true } : t)), ...PACK_TEMPLATES.map((t) => (EVENT_READY.has(t.id) ? { ...t, event: true, photos: 1 } : t))];
 
 export { cohesive } from '../design/model.js';
 
@@ -42,27 +48,34 @@ const SERMON_OUTPUTS = [
   ['thumb-sermon', 'Thumbnail', 'A YouTube cover with the title'],
 ];
 
-function useBrandCtx() {
+export function useBrandCtx() {
   const { config } = useApp();
-  const c = [...(config.brandColors || [])];
-  const fallback = ['#2B7F5F', '#D9A441', '#1B2440', '#F4EFE6', '#8FB8A8'];
-  while (c.length < 5) c.push(fallback[c.length]);
-  const f = config.brandFonts || { heading: 'Montserrat', body: 'Montserrat' };
-  return { c: c.slice(0, 5), h: f.heading, b: f.body, o: null };
+  // One object while the brand stays the same, so template previews don't redraw for nothing.
+  return useMemo(() => {
+    const c = [...(config.brandColors || [])];
+    const fallback = ['#2B7F5F', '#D9A441', '#1B2440', '#F4EFE6', '#8FB8A8'];
+    while (c.length < 5) c.push(fallback[c.length]);
+    const f = config.brandFonts || { heading: 'Montserrat', body: 'Montserrat' };
+    return { c: c.slice(0, 5), h: f.heading, b: f.body, o: null, church: config.churchInfo || {}, logo: config.appLogo || null };
+  }, [config.brandColors, config.brandFonts, config.churchInfo, config.appLogo]);
 }
 
-function newDoc(kind, tpl, ctx, size) {
+/** A new design: blank, or from a template, with church details filled in. brand: use the church's colors. */
+export function newDoc(kind, tpl, ctx, size, { brand = false } = {}) {
   const k = KINDS[kind];
+  const packColors = tpl?.pack ? PACKS[tpl.pack].c : null;
+  let pages = tpl ? fillChurch(tpl.build(ctx), ctx.church) : [blankPage(kind, ctx)];
+  if (brand && packColors) pages = inBrandColors(pages, packColors, ctx.c);
   return {
-    id: uid(), name: tpl ? tpl.name : `Untitled ${k.label.toLowerCase()}`, kind,
-    size: size || { w: k.w, h: k.h }, palette: tpl?.pack ? [...PACKS[tpl.pack].c] : ctx.c, tint: { color: '#FF9A62', amount: 0 },
-    pages: tpl ? tpl.build(ctx) : [blankPage(kind, ctx)],
+    id: uid(), name: tpl ? (ctx.ev?.title ? `${ctx.ev.title} · ${tpl.name}` : tpl.name) : `Untitled ${k.label.toLowerCase()}`, kind,
+    size: size || { w: k.w, h: k.h }, palette: packColors && !brand ? [...packColors] : ctx.c, tint: { color: '#FF9A62', amount: 0 },
+    pages, source: ctx.ev ? { event: ctx.ev.title } : undefined,
   };
 }
 
-function TemplateThumb({ tpl, ctx }) {
+export function TemplateThumb({ tpl, ctx, brand = false }) {
   const ref = useRef(null);
-  const doc = useMemo(() => newDoc(tpl.kind, tpl, ctx), [tpl, ctx]);
+  const doc = useMemo(() => newDoc(tpl.kind, tpl, ctx, undefined, { brand }), [tpl, ctx, brand]);
   useEffect(() => {
     let live = true;
     (async () => {
@@ -82,7 +95,8 @@ export function eventForDesign(e) {
   const day = d.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
   const time = e.allDay ? '' : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(':00', '');
   const days = Math.ceil((new Date(d.toDateString()) - new Date(new Date().toDateString())) / 86400000);
-  return { title: e.title, when: [day, time].filter(Boolean).join(' · '), place: e.location?.split(',')[0] || '', summary: e.summary || '', link: e.link || null,
+  return { title: e.title, when: [day, time].filter(Boolean).join(' · '), day, time, place: e.location?.split(',')[0] || '', summary: e.summary || '', link: e.link || null,
+    month: d.toLocaleDateString([], { month: 'short' }).toUpperCase(), num: String(d.getDate()), weekday: d.toLocaleDateString([], { weekday: 'long' }),
     countdown: days > 1 ? `${days} DAYS TO GO` : days === 1 ? 'TOMORROW' : 'TODAY' };
 }
 
@@ -97,6 +111,7 @@ export default function Graphics({ image, design, event, eventMode, quote, make 
   const [q, setQ] = useState('');
   const [modal, setModal] = useState(null); // 'sermon' | 'custom'
   const [redate, setRedate] = useState(null); // a design to copy for a new date
+  const [pickFor, setPickFor] = useState(null); // a calendar event to pick a template for
   const load = () => api.get('/api/designs').then((r) => setDesigns(r.designs)).catch(() => setDesigns([]));
   useEffect(() => { if (!open) load(); }, [open]);
 
@@ -115,6 +130,7 @@ export default function Graphics({ image, design, event, eventMode, quote, make 
     if (!event) return;
     const ev = eventForDesign(event);
     let d;
+    if (eventMode === 'pick') { setPickFor(event); return; }
     if (eventMode === 'flyer') { d = newDoc('flyer', TEMPLATES.find((t) => t.id === 'flyer-event'), { ...ctx, ev }); d.name = `${event.title} · Flyer`; }
     else if (eventMode === 'countdown') { d = newDoc('story', null, ctx); d.pages = countdownPages(ctx, ev); d.name = `${event.title} · Countdown`; }
     else { d = newDoc('post', TEMPLATES.find((t) => t.id === 'post-event'), { ...ctx, ev }); d.name = event.title; }
@@ -265,6 +281,7 @@ export default function Graphics({ image, design, event, eventMode, quote, make 
           onMaker={(m) => setModal(m)}
           onSize={(size) => { setModal(null); const d = newDoc('custom', null, ctx, size); d.name = `Untitled ${size.w}×${size.h}`; create(d); }} />
       )}
+      {pickFor && <EventTemplates event={pickFor} ctx={ctx} onClose={() => setPickFor(null)} onPick={(doc) => { setPickFor(null); create({ ...doc, firstPhoto: true }); }} />}
       {redate && <Redate design={redate} onClose={() => setRedate(null)} onDone={(id, changed) => { setRedate(null); load(); toast({ text: changed ? `Copy made with ${changed} date${changed === 1 ? '' : 's'} updated. Check the times too.` : 'Copy made. No dates were found in its text, so check it over.', action: { label: 'Open', run: () => setOpen(id) } }); }} />}
       {modal === 'import' && (
         <LibraryPicker title="Bring in your own design" folder="Graphics" onClose={() => setModal(null)} onPick={async (i) => {
@@ -387,6 +404,32 @@ function CreateNew({ ctx, onClose, onBlank, onTemplate, onBrowse, onMaker, onSiz
           <button className="btn primary" disabled={!ok} onClick={() => onSize({ w, h })}><Plus size={14} />Create {w}×{h}</button>
         </div>
         {!ok && <span className="hint">Sizes run from 100 to 6000 pixels.</span>}
+      </div>
+    </Modal>
+  );
+}
+
+/** Pick a template for a church event. Every option already shows the event's details. */
+function EventTemplates({ event, ctx, onClose, onPick }) {
+  const ev = useMemo(() => eventForDesign(event), [event]);
+  const ectx = useMemo(() => ({ ...ctx, ev }), [ctx, ev]);
+  const [kind, setKind] = useState('post');
+  const [brand, setBrand] = useState(false);
+  const list = TEMPLATES.filter((t) => t.event && (kind === 'all' || t.kind === kind));
+  return (
+    <Modal label="Make from template" onClose={onClose} width={980}
+      footer={<><span className="hint">Pick one, add a photo, and it’s ready. You can change anything after.</span><label className="switch small"><input type="checkbox" checked={brand} onChange={(e) => setBrand(e.target.checked)} />Use my brand colors</label></>}>
+      <ModalHead title={`A design for ${event.title}`} sub={ev.when + (ev.place ? ` · ${ev.place}` : '')} />
+      <div className="seg" style={{ justifySelf: 'start' }}>
+        {[['post', 'Posts'], ['story', 'Stories'], ['flyer', 'Flyers'], ['all', 'All']].map(([k, l]) => <button key={k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>{l}</button>)}
+      </div>
+      <div className="evt-grid">
+        {list.map((t) => (
+          <button key={t.id} className="dz-card glass dz-tpl" onClick={() => onPick(newDoc(t.kind, t, ectx, undefined, { brand }))}>
+            <span className="dz-card-cover"><TemplateThumb tpl={t} ctx={ectx} brand={brand} /></span>
+            <span className="dz-card-meta"><span className="stack" style={{ gap: 0 }}><strong className="small">{PACKS[t.pack]?.name || 'Classic'}</strong><span className="muted" style={{ fontSize: 12 }}>{KINDS[t.kind].label}{t.photos ? ' · 1 photo' : ''}</span></span></span>
+          </button>
+        ))}
       </div>
     </Modal>
   );
