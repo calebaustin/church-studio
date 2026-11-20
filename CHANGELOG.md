@@ -2,7 +2,7 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
-## Unreleased
+## 0.16.0 · November 20, 2026
 
 ### New
 - **The Sermon page.** Each sermon's last step is now its own page, the hub for everything made from it:
