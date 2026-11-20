@@ -2,7 +2,7 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
-## Unreleased
+## 0.15.0 · November 20, 2026
 
 ### New
 - **Links in helper answers.** When the helper mentions one of your events, sermons, designs, writing, campaigns or brand pictures, the name becomes a pill you can click to open it. The chat stays open while you go.
