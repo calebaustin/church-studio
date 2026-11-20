@@ -80,7 +80,8 @@
         "to": "assets",
         "filter": [
           "fonts/**",
-          "build/icon.png"
+          "build/icon.png",
+          "bible/**"
         ]
       }
     ],

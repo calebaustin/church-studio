@@ -9,7 +9,7 @@ import { api } from '../api.js';
 import { mdToHtml } from '../markdown.js';
 
 const NAMES = { apple: 'Apple Intelligence', cshelper: 'CS Helper', anthropic: 'Claude', openai: 'ChatGPT', gemini: 'Gemini', ollama: 'Ollama' };
-const REF_ICON = { event: CalendarDays, sermon: Clapperboard, design: Shapes, writing: FileText, campaign: Megaphone, file: ImageIcon, place: Settings2 };
+const REF_ICON = { event: CalendarDays, sermon: Clapperboard, design: Shapes, writing: FileText, campaign: Megaphone, file: ImageIcon, place: Settings2, moment: Clapperboard };
 // What people can ask for. Each one fills the box so they can send it or change it first.
 const TIPS = [
   ['Planning', ['What should we post this week?', 'How does this sermon connect to upcoming events?', 'Which events need posts soon?']],
@@ -32,7 +32,7 @@ function routeFor(r) {
   if (r.type === 'design') return { name: 'graphics', design: r.id };
   if (r.type === 'writing') return { name: 'writing', project: r.id };
   if (r.type === 'campaign') return { name: 'calendar', tab: 'campaigns' };
-  if (r.type === 'place') return r.go;
+  if (r.go) return r.go; // places in the app, and sermon moments (the transcript at that spot)
   return { name: 'assets' };
 }
 /** The answer as HTML, with each named item turned into a pill button (first mention only). */
@@ -87,7 +87,7 @@ export default function HelperBubble({ ai }) {
     api.post('/api/helper/context', { focus }).then((c) => {
       if (!live) return;
       setCtx((prev) => {
-        if (prev && prev.label !== c.label) setMsgs((m) => (m.length && m[m.length - 1].role !== 'note' ? [...m, { role: 'note', content: `Now looking at ${c.label}` }] : m));
+        if (prev && prev.label !== c.label && c.label !== 'Church Studio') setMsgs((m) => (m.length && m[m.length - 1].role !== 'note' ? [...m, { role: 'note', content: `Now looking at ${c.label}` }] : m));
         return c;
       });
     }).catch(() => {});
@@ -318,7 +318,8 @@ export default function HelperBubble({ ai }) {
                   );
                 }
                 const { html, inline } = withPills(m.content, m.refs);
-                const extra = (m.refs || []).filter((_, k) => !inline.has(k));
+                const extra = (m.refs || []).filter((r, k) => !inline.has(k) && r.type !== 'moment');
+                const moments = (m.refs || []).filter((r) => r.type === 'moment');
                 return (
                   <div key={i} className="helper-turn" data-msg={i}>
                     <div className={`helper-msg assistant ${m.error ? 'error' : ''}`}>
@@ -327,6 +328,12 @@ export default function HelperBubble({ ai }) {
                     {extra.length > 0 && (
                       <div className="helper-refrow">
                         {extra.map((r) => { const Icon = REF_ICON[r.type] || FileText; return <button key={`${r.type}${r.id}`} className="helper-ref" onClick={() => openRef(r)}><Icon size={12} />{r.title}</button>; })}
+                      </div>
+                    )}
+                    {moments.length > 0 && (
+                      <div className="helper-moments">
+                        <span className="tiny muted">Where your minister talked about this</span>
+                        <div className="helper-refrow">{moments.map((r) => <button key={r.id} className="helper-ref" onClick={() => openRef(r)}><Clapperboard size={12} />{r.title}</button>)}</div>
                       </div>
                     )}
                     {m.actions?.length > 0 && (

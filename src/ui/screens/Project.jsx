@@ -50,7 +50,7 @@ function TimeInput({ value, onChange }) {
   );
 }
 
-export default function Project({ id, initialStep, initialClip }) {
+export default function Project({ id, initialStep, initialClip, initialTime }) {
   const { go, trackJob, onJobFinished, jobs, confirmLeave } = useApp();
   const [project, setProject] = useState(null);
   const [sharing, setSharing] = useState(false);
@@ -78,6 +78,8 @@ export default function Project({ id, initialStep, initialClip }) {
       // A video that already has kept clips opens in the editor. "Cut more clips" goes back to the picker.
       if (!initialStep && (!audioOnly || p.kind === 'lyric') && keptClip) { setSelected(keptClip.id); setStep('edit'); }
       else if (initialStep === 'edit' && p.clips.length) { setSelected((p.clips.find((c) => c.id === initialClip) || p.clips.find((c) => c.status === 'kept' || c.status === 'exported') || p.clips[0]).id); setStep('edit'); }
+      // A link to a step (the transcript, clips, content plan…) opens there once the sermon is transcribed.
+      else if (initialStep && initialStep !== 'edit' && (p.status === 'transcribed' || initialStep === 'transcribe')) setStep(initialStep);
       else setStep(fallback);
     }).catch(() => go({ name: 'library' }));
   }, [load]);
@@ -183,7 +185,7 @@ export default function Project({ id, initialStep, initialClip }) {
           onSelect={setSelected} patch={patch} jobs={busy} onMore={() => setStep('clips')} />
       )}
       {step === 'exports' && <ExportsStep project={project} />}
-      {step === 'text' && transcript && <TranscriptStep project={project} />}
+      {step === 'text' && transcript && <TranscriptStep project={project} at={initialTime} />}
       {step === 'plan' && <ContentPlan project={project} setStep={setStep} onChange={load} />}
       {sharing && <ShareProject project={project} onClose={() => setSharing(false)} />}
     </div>
@@ -462,9 +464,10 @@ function ExportsStep({ project }) {
 }
 
 /** The transcript as text: read it, select part of it, copy or save it, or make something from it. */
-function TranscriptStep({ project }) {
+function TranscriptStep({ project, at }) {
   const { go, toast } = useApp();
-  const [whole, setWhole] = useState(!project.sermon?.confirmed);
+  // Opened at a moment (from a helper link): show everything so the moment is never trimmed away.
+  const [whole, setWhole] = useState(!project.sermon?.confirmed || at != null);
   const [data, setData] = useState(null);
   const [times, setTimes] = useState(() => { try { return localStorage.getItem('cs-times') === '1'; } catch { return false; } });
   const [sel, setSel] = useState(null); // { a, b } word indexes
@@ -492,6 +495,17 @@ function TranscriptStep({ project }) {
       setSel(sel && sel.a === a && sel.b === b ? null : { a, b });
     }
   };
+  // Jump to the linked moment: select the words there and scroll them into view.
+  const jumped = useRef(false);
+  useEffect(() => {
+    if (at == null || jumped.current || !words.length) return;
+    const a = Math.max(0, words.findIndex((w) => w.start >= Number(at) - 0.3));
+    let b = a;
+    while (b < words.length - 1 && words[b + 1].start < Number(at) + 12) b++;
+    jumped.current = true;
+    setSel({ a, b });
+    requestAnimationFrame(() => box.current?.querySelector(`[data-i="${a}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+  }, [at, words]);
   useEffect(() => { const k = (e) => { if (e.key === 'Escape') setSel(null); }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k); }, []);
 
   const save = async (format) => {

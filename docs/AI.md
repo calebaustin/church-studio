@@ -70,9 +70,18 @@ chosen file. `POST /api/ai/image-playground` copies it into the Brand library (G
 Prompts come from `imagePrompts()` in `helper.js` (only when Apple Intelligence is the helper and a design is open).
 
 ## Scripture
-There's no Bible text in the app. The helper may suggest references for writing (it remembers references well),
-preferring ones the minister has preached (from the sermon index). `cleanVerses()` strips any verse wording quoted
-next to a reference and adds a reminder to check the wording. The rules forbid doctrinal opinions.
+`assets/bible/web.json.gz` is the World English Bible (66 books, unchanged, public domain; see its README).
+`src/daemon/bible.js` loads it on first use and only checks references (`lookup`, `refsIn`) and finds verses that
+use a word (`versesAbout`). For verse requests, those verses are offered to the model as candidates, and
+`groundVerses()` in `helper.js` removes made-up references and any wording the model wrote, then adds the exact
+WEB wording with a note to check the church's translation.
+
+## Belief questions
+`isBeliefQuestion()` spots questions of belief. The helper never answers them itself. `sermonMoments()` searches
+saved transcripts (sentences cached per transcript) for the question's words. If the minister covered it, the
+model is told to share a short phrase in the minister's words, and each moment is a link (`type: 'moment'`) that
+opens the Transcript at that time (`route.t`), with the words selected. If not, Church Studio answers with a fixed
+"That's a question for your minister" reply, without asking the model.
 
 ## Not done yet
 - Picture descriptions with a local model.

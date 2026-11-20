@@ -11,5 +11,7 @@ splitting, word re-timing), AI-Youtube-Shorts-Generator (speaker-following crop)
 credentials and a persistent posting queue), cohesive-colors (color blending), claude-blog (writing that
 never invents facts), DeckCraft (slide deck features), Fluid (spring curves and the gliding, stretching highlight, MIT), and Apple-Intelligence-Chat (the Apple Intelligence bridge, MIT).
 
+**Bible text:** the World English Bible (public domain, from eBible.org), used to check references and show their wording.
+
 **AI helpers:** CS Helper runs Meta's Llama 3.2 3B (Built with Llama; Llama 3.2 Community License) with llama.cpp (MIT). Apple Intelligence is Apple's, built into macOS. Each project's license applies to the parts it
 covers.

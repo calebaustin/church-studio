@@ -1606,3 +1606,4 @@ input[type='range']:active::-webkit-slider-thumb { transform: scale(1.22); trans
 .helper-images { padding-top: 6px; }
 .today-card { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 14px 16px; }
 @media (max-width: 760px) { .today-card { grid-template-columns: auto minmax(0, 1fr); } .today-card .btn { grid-column: 2; } }
+.helper-moments { display: grid; gap: 4px; max-width: 100%; }

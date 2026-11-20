@@ -15,6 +15,10 @@ import { loadVoice } from './voice.js';
 import { listDrafts, loadDraft } from './writing.js';
 import { gapReport, sermonIndex } from './insights.js';
 import { listChannel } from './youtube.js';
+import { lookup, refsIn, topicWords, TRANSLATION, versesAbout } from './bible.js';
+import { toSentences } from './text.js';
+import { stat } from 'node:fs/promises';
+import { file as projectFile } from './projects.js';
 import { chat, complete, PROVIDER_NAMES } from './ai.js';
 import { appleAsk, llamaChat } from './localai.js';
 import { listLibrary } from './library.js';
@@ -171,8 +175,8 @@ Rules you always keep:
 - Write in ${church}'s voice when you write anything they'll post or send.
 - If they say "this" or "it", they mean what is selected (see below), or the whole piece if nothing is. If it's still unclear what they mean, ask one short question before you answer.
 - When you suggest a sermon, event, design or picture, use its exact name from the facts so they can open it.
-- Don't give doctrinal opinions or tell anyone what to believe. If asked, say kindly that's a question for their minister, and offer writing help instead.
-- For writing, you may suggest Bible references that fit a topic (references only, like Psalm 23:1). Prefer verses their minister has preached (in the facts). Never quote verse wording from memory; tell them to check the wording in their own Bible.
+- Don't give doctrinal opinions or tell anyone what to believe. If they ask a question of belief, don't answer it yourself. If "What their minister said on this" appears below, point them to that sermon and share a short phrase of what the minister said there, in the minister's words. If it doesn't appear, say kindly that's a question for their minister.
+- For writing, you may suggest Bible references that fit a topic (references only, like Psalm 23:1). Choose from "Verses you can suggest" and the verses their minister has preached when they're given. Never quote verse wording yourself; Church Studio adds the exact wording.
 - When they ask how to do something or where a setting is, answer with the exact place from the guide below, like "Settings › Church info".
 
 HOW CHURCH STUDIO IS LAID OUT
@@ -197,15 +201,34 @@ async function systemFor(cfg, focus) {
 export async function helperChat({ focus, messages, onDelta, signal }) {
   const cfg = await loadConfig();
   if (!cfg.llmProvider || cfg.llmProvider === 'none') throw new Error('Turn on an AI helper in Settings first.');
-  const { system } = await systemFor(cfg, focus);
+  let { system } = await systemFor(cfg, focus);
+  const clean0 = (messages || []).filter((m) => m?.role === 'user');
+  const lastQ = String(clean0[clean0.length - 1]?.content || '');
+  let moments = [];
+  if (isBeliefQuestion(lastQ)) {
+    moments = await sermonMoments(lastQ);
+    if (!moments.length) {
+      const text = 'That\'s a question for your minister, so I won\'t answer it myself. I didn\'t find it in your saved sermon transcripts. If your minister preaches on it, I can point you to that spot, and help you write about it in your church\'s words.';
+      onDelta?.(text);
+      return { text, refs: [], actions: [] };
+    }
+    system += '\n\nThis is a question of belief. Don\'t answer it yourself. Say their minister spoke about it, and share a short phrase of what was said, in the minister\'s words. Then offer to help write about it.';
+    if (moments.length) system += `\n\nWHAT THEIR MINISTER SAID ON THIS (from saved sermon transcripts)\n${moments.map((m) => `- In "${m.title}" at ${clock(m.start)}: "${clip(m.text, 320)}"`).join('\n')}`;
+  }
+  if (/\b(verses?|scriptures?|bible|passages?)\b/i.test(lastQ)) {
+    const vs = versesAbout(topicWords(lastQ), cfg.llmProvider === 'apple' ? 6 : 10);
+    if (vs.length) system += `\n\nVERSES YOU CAN SUGGEST (they use the words asked about)\n${vs.map((v) => v.ref).join('; ')}`;
+  }
   const clean = (messages || []).filter((m) => m && ['user', 'assistant'].includes(m.role) && String(m.content || '').trim()).map((m) => ({ role: m.role, content: String(m.content).slice(0, 4000) }));
   if (!clean.length || clean[clean.length - 1].role !== 'user') throw new Error('Ask a question first.');
   let text = await chat(cfg, { system, messages: clean, onDelta, signal });
   // When it declines, small models sometimes invent a feature to point at. Finish the reply ourselves with
   // something real from this church's calendar or sermons.
   if (/^\W*I can only help with Church Studio/i.test(text)) text = `I can only help with Church Studio work. ${await realSuggestion()}`;
-  text = cleanVerses(text);
+  text = groundVerses(text);
   const refs = findRefs(text, await catalog(), focus);
+  // The sermon moments, as pills that open the transcript right at that spot.
+  for (const m of moments) refs.push({ type: 'moment', id: `${m.projectId}@${Math.round(m.start)}`, title: `${m.title} · ${clock(m.start)}`, go: { name: 'project', id: m.projectId, step: 'text', t: m.start } });
   return { text, refs, actions: followUps(refs, focus) };
 }
 
@@ -472,17 +495,77 @@ export async function whatToday() {
 }
 
 // ------------------------------------------------------------------ Bible references
-// Small models remember references well but misquote the wording. Keep the references, drop any wording
-// quoted next to them, and remind people to check their own Bible.
-const BOOK_RE = '(?:[1-3]\\s?)?(?:Genesis|Exodus|Leviticus|Numbers|Deuteronomy|Joshua|Judges|Ruth|Samuel|Kings|Chronicles|Ezra|Nehemiah|Esther|Job|Psalms?|Proverbs|Ecclesiastes|Song of (?:Solomon|Songs)|Isaiah|Jeremiah|Lamentations|Ezekiel|Daniel|Hosea|Joel|Amos|Obadiah|Jonah|Micah|Nahum|Habakkuk|Zephaniah|Haggai|Zechariah|Malachi|Matthew|Mark|Luke|John|Acts|Romans|Corinthians|Galatians|Ephesians|Philippians|Colossians|Thessalonians|Timothy|Titus|Philemon|Hebrews|James|Peter|Jude|Revelation)';
-const REF_RE = new RegExp(`\\b${BOOK_RE}\\s+\\d+(?::\\d+(?:[-–]\\d+)?)?`);
-export function cleanVerses(text) {
-  let found = false;
-  const out = String(text).split('\n').map((line) => {
-    if (!REF_RE.test(line)) return line;
-    found = true;
-    return line.replace(/\s*[-–—:]?\s*["“][^"”]{6,}["”]\s*/g, ' ').replace(/\s+([.,;])/g, '$1').replace(/\s{2,}/g, ' ').trimEnd();
-  }).join('\n');
-  if (!found || /check (the )?wording/i.test(out)) return out;
-  return `${out}\n\nCheck the wording in your church's Bible translation before you use these.`;
+// Small models remember references well but misquote the wording. Keep real references, drop ones that don't
+// exist, remove any wording the model wrote, and add the exact wording from the World English Bible.
+export function groundVerses(text) {
+  const found = new Map();
+  const lines = String(text).split('\n').map((line) => {
+    const refs = refsIn(line);
+    if (!refs.length) return line;
+    let out = line.replace(/\s*[-–—:]?\s*["“][^"”]{6,}["”]\s*/g, ' ');
+    let bad = 0;
+    for (const r of refs) {
+      const v = lookup(r.book, r.chapter, r.from, r.to);
+      if (v) found.set(v.ref, v); else { bad++; out = out.replace(r.raw, '').replace(/\s{2,}/g, ' '); }
+    }
+    // A list line that was only a made-up reference goes away.
+    if (bad && !refsIn(out).length && /^\s*(?:[-*•]|\d+[.)])\s*[\W]*$/.test(out)) return null;
+    return out.replace(/\s+([.,;])/g, '$1').trimEnd();
+  }).filter((l) => l !== null);
+  let out = lines.join('\n');
+  if (!found.size) return out;
+  const list = [...found.values()].slice(0, 6).map((v) => `- **${v.ref}**: “${v.text}”`).join('\n');
+  return `${out}\n\n${list}\n\n*Wording from the ${TRANSLATION} (public domain). Check it against your church's translation.*`;
+}
+
+// ------------------------------------------------------------------ what the minister said
+// Questions of belief aren't the helper's to answer. If a saved sermon covered it, point to that spot.
+const BELIEF = /\b(salvation|saved|bapti[sz]\w*|sin|sins|sinful|heaven|hell|grace|faith|believe|belief|trinity|communion|lord'?s supper|holy spirit|resurrection|marriage|divorce|tith\w*|forgiv\w*|repent\w*|eternal|judgment|second coming|rapture|predestin\w*|prayer|pray|worship|scripture|doctrine|gospel|church membership|creation|evolution|abortion|sexuality|gay|homosexual\w*|alcohol|drinking|instrument\w*|speaking in tongues|gifts of the spirit)\b/i;
+export function isBeliefQuestion(q) {
+  if (!BELIEF.test(q)) return false;
+  return /\?|\b(is it|is there|are we|do we|does god|does the bible|what does|should (we|i|christians)|can (we|i|christians)|required|necessary|okay to|ok to|allowed|believe about|teach about|stance|view on|position on)\b/i.test(q);
+}
+const clock = (t) => { const s = Math.max(0, Math.round(t)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+const stem = (w) => w.toLowerCase().replace(/(ing|ed|es|s)$/, '');
+const sentCache = new Map(); // projectId -> { mtime, sentences }
+async function sentencesOf(id) {
+  const f = projectFile(id, 'transcript.json');
+  const st = await stat(f).catch(() => null);
+  if (!st) return [];
+  const c = sentCache.get(id);
+  if (c && c.mtime === st.mtimeMs) return c.sentences;
+  const t = await getTranscript(id).catch(() => null);
+  const sentences = t?.words?.length ? toSentences(t.words) : [];
+  sentCache.set(id, { mtime: st.mtimeMs, sentences });
+  return sentences;
+}
+const QSTOP = new Set(['what', 'does', 'bible', 'say', 'about', 'should', 'would', 'could', 'christian', 'christians', 'believe', 'church', 'there', 'their', 'that', 'this', 'with', 'have', 'from', 'your', 'teach', 'think', 'okay', 'allowed', 'required', 'necessary']);
+/** The best passages across saved sermons for a question: up to 3, at least two of its words. */
+export async function sermonMoments(question, n = 3) {
+  const terms = [...new Set((question.toLowerCase().match(/[a-z']{4,}/g) || []).filter((w) => !QSTOP.has(w)).map(stem))];
+  if (!terms.length) return [];
+  const hits = [];
+  for (const p of (await listProjects().catch(() => [])).filter((x) => x.status === 'transcribed')) {
+    const sents = await sentencesOf(p.id);
+    for (let i = 0; i < sents.length; i++) {
+      const win = sents.slice(i, i + 3);
+      const words = new Set(win.flatMap((x) => (x.text.toLowerCase().match(/[a-z']{3,}/g) || []).map(stem)));
+      const got = terms.filter((t) => words.has(t));
+      const need = Math.min(2, terms.length);
+      if (got.length < need) continue;
+      // Start at the first sentence that actually says it.
+      const has = (x) => terms.some((t) => (x.text.toLowerCase().match(/[a-z']{3,}/g) || []).map(stem).includes(t));
+      const from = win.findIndex(has);
+      const part = win.slice(Math.max(0, from));
+      hits.push({ projectId: p.id, title: p.title, start: part[0].start, end: part[part.length - 1].end, text: part.map((x) => x.text).join(' '), score: got.length * 10 - i / 1000 });
+    }
+  }
+  hits.sort((a, b) => b.score - a.score);
+  const out = [];
+  for (const h of hits) {
+    const same = (o) => { const A = new Set(o.text.toLowerCase().match(/[a-z']+/g)); const B = new Set(h.text.toLowerCase().match(/[a-z']+/g)); return [...B].filter((w) => A.has(w)).length / Math.max(1, Math.min(A.size, B.size)) > 0.8; };
+    if (out.some((o) => (o.projectId === h.projectId && Math.abs(o.start - h.start) < 60) || same(o))) continue;
+    out.push(h); if (out.length >= n) break;
+  }
+  return out;
 }
