@@ -59,7 +59,7 @@ export default function MyApp({ section } = {}) {
     [Layers, 'Caption theme', caption?.name || 'Default', () => go({ name: 'settings', section: 'video-themes' })],
     [Target, 'Weekly goal', `${config.weeklyGoal || 5} clips`, () => go({ name: 'home' })],
     [Send, 'Social accounts', accounts ? (accounts.length ? accounts.map((a) => a.label).join(', ') : 'None yet') : '…', () => go({ name: 'social' })],
-    [Sparkles, 'AI helper', config.llmProvider === 'none' ? 'Off' : config.llmProvider, () => go({ name: 'settings', section: 'ai' })],
+    [Sparkles, 'AI helper', ({ none: 'Off', apple: 'Apple Intelligence', cshelper: 'CS Helper', anthropic: 'Claude', openai: 'ChatGPT', gemini: 'Gemini', ollama: 'Ollama' })[config.llmProvider || 'none'] || 'Off', () => go({ name: 'settings', section: 'ai' })],
     [FolderHeart, 'Brand library', lib ? `${lib.items.length} files` : '…', () => go({ name: 'assets' })],
   ];
 

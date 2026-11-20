@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Undo2, Redo2, Download, Zap, Plus, Trash2, Crosshair, Play, Pause, Send, FolderOpen, Save, MousePointerClick, Bookmark, X, ScissorsLineDashed, CalendarDays, ChevronDown } from 'lucide-react';
-import { useApp } from '../App.jsx';
+import { useApp, useHelperFocus } from '../App.jsx';
 import { api, fmt, media } from '../api.js';
 import CaptionOverlay, { findFont } from '../components/CaptionOverlay.jsx';
 import ExportDialog from '../components/ExportDialog.jsx';
@@ -263,6 +263,12 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
 
   const font = findFont(themes, themeDraft?.font);
   const set = (p) => h.set((c) => ({ ...c, ...p }));
+  // The helper chat sees this clip; a picked hook, title or caption lands here (and Undo takes it back).
+  useHelperFocus({ kind: 'clip', id: project.id, clipId: clip.id }, (field, value) => {
+    if (!['hook', 'title', 'summary'].includes(field)) return false;
+    set({ [field]: value });
+    return true;
+  });
 
   // ---- framing
   // Wide (16:9) clips preview in a wide frame showing the whole shot, just like the export.

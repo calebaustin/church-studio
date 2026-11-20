@@ -39,6 +39,8 @@ import { contentPlan } from './hub.js';
 import * as insights from './insights.js';
 import * as churchCal from './calendar.js';
 import { aiStatus, resetAiStatus, testProvider } from './ai.js';
+import { appleStatus, csHelperStatus, deleteCsModel, downloadCsModel } from './localai.js';
+import { helperChat, helperContext, runPass } from './helper.js';
 import { binTranscript } from './sermon.js';
 import * as social from './social/hub.js';
 import * as socialStore from './social/store.js';
@@ -63,6 +65,8 @@ const route = (method, pattern, handler) => {
   const re = new RegExp(`^${pattern.replace(/:(\w+)/g, (_, k) => { keys.push(k); return '([^/]+)'; })}$`);
   routes.push({ method, re, keys, handler });
 };
+/** A route that writes its own streamed response (newline-delimited JSON) instead of returning a value. */
+const streamRoute = (method, pattern, handler) => { route(method, pattern, handler); routes[routes.length - 1].stream = true; };
 
 async function body(req) {
   const chunks = [];
@@ -93,6 +97,24 @@ route('GET', '/api/config', async () => ({ config: mask(await loadConfig()), key
 route('PUT', '/api/config', async (_p, b) => { if (['llmProvider', 'anthropicApiKey', 'openaiApiKey', 'geminiApiKey', 'ollamaUrl', 'ollamaModel'].some((k) => k in b)) resetAiStatus(); return { config: mask(await saveConfig(b)) }; });
 route('GET', '/api/tools', async () => ({ tools: await toolStatus() }));
 route('POST', '/api/tools/repair', (_p, b) => ({ job: jobs.view(jobs.enqueue({ kind: 'repair', label: 'Repairing a helper', key: `repair:${b.name}` }, (ctx) => repairTool(String(b.name || ''), ctx))) }));
+// ---- AI helpers that run on this Mac (Apple Intelligence, CS Helper) and the helper chat
+route('GET', '/api/ai/local', async () => ({ apple: await appleStatus(true), cshelper: await csHelperStatus() }));
+route('POST', '/api/ai/cshelper/download', () => ({ job: jobs.view(jobs.enqueue({ kind: 'cshelper', label: 'Download CS Helper', key: 'cshelper' }, (ctx) => downloadCsModel(ctx))) }));
+route('DELETE', '/api/ai/cshelper', async () => { await deleteCsModel(); return { ok: true }; });
+route('POST', '/api/helper/context', async (_p, b) => helperContext(b.focus || {}));
+route('POST', '/api/helper/pass', async (_p, b) => runPass({ focus: b.focus || {}, pass: b.pass }));
+streamRoute('POST', '/api/helper/chat', async (_p, b, res, req) => {
+  res.writeHead(200, { 'content-type': 'application/x-ndjson', 'cache-control': 'no-store' });
+  const ac = new AbortController();
+  req.on('close', () => { if (!res.writableEnded) ac.abort(); });
+  const line = (o) => { if (!res.writableEnded) res.write(`${JSON.stringify(o)}\n`); };
+  try {
+    const text = await helperChat({ focus: b.focus || {}, messages: b.messages || [], signal: ac.signal, onDelta: (d, full) => (d == null ? line({ replace: full }) : line({ delta: d })) });
+    line({ done: true, text });
+  } catch (e) { line({ error: e.message }); }
+  res.end();
+});
+
 route('POST', '/api/ai/test', async (_p, b) => {
   const cfg = { ...(await loadConfig()) };
   if (b.provider) cfg.llmProvider = b.provider;
@@ -661,6 +683,7 @@ const server = http.createServer(async (req, res) => {
         if (!m) continue;
         const params = Object.fromEntries(r.keys.map((k, i) => [k, decodeURIComponent(m[i + 1])]));
         const b = ['POST', 'PUT', 'PATCH'].includes(req.method) ? await body(req) : {};
+        if (r.stream) return r.handler(params, b, res, req);
         return send(res, 200, await r.handler(params, b, url));
       }
       throw new HttpError(404, 'Not found');
@@ -724,6 +747,7 @@ try { upgrade = await updates.prepareUpgrade(); if (upgrade.upgraded) console.lo
 server.listen(PORT, HOST, () => {
   social.startScheduler().catch((e) => console.error('[social] scheduler failed to start', e));
   churchCal.refreshIfDue(); setInterval(() => churchCal.refreshIfDue(), 3600_000).unref();
+  appleStatus().catch(() => {}); // know early whether Apple Intelligence is ready
   setTimeout(() => backup.backupIfDue(), 3 * 60_000).unref(); // weekly backup, once things settle
   console.log(`Church Studio engine on http://${HOST}:${PORT}`);
   process.send?.({ ready: true, port: PORT });

@@ -7,7 +7,7 @@ import { useChurchEvents } from '../components/ChurchEvents.jsx';
 import HeaderImage from '../components/HeaderImage.jsx';
 import PrintDialog from '../components/PrintDialog.jsx';
 import LibraryPicker from '../components/LibraryPicker.jsx';
-import { useApp } from '../App.jsx';
+import { useApp, useHelperFocus } from '../App.jsx';
 import { api } from '../api.js';
 import { seoChecks } from '../seo.js';
 import { mdToHtml } from '../markdown.js';
@@ -142,6 +142,12 @@ function WritingEditor({ pid, onBack, startKind }) {
   };
   const save = async () => { await api.put(`/api/writing/${pid}`, draft); setDirty(false); toast({ text: 'Draft saved.', celebrate: true }); };
   const set = (p) => { setDraft((d) => ({ ...d, ...p })); setDirty(true); };
+  // The helper chat sees this piece; a picked title lands in the title field.
+  useHelperFocus(draft ? { kind: 'writing', id: pid, part: kind } : null, (field, value) => {
+    if (field !== 'title') return false;
+    set({ title: value });
+    return true;
+  });
   const polish = async () => {
     setBusy(true);
     try { const r = await api.post(`/api/writing/${pid}/polish`, { kind, text: draft[kind] }); set({ [kind]: r.text }); toast({ text: r.notice || 'Polished. Read it over before using it.' }); } catch (e) { toast({ kind: 'error', text: e.message }); }

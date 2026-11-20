@@ -1,4 +1,5 @@
 import Backups from '../components/Backups.jsx';
+import AIHelperSettings from '../components/AIHelperSettings.jsx';
 import { useEffect, useRef, useState } from 'react';
 import { Plus, AlertTriangle } from 'lucide-react';
 import { useApp, applyAppTheme, activeAppTheme } from '../App.jsx';
@@ -43,7 +44,7 @@ export default function Settings({ section: initial }) {
         {section === 'credits' && <Credits />}
         {section === 'tools' && <Tools />}
         {section === 'youtube' && <YouTube />}
-        {section === 'ai' && <AIKeys />}
+        {section === 'ai' && <AIHelperSettings />}
         {section === 'clips' && <ClipDefaults />}
         {section === 'export' && <ExportSettings />}
         {section === 'app-theme' && <AppTheme />}
@@ -160,101 +161,6 @@ function YouTube() {
         </>
       )}
     </section>
-  );
-}
-
-const PROVIDERS = [
-  { id: 'none', name: 'Off', note: 'Offline scoring. Free, private, no key.', badge: 'Recommended' },
-  { id: 'ollama', name: 'Ollama', note: 'Local model on this Mac. Free, no key.' },
-  { id: 'anthropic', name: 'Claude', note: 'Anthropic API key.' },
-  { id: 'openai', name: 'OpenAI', note: 'OpenAI API key.' },
-  { id: 'gemini', name: 'Gemini', note: 'Google AI Studio key.' },
-];
-
-function SecretField({ guide, value, onSave }) {
-  const [draft, setDraft] = useState('');
-  const [state, setState] = useState(null);
-  return (
-    <div className="keycard">
-      <div className="row between">
-        <h3>{guide.name}</h3>
-        {value ? <span className="chip ok"><span className="dot" />Saved</span> : <span className="chip">Not set</span>}
-      </div>
-      <p className="muted small">{guide.purpose}</p>
-      <ol className="small">{guide.steps.map((s) => <li key={s}>{s}</li>)}</ol>
-      <div className="row">
-        <input className="input mono" type="password" autoComplete="off" spellCheck={false} placeholder={value || 'Paste key'} value={draft} onChange={(e) => setDraft(e.target.value)} />
-        <button className="btn primary" disabled={!draft.trim()} onClick={async () => { await onSave(draft.trim()); setDraft(''); setState('saved'); }}>Save</button>
-        {value && <button className="btn ghost danger" onClick={async () => { await onSave(''); setState('removed'); }}>Remove</button>}
-      </div>
-      <div className="row between small">
-        <button className="btn ghost sm" onClick={() => openLink(guide.link)}>Get a key ↗</button>
-        <span className="muted">Saved on this Mac only{state ? ` · ${state}` : ''}</span>
-      </div>
-    </div>
-  );
-}
-
-function AIKeys() {
-  const { config, saveConfig, keyGuide } = useApp();
-  const [test, setTest] = useState(null);
-  const [models, setModels] = useState({ ollamaUrl: config.ollamaUrl, ollamaModel: config.ollamaModel, anthropicModel: config.anthropicModel, openaiModel: config.openaiModel, geminiModel: config.geminiModel });
-  const p = config.llmProvider;
-  const runTest = async () => {
-    setTest({ busy: true });
-    try {
-      await saveConfig(models);
-      const r = await api.post('/api/ai/test');
-      setTest(r.ok ? { ok: true, msg: `Working. Sample title: “${r.sample}”` } : { ok: false, msg: r.error });
-    } catch (e) { setTest({ ok: false, msg: e.message }); }
-  };
-  const modelField = { anthropic: 'anthropicModel', openai: 'openaiModel', gemini: 'geminiModel', ollama: 'ollamaModel' }[p];
-  return (
-    <>
-      <section className="glass strong panel stack">
-        <h2>AI helper (optional)</h2>
-        <p className="muted">Off by default. When on, it reranks clips and writes titles.</p>
-        <div className="provider-grid">
-          {PROVIDERS.map((x) => (
-            <div key={x.id} className={`provider ${p === x.id ? 'on' : ''}`} onClick={() => { setTest(null); saveConfig({ llmProvider: x.id }); }}>
-              <div className="row between"><strong>{x.name}</strong>{x.badge && <span className="chip ok">{x.badge}</span>}</div>
-              <span className="muted small">{x.note}</span>
-            </div>
-          ))}
-        </div>
-        {p === 'ollama' && (
-          <div className="keycard">
-            <h3>Ollama (local, free)</h3>
-            <ol className="small">
-              <li>Install Ollama from ollama.com and open it.</li>
-              <li>Open Terminal and paste: <span className="mono">ollama pull {models.ollamaModel || 'qwen3:4b'}</span></li>
-              <li>Press Save and test.</li>
-            </ol>
-            <div className="grid2">
-              <label className="field">Server<input className="input mono" value={models.ollamaUrl} onChange={(e) => setModels({ ...models, ollamaUrl: e.target.value })} /></label>
-              <label className="field">Model<input className="input mono" value={models.ollamaModel} onChange={(e) => setModels({ ...models, ollamaModel: e.target.value })} /></label>
-            </div>
-            <button className="btn ghost sm" style={{ justifySelf: 'start' }} onClick={() => openLink('https://ollama.com/download')}>Download Ollama ↗</button>
-          </div>
-        )}
-        {p !== 'none' && p !== 'ollama' && (
-          <label className="field">Model <span className="hint">Leave as is unless you know you want a different one.</span>
-            <input className="input" value={models[modelField] || ''} onChange={(e) => setModels({ ...models, [modelField]: e.target.value })} />
-          </label>
-        )}
-        {p !== 'none' && (
-          <div className="row">
-            <button className="btn" onClick={runTest} disabled={test?.busy}>{test?.busy ? 'Testing…' : 'Save and test'}</button>
-            {test && !test.busy && <span className={`chip ${test.ok ? 'ok' : 'bad'}`} style={{ height: 'auto', padding: '4px 10px' }}>{test.msg}</span>}
-          </div>
-        )}
-      </section>
-      {keyGuide.filter((g) => g.provider && g.provider === p).map((g) => (
-        <section key={g.field} className="glass panel stack">
-          <SecretField guide={g} value={config[g.field]} onSave={(v) => saveConfig({ [g.field]: v })} />
-        </section>
-      ))}
-    </>
   );
 }
 

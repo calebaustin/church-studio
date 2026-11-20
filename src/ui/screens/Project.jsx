@@ -1,6 +1,6 @@
 import { ShareProject } from '../components/Backups.jsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useApp } from '../App.jsx';
+import { useApp, useHelperFocus } from '../App.jsx';
 import { api, fmt, fmtEta, media } from '../api.js';
 import { ArrowLeft, ArrowRight, Check, Square, Wand2, Download, Trash2, Plus, Send, FolderOpen, Copy, ScissorsLineDashed, AudioLines, ChevronDown, FileText, PenLine, Quote, Share2 } from 'lucide-react';
 import AudioCleanup from '../components/AudioCleanup.jsx';
@@ -111,6 +111,7 @@ export default function Project({ id, initialStep, initialClip }) {
     } catch (e) { setNotice(e.message); }
   };
 
+  useHelperFocus(project && step && step !== 'edit' ? { kind: 'project', id: project.id } : null);
   if (!project || !step) return <div className="page"><p className="muted">Loading…</p></div>;
   const src = project.sourceFile ? media(id, project.sourceFile) : null;
   const transcribed = project.status === 'transcribed';

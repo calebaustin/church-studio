@@ -64,6 +64,7 @@ export function tool(name) {
   const candidates = [
     process.env[`${name.toUpperCase().replace(/-/g, '_')}_PATH`],
     RESOURCES && path.join(RESOURCES, 'bin', exe),
+    path.join(ROOT, 'build', 'bin', exe), // dev builds of our own helpers (cs-apple-ai)
     npmStatic(name),
     venvBin(name),
     ...EXTRA_BIN_DIRS.map((d) => path.join(d, exe)),

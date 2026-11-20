@@ -3,6 +3,19 @@
 // pipeline: we fall back to the heuristic picks and show a warning.
 import Anthropic from '@anthropic-ai/sdk';
 import { fmtTime } from './text.js';
+import { appleAsk, appleKnown, csHelperReadySync, llamaChat } from './localai.js';
+
+/** The two helpers that run on this Mac: no key, no internet. */
+export const LOCAL_PROVIDERS = ['apple', 'cshelper'];
+const tooLong = (e) => /exceededContextWindowSize|context window|context size|too long/i.test(String(e?.message || e));
+
+/** Pull the first JSON object out of a reply (small local models sometimes add a sentence around it). */
+function looseJson(text) {
+  const t = String(text).replace(/```(?:json)?/g, '');
+  const a = t.indexOf('{'); const b = t.lastIndexOf('}');
+  if (a < 0 || b <= a) throw new Error('The AI helper did not return a usable answer.');
+  return JSON.parse(t.slice(a, b + 1));
+}
 
 const SYSTEM = `You help a church media team pick short vertical clips (Reels, Shorts, TikTok) from a sermon.
 A good clip: a viewer who has seen nothing else understands it in the first two seconds, it stands on its own
@@ -99,8 +112,16 @@ async function askOllama(cfg, text) {
   return JSON.parse((await r.json()).message.content);
 }
 
-const PROVIDERS = { anthropic: askAnthropic, openai: askOpenAI, gemini: askGemini, ollama: askOllama };
-export const PROVIDER_NAMES = { anthropic: 'Claude', openai: 'OpenAI', gemini: 'Gemini', ollama: 'Ollama' };
+async function askApple(cfg, text) {
+  const shape = '{"clips":[{"index":0,"score":80,"title":"...","summary":"...","hook":"...","hashtags":["..."],"reason":"..."}]}';
+  return looseJson(await appleAsk({ system: SYSTEM, prompt: `${text}\n\nAnswer with JSON only, exactly in this shape: ${shape}`, temperature: 0.2 }));
+}
+async function askLlama(cfg, text) {
+  return llamaChat({ system: SYSTEM, messages: [{ role: 'user', content: text }], schema: SCHEMA, temperature: 0.2, maxTokens: 2000 });
+}
+
+const PROVIDERS = { anthropic: askAnthropic, openai: askOpenAI, gemini: askGemini, ollama: askOllama, apple: askApple, cshelper: askLlama };
+export const PROVIDER_NAMES = { anthropic: 'Claude', openai: 'OpenAI', gemini: 'Gemini', ollama: 'Ollama', apple: 'Apple Intelligence', cshelper: 'CS Helper' };
 
 // ---- status: "Working with Claude" until a usage problem, then "Working locally" for an hour.
 const status = { degradedUntil: 0, reason: null, notice: null };
@@ -120,12 +141,14 @@ export function resetAiStatus() { status.degradedUntil = 0; status.reason = null
 export function aiStatus(cfg) {
   const ready = providerReady(cfg);
   const degraded = ready && Date.now() < status.degradedUntil;
-  return { provider: cfg.llmProvider, name: PROVIDER_NAMES[cfg.llmProvider] || null, ready, degraded, active: ready && !degraded, reason: degraded ? status.reason : null, notice: status.notice };
+  return { provider: cfg.llmProvider, name: PROVIDER_NAMES[cfg.llmProvider] || null, ready, degraded, active: ready && !degraded, reason: degraded ? status.reason : null, notice: status.notice, appleAvailable: appleKnown().available };
 }
 /** Run an AI call; on a usage problem, note it and return the fallback instead of failing. */
 export async function withFallback(cfg, fn, fallback) {
   if (!aiStatus(cfg).active) return { value: await fallback(), local: true };
   try { return { value: await fn(), local: false }; } catch (e) {
+    // Too much for a small on-device model: do this one locally, without marking the helper as down.
+    if (tooLong(e)) return { value: await fallback(), local: true };
     if (!isUsageError(e)) throw e;
     markUsageProblem(cfg, e);
     return { value: await fallback(), local: true, notice: status.notice };
@@ -136,6 +159,8 @@ export function providerReady(cfg) {
   const p = cfg.llmProvider;
   if (!p || p === 'none') return false;
   if (p === 'ollama') return true;
+  if (p === 'apple') return appleKnown().available;
+  if (p === 'cshelper') return csHelperReadySync();
   return Boolean(cfg[`${p}ApiKey`]);
 }
 
@@ -143,7 +168,11 @@ export function providerReady(cfg) {
 export async function rerank(cfg, cands, { title, count }) {
   const ask = PROVIDERS[cfg.llmProvider];
   if (!ask) throw new Error(`Unknown AI provider "${cfg.llmProvider}"`);
-  const out = await ask(cfg, prompt(cands, title, count));
+  // On-device models have small memories: send the strongest candidates, trimmed. Indexes still match.
+  const p = cfg.llmProvider;
+  const shown = p === 'apple' ? cands.slice(0, 10).map((c) => ({ ...c, text: c.text.slice(0, 380) }))
+    : p === 'cshelper' ? cands.slice(0, 24).map((c) => ({ ...c, text: c.text.slice(0, 600) })) : cands;
+  const out = await ask(cfg, prompt(shown, title, count));
   const seen = new Set();
   return (out.clips || [])
     .filter((p) => Number.isInteger(p.index) && cands[p.index] && !seen.has(p.index) && seen.add(p.index))
@@ -172,6 +201,8 @@ export async function testProvider(cfg) {
 /** Plain text completion for writing help. Same providers and keys as clip ranking. */
 export async function complete(cfg, system, user) {
   const p = cfg.llmProvider;
+  if (p === 'apple') return appleAsk({ system, prompt: user, temperature: 0.4 });
+  if (p === 'cshelper') return llamaChat({ system, messages: [{ role: 'user', content: user }], maxTokens: 1800, temperature: 0.4 });
   if (p === 'anthropic') {
     const client = new Anthropic({ apiKey: cfg.anthropicApiKey });
     const res = await client.beta.messages.create({
@@ -215,6 +246,7 @@ export async function complete(cfg, system, user) {
  */
 export async function describeImage(cfg, image, prompt) {
   const p = cfg.llmProvider;
+  if (LOCAL_PROVIDERS.includes(p)) throw new Error(`${PROVIDER_NAMES[p]} can't look at pictures yet. Write the description yourself, or use an External AI for this.`);
   const ask = prompt || 'Write alt text for this picture from a church: one or two plain sentences that say what is shown, for someone who can’t see it. No "image of" or "picture of". Then, on a new line starting with "Tags:", give up to six short comma-separated tags.';
   if (p === 'anthropic') {
     const client = new Anthropic({ apiKey: cfg.anthropicApiKey });
@@ -251,4 +283,31 @@ export async function describeImage(cfg, image, prompt) {
     return (await r.json()).message.content.trim();
   }
   throw new Error('Turn on an AI helper in Settings to suggest alt text.');
+}
+
+/**
+ * A conversation for the helper chat. messages: [{ role: 'user'|'assistant', content }].
+ * onDelta(text) gets the answer as it's written (local helpers and Claude stream; others arrive at once).
+ */
+export async function chat(cfg, { system, messages, onDelta, signal }) {
+  const p = cfg.llmProvider;
+  if (p === 'apple') {
+    // Apple's on-device model keeps its own short memory per session; hand it the recent turns as text.
+    const history = messages.slice(0, -1).slice(-6).map((m) => `${m.role === 'user' ? 'They asked' : 'You answered'}: ${m.content}`).join('\n\n');
+    const last = messages[messages.length - 1].content;
+    return appleAsk({ system, prompt: history ? `Earlier in this chat:\n${history}\n\nNow they ask: ${last}` : last, onDelta, signal, temperature: 0.6 });
+  }
+  if (p === 'cshelper') return llamaChat({ system, messages: messages.slice(-10), onDelta, signal, temperature: 0.6, maxTokens: 1000 });
+  if (p === 'anthropic') {
+    const client = new Anthropic({ apiKey: cfg.anthropicApiKey });
+    const stream = client.messages.stream({ model: cfg.anthropicModel, max_tokens: 4000, system, messages: messages.slice(-12) }, { signal });
+    stream.on('text', (t) => onDelta?.(t));
+    const res = await stream.finalMessage();
+    return res.content.filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
+  }
+  // OpenAI, Gemini, Ollama: one answer, sent whole.
+  const flat = messages.slice(-10).map((m) => `${m.role === 'user' ? 'Q' : 'A'}: ${m.content}`).join('\n\n');
+  const text = await complete(cfg, system, flat);
+  onDelta?.(text);
+  return text;
 }

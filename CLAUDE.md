@@ -9,8 +9,11 @@ channel, transcribe it, suggest clips, and export captioned 9:16 videos with a s
 writes blog posts, emails and small group guides from the sermon, makes graphics and slide decks, and posts or
 schedules to social accounts. Visual style: **light liquid glass**, themeable, with dark mode.
 
-**Everything works offline with no AI and no keys.** AI helpers (Claude, Ollama, Gemini, OpenAI) are optional
-and off by default. If one fails on usage, the app falls back to working locally.
+**Everything works offline with no AI and no keys.** AI helpers are optional and off by default. Local ones come
+first: Apple Intelligence (built into macOS 26, via the Swift bridge in `native/apple-ai`) and CS Helper (Llama 3.2 3B
+run by llama.cpp, downloaded in Settings). External AI (Claude, ChatGPT, Gemini, Ollama) is online-only and uses the
+person's own account. If a helper fails or a request is too big for it, the app falls back to working locally.
+The helper only sees facts gathered in `src/daemon/helper.js` and must never invent church details. See docs/AI.md.
 
 ## Non-goals
 - No accounts or login. Keys go in Settings and are stored in `config.local.json` (never in git).

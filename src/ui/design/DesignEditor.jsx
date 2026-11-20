@@ -5,7 +5,7 @@ import {
   Magnet, Minus, MonitorUp, Hexagon, Scaling, Smartphone, Laptop, Eraser, ImageOff, Play, RefreshCw, Plus, QrCode, Redo2, SendToBack, Shapes, Square, Trash2, Type, Undo2, Shuffle, X,
   Send,
 } from 'lucide-react';
-import { useApp } from '../App.jsx';
+import { useApp, useHelperFocus } from '../App.jsx';
 import { api } from '../api.js';
 import ColorField from '../components/ColorField.jsx';
 import FontMenu, { useFamilies } from '../components/FontMenu.jsx';
@@ -156,6 +156,13 @@ export default function DesignEditor({ id, onClose }) {
 
   const item = pg?.items.find((x) => x.id === sel) || null;
   const setItem = (p, opts) => update((d) => { const it = d.pages[pi].items.find((x) => x.id === sel); Object.assign(it, p); return d; }, opts);
+  // The helper chat sees this design. A picked headline replaces the text box that's selected.
+  useHelperFocus(id ? { kind: 'design', id, selectedText: item?.type === 'text' ? item.text : undefined } : null, (field, value) => {
+    if (field !== 'text') return false;
+    if (item?.type !== 'text') return 'Click the text you want to replace, then press Use.';
+    setItem({ text: value });
+    return true;
+  });
   const setPage = (p, opts) => update((d) => { Object.assign(d.pages[pi], p); return d; }, opts);
   const addItem = (it) => { update((d) => { d.pages[pi].items.push(it); return d; }); setSel(it.id); };
   const removeItem = () => { if (!sel) return; update((d) => { d.pages[pi].items = d.pages[pi].items.filter((x) => x.id !== sel); return d; }); setSel(null); };

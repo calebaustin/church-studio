@@ -23,10 +23,27 @@ import JobsTray from './components/JobsTray.jsx';
 import { Toasts } from './components/Toasts.jsx';
 import Modal from './components/Modal.jsx';
 import UpdateReady from './components/UpdateReady.jsx';
+import HelperBubble from './components/HelperBubble.jsx';
 
 // Where the background color sits on each screen. It glides between spots as you move around.
 const Ctx = createContext(null);
 export const useApp = () => useContext(Ctx);
+
+/**
+ * Tell the helper chat what this page is working on, and how to use a suggestion here.
+ * focus: { kind: 'design'|'clip'|'project'|'writing'|'campaign', id, clipId, part, selectedText }.
+ * apply(field, value): put a picked suggestion on the page; return false if it can't.
+ */
+export function useHelperFocus(focus, apply) {
+  const { setHelperFocus } = useApp();
+  const applyRef = useRef(apply); applyRef.current = apply;
+  const key = focus ? JSON.stringify(focus) : '';
+  useEffect(() => {
+    if (!focus) return undefined;
+    setHelperFocus(focus, (f, v) => (applyRef.current ? applyRef.current(f, v) : false));
+    return () => setHelperFocus(null, null);
+  }, [key]);
+}
 
 const systemDark = () => window.matchMedia?.('(prefers-color-scheme: dark)').matches;
 
@@ -247,6 +264,11 @@ export default function App() {
     if (j.status === 'error' && ['export', 'export-joined', 'download', 'transcribe'].includes(j.kind)) toast({ kind: 'error', text: `${j.label} didn't finish: ${j.error?.slice(0, 160)}`, duration: 9000 });
   }), [onJobFinished, toast]);
 
+  // What the helper chat is looking at (set by the open editor), and how to use a suggestion there.
+  const [helperFocus, setHelperFocusState] = useState(null);
+  const helperApply = useRef(null);
+  const setHelperFocus = useCallback((f, apply) => { setHelperFocusState(f); helperApply.current = apply || null; }, []);
+
   // A downloaded update: ask, big and clear, to quit and replace the app.
   const [updateReady, setUpdateReady] = useState(null);
   useEffect(() => onJobFinished((j) => { if (j.kind === 'update' && j.status === 'done') setUpdateReady(j.result || {}); }), [onJobFinished]);
@@ -267,7 +289,7 @@ export default function App() {
   const [logoTick, setLogoTick] = useState(0);
   const logo = useChurchLogo(config ? { ...config, _t: logoTick } : null);
 
-  const value = { route, go, showNext, logo, refreshLogo: () => setLogoTick((n) => n + 1), setGuard, confirmLeave, config, saveConfig, reloadConfig, keyGuide, themes, reloadThemes, jobs, trackJob, onJobFinished, toast };
+  const value = { route, go, showNext, logo, refreshLogo: () => setLogoTick((n) => n + 1), setGuard, confirmLeave, config, saveConfig, reloadConfig, keyGuide, themes, reloadThemes, jobs, trackJob, onJobFinished, toast, helperFocus, setHelperFocus, helperApply, ai };
 
   if (error) {
     return (
@@ -346,6 +368,7 @@ export default function App() {
       </div>
       {searching && <SearchPalette onClose={() => setSearching(false)} />}
       <JobsTray />
+      <HelperBubble ai={ai} />
       <Toasts toasts={toasts} dismiss={dismissToast} />
       {leaveAsk && (
         <Modal label="Unsaved changes" width={440} onClose={() => { leaveAsk.resolve(false); setLeaveAsk(null); }}>

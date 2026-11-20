@@ -1,6 +1,6 @@
 // A friendly hello the first time someone opens a tool: what it's for, a few steps, and buttons to try
 // something right away. "Got it" puts it away for good.
-import { CalendarDays, Clapperboard, FolderHeart, LayoutGrid, PenLine, Send, Shapes, X } from 'lucide-react';
+import { Apple, CalendarDays, Clapperboard, FolderHeart, LayoutGrid, PenLine, Send, Shapes, X } from 'lucide-react';
 import { useApp } from '../App.jsx';
 
 // Buttons either go somewhere ({ go }) or press a button on this screen by its label ({ press }).
@@ -27,10 +27,21 @@ const INTROS = {
     steps: ['Star what you come back to, and make folders.', 'Tag things, or archive what you’re done with.', 'Press ⌘K anywhere to search everything.'], actions: [] },
 };
 
+// A gentle nudge when the Mac has Apple Intelligence and no helper is on yet.
+const NUDGE = {
+  library: 'It picks stronger clips and writes hooks and titles.',
+  calendar: 'It helps plan posts for what\u2019s coming up.',
+  social: 'It writes caption ideas in your church\u2019s voice.',
+  writing: 'It suggests titles and helps you sound like your church.',
+  graphics: 'It writes headline ideas for any design.',
+  assets: 'It learns your church\u2019s voice from what you add here.',
+  projects: 'Ask it about anything you\u2019ve made.',
+};
+
 export const introSeen = (config, id) => Boolean(config.toolIntros?.[id]) || !INTROS[id];
 
 export default function ToolIntro({ id }) {
-  const { config, saveConfig, go } = useApp();
+  const { config, saveConfig, go, ai, toast } = useApp();
   const intro = INTROS[id];
   if (!intro || config.toolIntros?.[id]) return null;
   const done = () => saveConfig({ toolIntros: { ...(config.toolIntros || {}), [id]: true } });
@@ -51,6 +62,13 @@ export default function ToolIntro({ id }) {
       <div className="stack" style={{ gap: 8, minWidth: 0 }}>
         <div className="stack" style={{ gap: 2 }}><h2 style={{ margin: 0 }}>{intro.title}</h2><span className="muted">{intro.body}</span></div>
         <ol className="tool-intro-steps">{intro.steps.map((x) => <li key={x}>{x}</li>)}</ol>
+        {ai?.appleAvailable && (!config.llmProvider || config.llmProvider === 'none') && NUDGE[id] && (
+          <div className="ai-nudge">
+            <Apple size={14} />
+            <span className="small"><strong>Try it with Apple Intelligence!</strong> {NUDGE[id]} Private, on this Mac, nothing to download.</span>
+            <button className="btn sm ghost" onClick={async () => { await saveConfig({ llmProvider: 'apple' }); toast({ text: 'Apple Intelligence is on. Look for the helper in the corner.' }); }}>Turn it on</button>
+          </div>
+        )}
         <div className="row wrap" style={{ gap: 6 }}>
           {intro.actions.map(([label, a], i) => <button key={label} className={`btn sm ${i === 0 ? 'primary' : ''}`} onClick={() => act(a)}>{label}</button>)}
           <button className="btn sm ghost" onClick={done}>Got it</button>
