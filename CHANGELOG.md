@@ -2,7 +2,7 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
-## Unreleased
+## 0.12.0 · November 19, 2026
 
 ### New
 - **Studio look for clips.** In the clip editor's Framing tab, a small Studio look card gives a quick lighting pass: eight looks (Clean, Warm, Cool, Bright, Punchy, Film, Soft, Black and white) with a strength slider, a lighting lift that brightens faces and shadows without blowing out bright spots, and a background blur that softens the edges and keeps the speaker sharp. Captions and graphics stay crisp. The preview is close; the export is exact.
