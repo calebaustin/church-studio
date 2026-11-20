@@ -73,7 +73,7 @@ export async function listProjects() {
       if (p) out.push({
         id: p.id, title: p.title, status: p.status, created: p.created, updated: p.updated,
         thumbnail: p.thumbnail, youtubeId: p.youtubeId || null, duration: p.media?.duration ?? null, clips: p.clips.length,
-        exported: p.clips.filter((c) => c.export).length, isSermon: isSermon(p), kind: p.kind || 'sermon',
+        exported: p.clips.filter((c) => c.export).length, isSermon: isSermon(p), kind: p.kind || 'sermon', audio: Boolean(p.media && !p.media.width),
       });
     } catch { /* skip broken folders */ }
   }

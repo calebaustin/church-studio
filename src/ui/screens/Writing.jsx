@@ -14,6 +14,7 @@ import { mdToHtml } from '../markdown.js';
 import { emailHtml } from '../emailHtml.js';
 import RichEditor from '../components/RichEditor.jsx';
 import SermonPicker from '../components/SermonPicker.jsx';
+import PreviewTile from '../components/PreviewTile.jsx';
 import Popover, { PopList } from '../components/Popover.jsx';
 
 const ANGLES = [
@@ -410,7 +411,7 @@ function WritingHome({ onOpen }) {
         {(drafts || []).map((d) => (
           <div key={d.id} className="item-card glass">
             <button className="item-cover" onClick={() => onOpen(d.id)}>
-              {d.header ? <img src={`/library/${d.header.split('/').map(encodeURIComponent).join('/')}`} alt="" /> : <span className="type-badge" style={{ width: 44, height: 44, '--t': `var(--tone-${d.source === 'event' ? 3 : d.source === 'blank' ? 2 : 1})` }}>{d.source === 'event' ? <CalendarDays size={20} /> : d.source === 'blank' ? <PenLine size={20} /> : <FileText size={20} />}</span>}
+              {d.header ? <img src={`/library/${d.header.split('/').map(encodeURIComponent).join('/')}`} alt="" /> : <PreviewTile kind="writing" title={d.title} excerpt={d.excerpt} source={d.source} />}
             </button>
             <div className="item-meta">
               <div className="stack" style={{ gap: 3 }}>

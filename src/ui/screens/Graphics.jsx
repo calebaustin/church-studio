@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import PreviewTile from '../components/PreviewTile.jsx';
 import ToolIntro from '../components/ToolIntro.jsx';
 import {
   Clapperboard, Copy, GalleryHorizontalEnd, Heart, LayoutGrid, MonitorPlay, NotebookPen, Presentation, Printer,
@@ -227,7 +228,7 @@ export default function Graphics({ image, design, event, eventMode, quote, make,
             {mine.map((d) => (
               <div key={d.id} className="dz-card glass">
                 <button className="dz-card-cover" onClick={() => setOpen(d.id)} style={{ aspectRatio: `${d.size.w}/${d.size.h}` }}>
-                  {d.thumb ? <img src={d.thumb} alt="" /> : <span className="muted">No preview</span>}
+                  {d.thumb ? <img src={d.thumb} alt="" /> : <PreviewTile kind="design" title={d.name} palette={d.palette} />}
                 </button>
                 <div className="dz-card-meta">
                   <div className="stack" style={{ gap: 0, minWidth: 0 }}>

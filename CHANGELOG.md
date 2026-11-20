@@ -2,6 +2,13 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## 0.16.1 · November 20, 2026
+
+### Better
+- **No more empty gray boxes.** Things without a picture yet now show a real preview: writing shows as a page with its title and first lines, audio sermons and videos without a cover get a tile in your theme's colors with the title, and designs without a preview show their own colors.
+- **Cleaner clip hooks from CS Helper.** On-screen hooks stay a few words long, and clip scores use the same scale as other helpers.
+- Blog titles no longer end with a stray comma.
+
 ## 0.16.0 · November 20, 2026
 
 ### New

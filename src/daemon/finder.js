@@ -9,6 +9,7 @@ import { DATA_DIR } from './tools.js';
 import { getProject, listProjects, projectDir } from './projects.js';
 import { deleteDesign, getDesign, listDesigns, saveDesign } from './designs.js';
 import * as socialStore from './social/store.js';
+import { excerptOf } from './writing.js';
 
 const STORE = path.join(DATA_DIR, 'finder.json');
 const WRITING = path.join(DATA_DIR, 'writing');
@@ -46,11 +47,11 @@ async function allItems(state) {
       const d = JSON.parse(await readFile(path.join(WRITING, f), 'utf8'));
       const project = await getProject(pid).catch(() => null);
       const head = Object.values(d.headers || {}).find((h) => h?.rel)?.rel;
-      items.push({ key: `writing:${pid}`, type: 'writing', id: pid, name: d.title || project?.title || 'Writing', thumb: head ? lib(head) : project?.thumbnail || null, updated: d.saved || d.generated, meta: 'Blog, email, guide, captions', projectId: pid });
+      items.push({ key: `writing:${pid}`, type: 'writing', id: pid, name: d.title || project?.title || 'Writing', thumb: head ? lib(head) : project?.thumbnail || null, updated: d.saved || d.generated, meta: 'Blog, email, guide, captions', projectId: pid, excerpt: excerptOf(d) });
     } catch { /* skip */ }
   }
   for (const d of await listDesigns()) {
-    items.push({ key: `design:${d.id}`, type: 'design', id: d.id, name: d.name, thumb: d.thumb, updated: d.updated, kind: d.kind, meta: d.pages > 1 ? `${d.pages} pages` : null, size: d.size });
+    items.push({ key: `design:${d.id}`, type: 'design', id: d.id, name: d.name, thumb: d.thumb, updated: d.updated, kind: d.kind, meta: d.pages > 1 ? `${d.pages} pages` : null, size: d.size, palette: d.palette || [] });
   }
   const starred = new Set(state.starred);
   const archived = new Set(state.archived || []);

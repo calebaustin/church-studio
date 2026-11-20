@@ -426,6 +426,13 @@ export async function polish(projectId, kind, text) {
 // scratch or from a calendar event get their own "w-" id and have no transcript behind them.
 export const isStandalone = (id) => String(id).startsWith('w-');
 
+/** The first words of a piece, as plain text, for preview tiles. */
+export function excerptOf(d) {
+  const t = String(d?.blog || d?.newsletter || d?.email || d?.group || d?.devotional || d?.social || '')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/^#+\s.*$/m, '').replace(/[#>*_`]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return t.slice(0, 180);
+}
+
 export async function listDrafts() {
   const out = [];
   for (const f of existsSync(DRAFTS) ? await readdir(DRAFTS) : []) {
@@ -435,7 +442,7 @@ export async function listDrafts() {
       const id = f.replace(/\.json$/, '');
       const project = isStandalone(id) ? null : await getProject(id).catch(() => null);
       out.push({ id, title: d.title || project?.title || 'Untitled', source: d.source?.type || 'sermon', sermon: project?.title || null,
-        updated: d.saved || d.generated, header: Object.values(d.headers || {}).find((h) => h?.rel)?.rel || null, words: String(d.blog || '').split(/\s+/).length });
+        updated: d.saved || d.generated, header: Object.values(d.headers || {}).find((h) => h?.rel)?.rel || null, words: String(d.blog || '').split(/\s+/).length, excerpt: excerptOf(d) });
     } catch { /* skip */ }
   }
   return out.sort((a, b) => String(b.updated || '').localeCompare(String(a.updated || '')));

@@ -6,6 +6,7 @@ import {
   RotateCcw, Search, Shapes, Star, Trash2, X, Tag, Archive, Copy,
 } from 'lucide-react';
 import { useApp } from '../App.jsx';
+import PreviewTile from '../components/PreviewTile.jsx';
 import { Masonry } from '../components/Masonry.jsx';
 import { api } from '../api.js';
 import Popover from '../components/Popover.jsx';
@@ -77,7 +78,7 @@ function ItemCard({ item, folders, inFolder, onOpen, act }) {
   return (
     <div className="item-card glass" draggable onDragStart={(e) => { e.dataTransfer.setData('text/x-item', item.key); e.dataTransfer.effectAllowed = 'link'; }}>
       <button className={`item-cover ${item.portrait ? 'portrait' : ''}`} onClick={onOpen}>
-        {item.thumb ? <img src={item.thumb} alt="" loading="lazy" /> : <TypeBadge type={item.type} size={44} />}
+        {item.thumb ? <img src={item.thumb} alt="" loading="lazy" /> : <PreviewTile kind={item.type} title={item.name} excerpt={item.excerpt} palette={item.palette} meta={item.meta} />}
       </button>
       <div className="item-meta">
         <div className="stack" style={{ gap: 3, minWidth: 0 }}>

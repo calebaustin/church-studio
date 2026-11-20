@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import PreviewTile from '../components/PreviewTile.jsx';
 import ToolIntro, { introSeen } from '../components/ToolIntro.jsx';
 import { useApp } from '../App.jsx';
 import { ArrowRight, Check, MonitorPlay, FolderOpen, Link2, Clapperboard, AudioLines, FileAudio, ScissorsLineDashed, Search } from 'lucide-react';
@@ -91,7 +92,7 @@ export default function Library({ openPicker = false }) {
           <div key={p.id} className="glass card" onClick={() => go({ name: 'project', id: p.id })}>
             <div style={{ padding: 8 }}>
               <div className="thumb">
-                {p.thumbnail ? <img src={p.thumbnail} alt="" /> : p.status !== 'downloading' ? <img src={media(p.id, 'poster.jpg')} alt="" onError={(e) => { e.currentTarget.style.display = 'none'; }} /> : 'Downloading…'}
+                {p.thumbnail ? <img src={p.thumbnail} alt="" /> : p.audio ? <PreviewTile kind={p.isSermon ? 'sermon' : 'audio'} title={p.title} meta={p.duration ? fmt(p.duration) : null} /> : p.status !== 'downloading' ? <img src={media(p.id, 'poster.jpg')} alt="" onError={(e) => { e.currentTarget.style.display = 'none'; }} /> : 'Downloading…'}
               </div>
             </div>
             <div className="body">
