@@ -2,6 +2,21 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## Unreleased
+
+### New
+- **Links in helper answers.** When the helper mentions one of your events, sermons, designs, writing, campaigns or brand pictures, the name becomes a pill you can click to open it. The chat stays open while you go.
+- **Next steps under answers.** Answers that touch an event or a sermon offer one-tap next steps, like **Start a campaign** (connecting the event and the sermon), **Make a graphic** or **Open the transcript**.
+- **Pictures from your Brand library.** In a design, the helper knows your brand photos by name and description. Ask for a picture, or tap **Pick a photo**, and press **Add**: it fills the selected photo spot, or goes on the page.
+- **It knows what's selected.** In a design, "this" means the item you've selected (or the whole design). If it isn't sure what you mean, it asks.
+- **Saved chats.** Each chat is saved and named by its first question. Press **New chat** to start fresh, or the clock to open a past chat. Delete any you don't need.
+- **A working wave.** While an AI helper works on something, a soft wave of color moves over that panel: the design canvas, the writing, or the clip panel. Rewrites in Writing show it too.
+
+### Better
+- The helper's header keeps its width: long names end in "…".
+- The design editor's right panel never scrolls sideways. Long layer names end in "…", rows wrap, and the background choices (Gradient to Photo) fill the width.
+- The left menu fits a full-screen window on a 13-inch MacBook, with slightly smaller buttons.
+
 ## 0.14.0 · November 20, 2026
 
 ### New

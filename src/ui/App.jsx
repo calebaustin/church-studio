@@ -268,6 +268,8 @@ export default function App() {
   const [helperFocus, setHelperFocusState] = useState(null);
   const helperApply = useRef(null);
   const setHelperFocus = useCallback((f, apply) => { setHelperFocusState(f); helperApply.current = apply || null; }, []);
+  // Which page an AI helper is working on right now ('design', 'writing', 'clip'), for the working wave.
+  const [aiWorking, setAiWorking] = useState(null);
 
   // A downloaded update: ask, big and clear, to quit and replace the app.
   const [updateReady, setUpdateReady] = useState(null);
@@ -289,7 +291,7 @@ export default function App() {
   const [logoTick, setLogoTick] = useState(0);
   const logo = useChurchLogo(config ? { ...config, _t: logoTick } : null);
 
-  const value = { route, go, showNext, logo, refreshLogo: () => setLogoTick((n) => n + 1), setGuard, confirmLeave, config, saveConfig, reloadConfig, keyGuide, themes, reloadThemes, jobs, trackJob, onJobFinished, toast, helperFocus, setHelperFocus, helperApply, ai };
+  const value = { route, go, showNext, logo, refreshLogo: () => setLogoTick((n) => n + 1), setGuard, confirmLeave, config, saveConfig, reloadConfig, keyGuide, themes, reloadThemes, jobs, trackJob, onJobFinished, toast, helperFocus, setHelperFocus, helperApply, ai, aiWorking, setAiWorking };
 
   if (error) {
     return (

@@ -40,7 +40,7 @@ import * as insights from './insights.js';
 import * as churchCal from './calendar.js';
 import { aiStatus, resetAiStatus, testProvider } from './ai.js';
 import { appleStatus, csHelperStatus, deleteCsModel, downloadCsModel } from './localai.js';
-import { helperChat, helperContext, runPass } from './helper.js';
+import { deleteChat, getChat, helperChat, helperContext, listChats, runPass, saveChat } from './helper.js';
 import { binTranscript } from './sermon.js';
 import * as social from './social/hub.js';
 import * as socialStore from './social/store.js';
@@ -102,6 +102,10 @@ route('GET', '/api/ai/local', async () => ({ apple: await appleStatus(true), csh
 route('POST', '/api/ai/cshelper/download', () => ({ job: jobs.view(jobs.enqueue({ kind: 'cshelper', label: 'Download CS Helper', key: 'cshelper' }, (ctx) => downloadCsModel(ctx))) }));
 route('DELETE', '/api/ai/cshelper', async () => { await deleteCsModel(); return { ok: true }; });
 route('POST', '/api/helper/context', async (_p, b) => helperContext(b.focus || {}));
+route('GET', '/api/helper/chats', async () => ({ chats: await listChats() }));
+route('GET', '/api/helper/chats/:cid', async ({ cid }) => { const c = await getChat(cid); if (!c) throw new HttpError(404, 'That chat is gone.'); return { chat: c }; });
+route('PUT', '/api/helper/chats', async (_p, b) => ({ chat: await saveChat(b) }));
+route('DELETE', '/api/helper/chats/:cid', async ({ cid }) => { await deleteChat(cid); return { ok: true }; });
 route('POST', '/api/helper/pass', async (_p, b) => runPass({ focus: b.focus || {}, pass: b.pass }));
 streamRoute('POST', '/api/helper/chat', async (_p, b, res, req) => {
   res.writeHead(200, { 'content-type': 'application/x-ndjson', 'cache-control': 'no-store' });
@@ -109,8 +113,8 @@ streamRoute('POST', '/api/helper/chat', async (_p, b, res, req) => {
   req.on('close', () => { if (!res.writableEnded) ac.abort(); });
   const line = (o) => { if (!res.writableEnded) res.write(`${JSON.stringify(o)}\n`); };
   try {
-    const text = await helperChat({ focus: b.focus || {}, messages: b.messages || [], signal: ac.signal, onDelta: (d, full) => (d == null ? line({ replace: full }) : line({ delta: d })) });
-    line({ done: true, text });
+    const r = await helperChat({ focus: b.focus || {}, messages: b.messages || [], signal: ac.signal, onDelta: (d, full) => (d == null ? line({ replace: full }) : line({ delta: d })) });
+    line({ done: true, text: r.text, refs: r.refs, actions: r.actions });
   } catch (e) { line({ error: e.message }); }
   res.end();
 });

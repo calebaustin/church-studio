@@ -437,13 +437,13 @@ input[type='color'] { width: 34px; height: 30px; border: 1px solid var(--line-st
 /* A short window: the menu scrolls instead of hiding buttons, and the idea card steps aside first. */
 .sidebar { overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(var(--sheen-rgb), 0.25) transparent; }
 .sidebar > * { flex-shrink: 0; }
-@media (max-height: 680px) { .sidebar .side-card, .sidebar .side-card.in { display: none; } }
+@media (max-height: 740px) { .sidebar .side-card, .sidebar .side-card.in { display: none; } }
 .sidebar .side-drag { -webkit-app-region: drag; height: 30px; margin: -14px -12px 0; flex: none; }
-.sidebar .brand { display: flex; align-items: center; gap: 10px; font-family: 'Caveat', cursive; font-weight: 700; font-size: 25px; line-height: 1; padding: 4px 8px 14px; color: inherit; }
+.sidebar .brand { display: flex; align-items: center; gap: 10px; font-family: 'Caveat', cursive; font-weight: 700; font-size: 25px; line-height: 1; padding: 2px 8px 8px; color: inherit; }
 .side-nav { display: grid; gap: 2px; }
 .side-nav button {
   display: flex; align-items: center; gap: 12px; border: 0; background: transparent; color: inherit; opacity: 0.72; cursor: pointer;
-  padding: 10px 12px; border-radius: var(--radius-pill); font-weight: 600; text-align: left; transition: background var(--fast), color var(--fast), opacity var(--fast), box-shadow var(--fast);
+  padding: 8px 12px; border-radius: var(--radius-pill); font-weight: 600; font-size: 14.5px; text-align: left; transition: background var(--fast), color var(--fast), opacity var(--fast), box-shadow var(--fast);
 }
 .side-nav button:hover { opacity: 1; background: rgba(var(--sheen-rgb), 0.09); }
 .side-nav button.on { opacity: 1; background: var(--nav-on-bg); color: var(--nav-on-text); box-shadow: var(--shadow-nav); }
@@ -1498,8 +1498,9 @@ input[type='range']:active::-webkit-slider-thumb { transform: scale(1.22); trans
 }
 @keyframes helper-in { from { opacity: 0; transform: translateY(12px) scale(0.92); } 35% { opacity: 1; } }
 .helper-head { display: grid; gap: 8px; padding: 14px 16px 10px; border-bottom: 1px solid var(--line); }
-.helper-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.helper-chips .chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: var(--accent-soft); color: var(--accent-text); }
+.helper-panel > * { min-width: 0; }
+.helper-chips { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.helper-chips .chip { display: block; line-height: 20px; flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: var(--accent-soft); color: var(--accent-text); }
 .helper-list { overflow: auto; overscroll-behavior: contain; padding: 14px 16px; display: grid; align-content: start; gap: 10px; }
 .helper-empty { padding: 8px 2px; }
 .helper-msg { max-width: 92%; padding: 9px 12px; border-radius: 14px; font-size: 14px; line-height: 1.45; animation: settle var(--d-snappy) var(--spring-snappy); }
@@ -1517,7 +1518,7 @@ input[type='range']:active::-webkit-slider-thumb { transform: scale(1.22); trans
 .helper-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: helper-dot 900ms var(--ease) infinite alternate; }
 .helper-dots i:nth-child(2) { animation-delay: 150ms; } .helper-dots i:nth-child(3) { animation-delay: 300ms; }
 @keyframes helper-dot { to { opacity: 0.25; transform: translateY(-2px); } }
-.helper-passes { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 8px 16px 0; border-top: 1px solid var(--line); }
+.helper-passes { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 16px 0; border-top: 1px solid var(--line); }
 .chip-btn {
   flex: none; display: inline-flex; align-items: center; gap: 5px; min-height: 28px; padding: 0 11px; border-radius: var(--radius-pill);
   border: 1px solid var(--line-strong); background: var(--surface-solid); color: var(--ink); font-size: 12.5px; font-weight: 600; cursor: pointer;
@@ -1532,3 +1533,48 @@ input[type='range']:active::-webkit-slider-thumb { transform: scale(1.22); trans
 .ai-nudge > span { flex: 1 1 220px; min-width: 0; }
 .ai-choice.idle:hover { border-color: var(--line-strong); }
 .cs-installed { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 8px 8px 12px; border-radius: var(--radius-sm); background: var(--hover); cursor: default; }
+
+/* Designer side panel: never wider than itself. Rows wrap, long names end in "…". */
+.dz-side { overflow-x: hidden; overflow-y: auto; }
+.dz-side > * { min-width: 0; max-width: 100%; }
+.dz-side .row { min-width: 0; flex-wrap: wrap; }
+.dz-side .field { min-width: 0; }
+.dz-side .field.grow { flex: 1 1 140px; }
+.layer { min-width: 0; } .layer .truncate { min-width: 0; }
+/* A picker that fills its section: equal parts, labels shrink before anything scrolls. */
+.seg.seg-full { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); width: 100%; }
+.seg.seg-full > button { display: block; line-height: 26px; text-align: center; min-width: 0; padding: 0 2px; font-size: 11.5px; letter-spacing: -0.01em; justify-content: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- AI working: a soft wave of color washes over the panel the helper is changing ---------- */
+.ai-wave { position: relative; }
+.ai-wave::after {
+  content: ''; position: absolute; inset: 0; z-index: 5; pointer-events: none; border-radius: inherit;
+  background: linear-gradient(100deg, transparent 20%, color-mix(in srgb, var(--accent) 18%, transparent) 40%, color-mix(in srgb, var(--accent-2) 22%, transparent) 50%, color-mix(in srgb, var(--accent) 18%, transparent) 60%, transparent 80%);
+  background-size: 250% 100%; animation: ai-wave 1.6s var(--ease) infinite;
+}
+.ai-wave-box { border-radius: var(--radius-sm); background: var(--hover); }
+@keyframes ai-wave { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+
+/* ---------- helper chat: title, history, links, next steps ---------- */
+.helper-titlebar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 6px; margin: -4px -6px 0 -6px; }
+.helper-title { gap: 0; min-width: 0; }
+.helper-title strong { font-size: 14px; color: var(--ink); }
+.helper-turn { display: grid; gap: 6px; justify-items: start; }
+.helper-ref {
+  display: inline-flex; align-items: center; gap: 4px; max-width: 100%; vertical-align: baseline; margin: 0 1px; padding: 0 8px; border-radius: var(--radius-pill);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); background: var(--accent-soft); color: var(--accent-text);
+  font: inherit; font-size: 0.93em; font-weight: 600; line-height: 1.55; cursor: pointer; text-align: left;
+  transition: background-color 150ms, transform var(--d-bouncy) var(--spring-bouncy);
+}
+.helper-ref:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.helper-ref:active { transform: scale(0.95); transition-duration: 150ms, 90ms; }
+.helper-refrow, .helper-actions { display: flex; flex-wrap: wrap; gap: 6px; max-width: 100%; }
+.chip-btn.accent { border-color: color-mix(in srgb, var(--accent) 40%, var(--line-strong)); color: var(--accent-text); }
+.chip-btn { max-width: 100%; }
+.helper-option.pic { grid-template-columns: 44px minmax(0, 1fr) auto; }
+.helper-option.pic img { width: 44px; height: 44px; object-fit: cover; border-radius: 8px; background: var(--hover); }
+.helper-history { gap: 4px; }
+.helper-chat-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px; border-radius: 10px; }
+.helper-chat-row:hover, .helper-chat-row.on { background: var(--hover); }
+.helper-chat-open { display: grid; gap: 1px; min-width: 0; padding: 8px 10px; border: 0; background: none; color: var(--text); text-align: left; cursor: pointer; font: inherit; }
+.helper-chat-open strong { color: var(--ink); }

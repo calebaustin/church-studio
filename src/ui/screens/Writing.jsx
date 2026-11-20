@@ -100,7 +100,7 @@ export default function Writing({ project: startProject, kind: startKind }) {
 }
 
 function WritingEditor({ pid, onBack, startKind }) {
-  const { toast, config, go, showNext } = useApp();
+  const { toast, config, go, showNext, aiWorking } = useApp();
   const [project, setProject] = useState(null);
   const [draft, setDraft] = useState(null);
   const [loaded, setLoaded] = useState(false);
@@ -291,7 +291,7 @@ function WritingEditor({ pid, onBack, startKind }) {
                   </div>
                 </section>
               )}
-              <section className="glass strong panel rt-panel">
+              <section className={`glass strong panel rt-panel ${busy || aiWorking === 'writing' ? 'ai-wave' : ''}`} aria-busy={busy || undefined}>
                 <RichEditor key={kind} value={draft[kind] || ''} onChange={(v) => set({ [kind]: v })}
                   onPickImage={kind === 'social' ? undefined : () => new Promise((resolve) => setImgPick(() => resolve))} />
               </section>
@@ -317,7 +317,7 @@ function WritingEditor({ pid, onBack, startKind }) {
             </div>
           </>}>
           <ModalHead title={`For ${AUDIENCE_LIST.find(([id]) => id === rewritten.audience)?.[1].toLowerCase()}`} sub={AUDIENCE_LIST.find(([id]) => id === rewritten.audience)?.[2]} />
-          {rewritten.busy ? <div className="skeleton" style={{ height: 220 }} /> : <textarea className="input" rows={14} value={rewritten.text} onChange={(e) => setRewritten({ ...rewritten, text: e.target.value })} />}
+          {rewritten.busy ? <div className="ai-wave-box ai-wave" style={{ height: 220 }} aria-label="Rewriting…" /> : <textarea className="input" rows={14} value={rewritten.text} onChange={(e) => setRewritten({ ...rewritten, text: e.target.value })} />}
         </Modal>
       )}
       {printing && <PrintDialog pid={pid} kind={kind} kindLabel={KINDS.find((k) => k[0] === kind)[1]} draft={draft} header={header} onClose={() => setPrinting(false)} />}

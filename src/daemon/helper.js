@@ -3,6 +3,9 @@
 // an External AI) gets the same strict rules and the same facts, trimmed to what that model can hold.
 //
 // It only ever sees facts gathered here from this Mac. It never browses or makes things up.
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { DATA_DIR } from './tools.js';
 import { loadConfig } from './config.js';
 import { cachedEvents } from './calendar.js';
 import { listCampaigns } from './campaigns.js';
@@ -13,6 +16,23 @@ import { listDrafts, loadDraft } from './writing.js';
 import { sermonIndex } from './insights.js';
 import { chat, complete, PROVIDER_NAMES } from './ai.js';
 import { appleAsk, llamaChat } from './localai.js';
+import { listLibrary } from './library.js';
+import { loadNotes } from './photos.js';
+
+// ------------------------------------------------------------------ brand pictures
+const nameOf = (rel) => rel.split('/').pop().replace(/\.[a-z0-9]+$/i, '');
+async function brandImages() {
+  const lib = await listLibrary().catch(() => ({ items: [] }));
+  const notes = await loadNotes().catch(() => ({}));
+  return lib.items.filter((i) => i.kind === 'image' && ['Photos', 'Logos', 'Graphics'].includes(i.folder))
+    .map((i) => ({ rel: i.rel, url: i.url, folder: i.folder, name: nameOf(i.rel), alt: notes[i.rel]?.alt || '', tags: notes[i.rel]?.tags || [] }));
+}
+/** Brand pictures that fit some words best (by their description and tags), photos before logos. */
+function rankImages(images, words) {
+  const want = new Set(String(words).toLowerCase().match(/[a-z]{4,}/g) || []);
+  const score = (im) => [...`${im.name} ${im.alt} ${im.tags.join(' ')}`.toLowerCase().matchAll(/[a-z]{4,}/g)].filter((m) => want.has(m[0])).length * 2 + (im.folder === 'Photos' ? 1 : 0);
+  return [...images].sort((a, b) => score(b) - score(a));
+}
 
 // How much each helper can read at once (characters of facts, leaving room for the answer).
 const BUDGET = { apple: 4200, cshelper: 11000 };
@@ -81,9 +101,12 @@ export async function focusOf(focus = {}, budget = 8000) {
       const texts = (d.pages || []).flatMap((p) => (p.items || []).filter((i) => i.type === 'text').map((i) => i.text)).filter(Boolean);
       const campId = d.source?.campaignId;
       const camp = campId ? (await listCampaigns()).find((c) => c.id === campId) : null;
+      const pics = rankImages(await brandImages(), `${d.name} ${texts.join(' ')}`).slice(0, deep ? 12 : 6);
+      const sel = focus.selected;
       const lines = [`Design "${d.name}" (${d.kind || 'graphic'}, ${d.size?.w}×${d.size?.h}, ${d.pages?.length || 1} page${d.pages?.length > 1 ? 's' : ''}).`,
         texts.length && `Text on it now: ${texts.map((t) => `"${clip(t, 90)}"`).join(' / ')}`,
-        focus.selectedText && `They have this text selected: "${clip(focus.selectedText, 120)}"`,
+        sel ? `Selected right now: ${sel.label}${sel.text ? ` reading "${clip(sel.text, 120)}"` : ''}. When they say "this" or "it", they mean this.` : 'Nothing is selected, so "this" means the whole design.',
+        pics.length && `Pictures in their Brand library (when you suggest one, use its exact name): ${pics.map((im) => `"${im.name}"${im.alt ? ` (${clip(im.alt, 70)})` : ''}`).join('; ')}`,
         camp && `Part of the campaign "${camp.name}" for ${day(camp.date)}${camp.event ? `: ${camp.event.title}${camp.event.location ? ` at ${camp.event.location}` : ''}` : ''}.`];
       return { label: d.name, chips: [`Design: ${d.name}`, camp && `Campaign: ${camp.name}`].filter(Boolean), text: lines.filter(Boolean).join('\n'), passes: PASS_LIST.design };
     }
@@ -143,7 +166,9 @@ Rules you always keep:
 - When the facts give a day, time or place, write it out. Never leave a placeholder like [Date] for something you know.
 - Only mention events, campaigns and sermons that appear in the facts. Never add a placeholder or "to be determined" item.
 - Church Studio's tools: Videos (turn sermons into clips), Calendar (church events and campaigns), Social (write, schedule and post), Writing (blogs, emails, newsletters, small group guides), Design (graphics, stories, slides) and the Brand library (logo, colors, fonts, photos, voice). Name the right one when it helps.
-- Write in ${church}'s voice when you write anything they'll post or send.`;
+- Write in ${church}'s voice when you write anything they'll post or send.
+- If they say "this" or "it", they mean what is selected (see below), or the whole piece if nothing is. If it's still unclear what they mean, ask one short question before you answer.
+- When you suggest a sermon, event, design or picture, use its exact name from the facts so they can open it.`;
 }
 
 async function systemFor(cfg, focus) {
@@ -161,11 +186,61 @@ export async function helperChat({ focus, messages, onDelta, signal }) {
   const { system } = await systemFor(cfg, focus);
   const clean = (messages || []).filter((m) => m && ['user', 'assistant'].includes(m.role) && String(m.content || '').trim()).map((m) => ({ role: m.role, content: String(m.content).slice(0, 4000) }));
   if (!clean.length || clean[clean.length - 1].role !== 'user') throw new Error('Ask a question first.');
-  const text = await chat(cfg, { system, messages: clean, onDelta, signal });
+  let text = await chat(cfg, { system, messages: clean, onDelta, signal });
   // When it declines, small models sometimes invent a feature to point at. Finish the reply ourselves with
   // something real from this church's calendar or sermons.
-  if (/^\W*I can only help with Church Studio/i.test(text)) return `I can only help with Church Studio work. ${await realSuggestion()}`;
-  return text;
+  if (/^\W*I can only help with Church Studio/i.test(text)) text = `I can only help with Church Studio work. ${await realSuggestion()}`;
+  const refs = findRefs(text, await catalog(), focus);
+  return { text, refs, actions: followUps(refs, focus) };
+}
+
+// ------------------------------------------------------------------ links in answers
+// Everything an answer can point at, so names in the reply become pills that open the item.
+let catCache = { at: 0, value: null };
+async function catalog() {
+  if (Date.now() - catCache.at < 30_000) return catCache.value;
+  const now = Date.now();
+  const { events } = await cachedEvents();
+  const out = [
+    ...(events || []).filter((e) => Date.parse(e.start) > now - 30 * 86400_000).map((e) => ({ type: 'event', id: e.id, title: e.title, event: e, when: day(e.start) })),
+    ...(await listProjects().catch(() => [])).map((p) => ({ type: 'sermon', id: p.id, title: p.title })),
+    ...(await listDesigns().catch(() => [])).map((d) => ({ type: 'design', id: d.id, title: d.name })),
+    ...(await listDrafts().catch(() => [])).map((d) => ({ type: 'writing', id: d.id, title: d.title })),
+    ...(await listCampaigns().catch(() => [])).map((c) => ({ type: 'campaign', id: c.id, title: c.name })),
+    ...(await brandImages()).map((im) => ({ type: 'file', id: im.rel, title: im.name, url: im.url })),
+  ].filter((x) => x.title && x.title.trim().length >= 4);
+  catCache = { at: Date.now(), value: out };
+  return out;
+}
+const norm = (t) => String(t).toLowerCase().replace(/[“”"‘’']/g, '').replace(/\s+/g, ' ');
+function findRefs(text, cat, focus) {
+  const hay = norm(text);
+  const seen = new Set(); const hits = [];
+  for (const x of cat) {
+    const t = norm(x.title);
+    const at = hay.indexOf(t);
+    if (at < 0 || seen.has(`${x.type}:${x.id}`)) continue;
+    // Skip a one-word title that's just a common word inside the sentence.
+    if (!/\s/.test(t) && t.length < 6) continue;
+    seen.add(`${x.type}:${x.id}`); hits.push({ ...x, at });
+  }
+  // Longest names first win when one name sits inside another.
+  hits.sort((a, b) => b.title.length - a.title.length);
+  const kept = hits.filter((h, i) => !hits.slice(0, i).some((o) => o.at <= h.at && o.at + o.title.length >= h.at + h.title.length));
+  return kept.sort((a, b) => a.at - b.at).slice(0, 8).map(({ at, ...r }) => ({ ...r, here: focus?.kind === 'design' && r.type === 'file' }));
+}
+/** A few next steps that connect what the answer talked about. */
+function followUps(refs, focus) {
+  const ev = refs.find((r) => r.type === 'event');
+  const ser = refs.find((r) => r.type === 'sermon') || (focus?.kind === 'project' || focus?.kind === 'clip' ? { id: focus.id } : null);
+  const out = [];
+  if (ev) out.push({ label: ser ? `Start a campaign for ${ev.title} with this sermon` : `Start a campaign for ${ev.title}`, go: { name: 'calendar', campaign: { event: ev.event, ...(ser ? { projectId: ser.id } : {}) } } });
+  if (ev) out.push({ label: `Make a graphic for ${ev.title}`, go: { name: 'graphics', event: ev.event, eventMode: 'pick' } });
+  const sermon = refs.find((r) => r.type === 'sermon');
+  if (sermon) out.push({ label: 'Open the transcript', go: { name: 'project', id: sermon.id, step: 'text' } });
+  const pic = refs.find((r) => r.type === 'file');
+  if (pic && focus?.kind === 'design') out.push({ label: `Add ${pic.title} to this design`, apply: { field: 'image', value: pic.id } });
+  return out.slice(0, 3);
 }
 
 async function realSuggestion() {
@@ -199,6 +274,7 @@ const PASS_LIST = {
   design: [
     { id: 'headline', label: 'Headline ideas', apply: 'text', maxWords: 6, ask: 'Write 4 short headlines for this design, 2 to 5 words each, short enough to read at a glance on a graphic. Use only facts from the design, the campaign and the calendar. Don\'t start with the church name.' },
     { id: 'caption', label: 'Caption for posting', ask: 'Write 2 captions to post with this design, 1 to 3 sentences each, with the key details (what, when, where) from the facts.' },
+    { id: 'photos', label: 'Pick a photo', apply: 'image', pictures: true, ask: 'Pick the 3 pictures from their Brand library that would suit this design best. Answer with their exact names.' },
   ],
   writing: [
     { id: 'titles', label: 'Title ideas', apply: 'title', ask: 'Write 4 titles for this piece, under 65 characters each.' },
@@ -230,6 +306,19 @@ export async function runPass({ focus, pass }) {
     if (a >= 0 && b > a) { try { const o = JSON.parse(t.slice(a, b + 1)); if (Array.isArray(o.options)) return o.options; } catch { /* fall to lines */ } }
     return t.split('\n').map((l) => l.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim()).filter((l) => l.length > 2);
   };
+  if (p.pictures) {
+    const d = await getDesign(focus.id).catch(() => null);
+    const words = d ? `${d.name} ${(d.pages || []).flatMap((pg) => (pg.items || []).filter((i) => i.type === 'text').map((i) => i.text)).join(' ')}` : '';
+    const all = await brandImages();
+    const photos = all.filter((im) => im.folder !== 'Logos');
+    const pics = rankImages(photos.length ? photos : all, words);
+    if (!pics.length) throw new Error('Your Brand library has no photos yet. Add some in the Brand library first.');
+    let names = [];
+    try { names = parse(cfg.llmProvider === 'cshelper' ? (await llamaChat({ system, messages: [{ role: 'user', content: prompt }], temperature: 0.3, maxTokens: 300 })) : cfg.llmProvider === 'apple' ? await appleAsk({ system, prompt, temperature: 0.3 }) : await complete(cfg, system, prompt)); } catch { /* fall back to the best matches */ }
+    const picked = names.map((n) => pics.find((im) => norm(n).includes(norm(im.name)))).filter(Boolean);
+    const list = [...new Set([...picked, ...pics])].slice(0, 4);
+    return { pass: p.id, label: p.label, apply: 'image', options: list.map((im) => ({ label: im.name, value: im.rel, thumb: im.url, note: im.alt || null })) };
+  }
   if (cfg.llmProvider === 'cshelper') {
     const o = await llamaChat({ system, messages: [{ role: 'user', content: p.ask }], schema: { type: 'object', required: ['options'], properties: { options: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 6 } } }, temperature: 0.7, maxTokens: 900 });
     options = o.options;
@@ -247,4 +336,36 @@ export async function runPass({ focus, pass }) {
   options = [...new Set(options)].slice(0, 6);
   if (!options.length) throw new Error('The helper didn\'t come up with anything. Try again.');
   return { pass: p.id, label: p.label, apply: p.apply || null, options };
+}
+
+// ------------------------------------------------------------------ chat history
+// Kept per workspace in data/helper-chats.json: the newest 40 chats, each named by its first question.
+const CHATS = () => path.join(DATA_DIR, 'helper-chats.json');
+async function readChats() { try { return JSON.parse(await readFile(CHATS(), 'utf8')); } catch { return []; } }
+export async function listChats() {
+  return (await readChats()).map(({ messages, ...c }) => ({ ...c, count: messages.filter((m) => m.role === 'user').length }));
+}
+export async function getChat(id) { return (await readChats()).find((c) => c.id === id) || null; }
+export async function saveChat(chat) {
+  const all = await readChats();
+  const msgs = (chat.messages || []).filter((m) => ['user', 'assistant', 'note'].includes(m.role)).slice(-80)
+    .map((m) => ({ role: m.role, content: String(m.content || '').slice(0, 8000), ...(m.options ? { options: m.options, apply: m.apply || null } : {}), ...(m.refs ? { refs: m.refs } : {}), ...(m.actions ? { actions: m.actions } : {}), ...(m.pass ? { pass: true } : {}), ...(m.error ? { error: true } : {}) }));
+  const firstQ = msgs.find((m) => m.role === 'user' && !m.pass)?.content || msgs.find((m) => m.role === 'user')?.content || 'New chat';
+  const prev = all.find((c) => c.id === chat.id);
+  const c = {
+    id: chat.id || `c-${Date.now().toString(36)}`,
+    title: String(chat.title || prev?.title || clip(firstQ, 60)).trim(),
+    label: String(chat.label || prev?.label || '').slice(0, 120),
+    created: prev?.created || new Date().toISOString(),
+    updated: new Date().toISOString(),
+    messages: msgs,
+  };
+  const next = [c, ...all.filter((x) => x.id !== c.id)].slice(0, 40);
+  await mkdir(DATA_DIR, { recursive: true });
+  await writeFile(CHATS(), JSON.stringify(next, null, 1));
+  return { id: c.id, title: c.title, label: c.label, updated: c.updated };
+}
+export async function deleteChat(id) {
+  const all = await readChats();
+  await writeFile(CHATS(), JSON.stringify(all.filter((c) => c.id !== id), null, 1));
 }

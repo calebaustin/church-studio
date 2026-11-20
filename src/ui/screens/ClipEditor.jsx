@@ -145,7 +145,7 @@ function SpeakerHelper({ project, clip, onClose, onDone }) {
 }
 
 export default function ClipEditor({ project, transcript, clipId, onSelect, patch, jobs, onMore }) {
-  const { themes, config, trackJob, onJobFinished, go, setGuard, confirmLeave, toast, reloadThemes } = useApp();
+  const { themes, config, trackJob, onJobFinished, go, setGuard, confirmLeave, toast, reloadThemes, aiWorking } = useApp();
   const original = project.clips.find((c) => c.id === clipId) || project.clips[0];
   const h = useHistory(original);
   const clip = h.clip;
@@ -478,7 +478,7 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
           )}
         </div>
 
-        <section className="glass strong panel">
+        <section className={`glass strong panel ${aiWorking === 'clip' ? 'ai-wave' : ''}`}>
           <div className="tabs">
             {[['words', 'Words & trim'], ['text', 'Title & hook'], ['look', 'Captions'], ['crop', 'Framing'], ['popups', 'Pop-ups'], ['gfx', 'Graphics'], ['sound', 'Sound']].map(([k, l]) => (
               <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>

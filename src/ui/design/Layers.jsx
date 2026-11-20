@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Eraser, GripVertical, Image as ImageIcon, QrCode, Shapes, Trash2, Type } from 'lucide-react';
 
 const ICON = { text: Type, shape: Shapes, image: ImageIcon, qr: QrCode };
-const label = (it) => {
+export const label = (it) => {
   if (it.type === 'text') return it.text.replace(/\s+/g, ' ').slice(0, 32) || 'Text';
   if (it.type === 'image') return (it.rel || 'Image').split('/').pop().replace(/\.[a-z0-9]+$/i, '');
   if (it.type === 'qr') return 'QR code';

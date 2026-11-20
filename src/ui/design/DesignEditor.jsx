@@ -15,7 +15,7 @@ import Popover, { PopList } from '../components/Popover.jsx';
 import { DEVICE_ASPECT, KINDS, PATTERNS, RESIZE_TARGETS, SHAPES, resizeDesign, blankPage, cohesive, loadAssets, onColor, page as newPage, renderPage, shape as newShape, svgColors, text as newText, uid } from './model.js';
 import { snapMove } from './snap.js';
 import PhotoEdits from './PhotoEdits.jsx';
-import Layers from './Layers.jsx';
+import Layers, { label as layerLabel } from './Layers.jsx';
 import CampaignHeader from '../components/CampaignHeader.jsx';
 import { exportDesign } from './exporters.js';
 import { BLACK_KEYS, NEXT_KEYS, PREV_KEYS, PresentHere, PresenterConsole, openChannel } from './Presenter.jsx';
@@ -41,7 +41,7 @@ PageThumb.cache = {};
 
 // ---------------------------------------------------------------- editor
 export default function DesignEditor({ id, onClose }) {
-  const { toast, config, showNext, go } = useApp();
+  const { toast, config, showNext, go, aiWorking } = useApp();
   const families = useFamilies();
   const [doc, setDoc] = useState(null);
   const [pi, setPi] = useState(0);
@@ -156,12 +156,21 @@ export default function DesignEditor({ id, onClose }) {
 
   const item = pg?.items.find((x) => x.id === sel) || null;
   const setItem = (p, opts) => update((d) => { const it = d.pages[pi].items.find((x) => x.id === sel); Object.assign(it, p); return d; }, opts);
-  // The helper chat sees this design. A picked headline replaces the text box that's selected.
-  useHelperFocus(id ? { kind: 'design', id, selectedText: item?.type === 'text' ? item.text : undefined } : null, (field, value) => {
-    if (field !== 'text') return false;
-    if (item?.type !== 'text') return 'Click the text you want to replace, then press Use.';
-    setItem({ text: value });
-    return true;
+  // The helper chat sees this design and what's selected. A picked headline replaces the selected text;
+  // a picked photo fills the selected photo spot or picture, or is added to the page.
+  useHelperFocus(id ? { kind: 'design', id, selected: item ? { label: layerLabel(item), text: item.type === 'text' ? item.text : undefined } : undefined } : null, (field, value) => {
+    if (field === 'text') {
+      if (item?.type !== 'text') return 'Click the text you want to replace, then press Use.';
+      setItem({ text: value });
+      return true;
+    }
+    if (field === 'image') {
+      if (item?.type === 'image') setItem({ rel: value });
+      else if (item?.type === 'shape' && (item.frame || item.photo)) setItem({ photo: value });
+      else addItem({ id: uid(), type: 'image', rel: value, x: 0.5, y: 0.5, w: 0.5, opacity: 1 });
+      return true;
+    }
+    return false;
   });
   const setPage = (p, opts) => update((d) => { Object.assign(d.pages[pi], p); return d; }, opts);
   const addItem = (it) => { update((d) => { d.pages[pi].items.push(it); return d; }); setSel(it.id); };
@@ -476,7 +485,7 @@ export default function DesignEditor({ id, onClose }) {
         {/* canvas */}
         <div className="dz-center" onPointerDown={(e) => { if (e.target === e.currentTarget && !editing) setSel(null); }}>
           {doc.source?.campaignId && <CampaignHeader campaignId={doc.source.campaignId} compact />}
-          <div ref={stageRef} className="dz-stage" onPointerDown={(e) => { if (e.target === e.currentTarget && !editing) setSel(null); }}>
+          <div ref={stageRef} className={`dz-stage ${aiWorking === 'design' ? 'ai-wave' : ''}`} onPointerDown={(e) => { if (e.target === e.currentTarget && !editing) setSel(null); }}>
             <div className="dz-canvas" style={{ width: dispW, height: dispH }}>
               <canvas ref={canvas} style={{ width: dispW, height: dispH }} aria-label="Page" />
               <div className="dz-overlay" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp}
@@ -642,7 +651,7 @@ export default function DesignEditor({ id, onClose }) {
           ) : (
             <>
               <span className="eyebrow">Page {pi + 1}</span>
-              <div className="seg sm">
+              <div className="seg sm seg-full">
                 {[['mesh', 'Gradient'], ['solid', 'Solid'], ['gradient', 'Blend'], ['pattern', 'Pattern'], ['image', 'Photo']].map(([k, l]) => (
                   <button key={k} className={(pg.bg?.type || 'mesh') === k ? 'on' : ''} onClick={() => (k === 'image' ? setPicker('bg') : setPage({ bg: { ...pg.bg, type: k, color: pg.bg?.color || (k === 'pattern' ? colors[3] : colors[0]), pattern: pg.bg?.pattern || 'checker' } }))}>{l}</button>
                 ))}
