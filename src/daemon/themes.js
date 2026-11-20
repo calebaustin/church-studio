@@ -110,11 +110,34 @@ const VIDEO_BUILTINS = [
 // (see docs/ui-ux-guide.md §4). `mode` decides which slot a theme fills: light or dark.
 const sans = "-apple-system, 'SF Pro Text', 'Inter', system-ui, sans-serif";
 const APP_BUILTINS = [
-  // The standard palette: a warm off-white leaning olive, leaf green, and a clay accent. Natural and calm.
+  // Four base looks, each with a light and a night version. Ids of the older themes are kept so saved
+  // choices still match (sermon-light is Sermon, midnight-glass is Sermon Night).
+  // Olive, the standard: warm off-white leaning olive, leaf green, clay.
   {
     id: 'olive', name: 'Olive', mode: 'light', builtin: true,
     tokens: { '--bg': '#ECEBDF', '--bg-2': '#E2E2D0', '--ink': '#20251D', '--accent': '#4A7C59', '--accent-2': '#C08A4E',
       '--glass-rgb': '252, 252, 246', '--radius': '18px', '--glass-blur': '14px', '--glass-tint': '0.9',
+      '--font-sans': sans, '--font-display': "'Avenir Next', -apple-system, system-ui, sans-serif" },
+  },
+  // Sermon: cool and bright, blue with a coral accent.
+  {
+    id: 'sermon-light', name: 'Sermon', mode: 'light', builtin: true,
+    tokens: { '--bg': '#EEF2F8', '--bg-2': '#F6F3EE', '--ink': '#141821', '--accent': '#3D6BFF', '--accent-2': '#FF8A5B',
+      '--glass-rgb': '255, 255, 255', '--radius': '18px', '--glass-blur': '14px', '--glass-tint': '0.9',
+      '--font-sans': sans, '--font-display': "'Avenir Next', -apple-system, system-ui, sans-serif" },
+  },
+  // Classic: cultured tan, classic blue, honey yellow.
+  {
+    id: 'classic', name: 'Classic', mode: 'light', builtin: true,
+    tokens: { '--bg': '#EFECE6', '--bg-2': '#E5E0D6', '--ink': '#1F2C40', '--accent': '#2F4A6D', '--accent-2': '#E5B45C',
+      '--glass-rgb': '253, 252, 249', '--radius': '18px', '--glass-blur': '14px', '--glass-tint': '0.9',
+      '--font-sans': sans, '--font-display': "'Avenir Next', -apple-system, system-ui, sans-serif" },
+  },
+  // Clay: warm cream, heirloom tomato, tawny.
+  {
+    id: 'clay', name: 'Clay', mode: 'light', builtin: true,
+    tokens: { '--bg': '#F2ECE3', '--bg-2': '#E8DDCD', '--ink': '#2E1C1A', '--accent': '#8C3F38', '--accent-2': '#C99A6B',
+      '--glass-rgb': '253, 250, 246', '--radius': '18px', '--glass-blur': '14px', '--glass-tint': '0.9',
       '--font-sans': sans, '--font-display': "'Avenir Next', -apple-system, system-ui, sans-serif" },
   },
   {
@@ -123,35 +146,22 @@ const APP_BUILTINS = [
       '--glass-rgb': '37, 42, 34', '--radius': '18px', '--glass-blur': '14px', '--glass-tint': '0.9',
       '--font-sans': sans, '--font-display': "'Avenir Next', -apple-system, system-ui, sans-serif" },
   },
-  // True dark: neutral night-mode grays with no tint, easy on the eyes in a dark room.
   {
-    id: 'night', name: 'Night', mode: 'dark', builtin: true,
-    tokens: { '--bg': '#141414', '--bg-2': '#181818', '--ink': '#EDEDED', '--accent': '#8CC49A', '--accent-2': '#E2AE72',
-      '--glass-rgb': '34, 34, 34', '--radius': '18px', '--glass-blur': '14px', '--glass-tint': '0.9',
+    id: 'midnight-glass', name: 'Sermon Night', mode: 'dark', builtin: true,
+    tokens: { '--bg': '#0F131D', '--bg-2': '#141A26', '--ink': '#EEF0F8', '--accent': '#7C9BFF', '--accent-2': '#FFA37A',
+      '--glass-rgb': '30, 36, 52', '--radius': '18px', '--glass-blur': '14px', '--glass-tint': '0.9',
       '--font-sans': sans, '--font-display': "'Avenir Next', -apple-system, system-ui, sans-serif" },
   },
   {
-    id: 'sermon-light', name: 'Sermon Light', mode: 'light', builtin: true,
-    tokens: { '--bg': '#EEF2F8', '--bg-2': '#F8F4EE', '--ink': '#141821', '--accent': '#3D6BFF', '--accent-2': '#FF8A5B',
-      '--glass-rgb': '255, 255, 255', '--radius': '20px', '--glass-blur': '18px', '--glass-tint': '0.55',
+    id: 'classic-night', name: 'Classic Night', mode: 'dark', builtin: true,
+    tokens: { '--bg': '#121925', '--bg-2': '#18202E', '--ink': '#ECEFF4', '--accent': '#8FB0D8', '--accent-2': '#F0C878',
+      '--glass-rgb': '29, 38, 54', '--radius': '18px', '--glass-blur': '14px', '--glass-tint': '0.9',
       '--font-sans': sans, '--font-display': "'Avenir Next', -apple-system, system-ui, sans-serif" },
   },
   {
-    id: 'morning-sage', name: 'Morning Sage', mode: 'light', builtin: true,
-    tokens: { '--bg': '#EEF3EE', '--bg-2': '#F6F1E7', '--ink': '#18211C', '--accent': '#2B7F5F', '--accent-2': '#D9A441',
-      '--glass-rgb': '255, 255, 255', '--radius': '18px', '--glass-blur': '16px', '--glass-tint': '0.6',
-      '--font-sans': sans, '--font-display': "Georgia, 'Times New Roman', serif" },
-  },
-  {
-    id: 'midnight-glass', name: 'Midnight Glass', mode: 'dark', builtin: true,
-    tokens: { '--bg': '#0E1220', '--bg-2': '#17142A', '--ink': '#EEF0F8', '--accent': '#7C9BFF', '--accent-2': '#FFA37A',
-      '--glass-rgb': '34, 39, 60', '--radius': '20px', '--glass-blur': '22px', '--glass-tint': '0.55',
-      '--font-sans': sans, '--font-display': "'Avenir Next', -apple-system, system-ui, sans-serif" },
-  },
-  {
-    id: 'evening-glass', name: 'Evening Glass', mode: 'dark', builtin: true,
-    tokens: { '--bg': '#1A1626', '--bg-2': '#2A1D2E', '--ink': '#F6F2F7', '--accent': '#B59CFF', '--accent-2': '#FFB18A',
-      '--glass-rgb': '48, 40, 62', '--radius': '22px', '--glass-blur': '20px', '--glass-tint': '0.6',
+    id: 'clay-night', name: 'Clay Night', mode: 'dark', builtin: true,
+    tokens: { '--bg': '#1B1514', '--bg-2': '#221A18', '--ink': '#F2EAE3', '--accent': '#E0917F', '--accent-2': '#D9B48F',
+      '--glass-rgb': '43, 33, 31', '--radius': '18px', '--glass-blur': '14px', '--glass-tint': '0.9',
       '--font-sans': sans, '--font-display': "'Avenir Next', -apple-system, system-ui, sans-serif" },
   },
 ];

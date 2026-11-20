@@ -22,6 +22,7 @@ import Onboarding from './screens/Onboarding.jsx';
 import JobsTray from './components/JobsTray.jsx';
 import { Toasts } from './components/Toasts.jsx';
 import Modal from './components/Modal.jsx';
+import UpdateReady from './components/UpdateReady.jsx';
 
 // Where the background color sits on each screen. It glides between spots as you move around.
 const Ctx = createContext(null);
@@ -246,6 +247,10 @@ export default function App() {
     if (j.status === 'error' && ['export', 'export-joined', 'download', 'transcribe'].includes(j.kind)) toast({ kind: 'error', text: `${j.label} didn't finish: ${j.error?.slice(0, 160)}`, duration: 9000 });
   }), [onJobFinished, toast]);
 
+  // A downloaded update: ask, big and clear, to quit and replace the app.
+  const [updateReady, setUpdateReady] = useState(null);
+  useEffect(() => onJobFinished((j) => { if (j.kind === 'update' && j.status === 'done') setUpdateReady(j.result || {}); }), [onJobFinished]);
+
   const trackJob = useCallback((job) => {
     if (!job) return;
     lastStatus.current.set(job.id, job.status);
@@ -356,6 +361,7 @@ export default function App() {
         </Modal>
       )}
       {wallet && notes.length > 0 && <NotificationsWallet items={notes} onClose={() => setWallet(false)} onDismiss={(id) => setNotes((ns) => ns.filter((n) => n.id !== id))} onDismissAll={() => { setNotes([]); setWallet(false); }} />}
+      {updateReady && <UpdateReady info={updateReady} onClose={() => setUpdateReady(null)} />}
       {nextInfo && <NextSteps info={nextInfo} onClose={() => showNext(null)} />}
       {config && !config.onboarded && <Onboarding />}
     </Ctx.Provider>

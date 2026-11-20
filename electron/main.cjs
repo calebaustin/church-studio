@@ -116,6 +116,8 @@ ipcMain.handle('present-open', async (_e, { displayId } = {}) => {
   } catch (e) { return { ok: false, error: e.message }; }
 });
 ipcMain.handle('present-close', () => { if (presentWindow && !presentWindow.isDestroyed()) presentWindow.destroy(); presentWindow = null; });
+// Quit so a downloaded update can replace the app in Applications.
+ipcMain.handle('quit-app', () => { setTimeout(() => app.quit(), 50); });
 // Mac notifications for finished work and posts that are due. Clicking one brings the app forward.
 ipcMain.handle('notify', (_e, { title, body } = {}) => {
   if (!Notification.isSupported()) return false;

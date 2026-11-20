@@ -12,4 +12,5 @@ contextBridge.exposeInMainWorld('desktop', {
   displays: () => ipcRenderer.invoke('displays'),
   presentOpen: (opts) => ipcRenderer.invoke('present-open', opts),
   presentClose: () => ipcRenderer.invoke('present-close'),
+  quitApp: () => ipcRenderer.invoke('quit-app'),
 });

@@ -27,7 +27,8 @@ function place(c) {
   }
   const x = on.offsetLeft, y = on.offsetTop, w = on.offsetWidth, h = on.offsetHeight;
   if (prev && prev.on === on && prev.x === x && prev.y === y && prev.w === w && prev.h === h && prev.shown) return;
-  const first = !prev || !prev.shown;
+  // First placement, or the same choice reflowing (a window resize): snap, don't glide.
+  const first = !prev || !prev.shown || prev.on === on;
   if (first) c.setAttribute('data-ind-still', '');
   c.style.setProperty('--ind-x', `${x}px`); c.style.setProperty('--ind-y', `${y}px`);
   c.style.setProperty('--ind-w', `${w}px`); c.style.setProperty('--ind-h', `${h}px`);

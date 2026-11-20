@@ -520,7 +520,7 @@ function Updates() {
     setBusy(false);
   };
   const download = async () => {
-    try { const r = await api.post('/api/updates/download'); trackJob?.(r.job); toast({ text: 'Downloading the update. It opens when it is ready.' }); } catch (e) { toast({ kind: 'error', text: e.message }); }
+    try { const r = await api.post('/api/updates/download'); trackJob?.(r.job); toast({ text: 'Downloading the update. You will see what to do when it is ready.' }); } catch (e) { toast({ kind: 'error', text: e.message }); }
   };
   return (
     <>

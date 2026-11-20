@@ -143,6 +143,21 @@ const MIGRATIONS = [
       }
     },
   },
+  {
+    // Four base looks now (Olive, Sermon, Classic, Clay, each with a night version). Retired themes move to Olive.
+    to: '0.13.2',
+    run: async (home) => {
+      const files = [path.join(home, 'config.local.json')];
+      for (const w of await readdir(path.join(home, 'workspaces')).catch(() => [])) files.push(path.join(home, 'workspaces', w, 'config.local.json'));
+      for (const f of files) {
+        if (!existsSync(f)) continue;
+        const c = JSON.parse(await readFile(f, 'utf8'));
+        if (c.appTheme === 'morning-sage') c.appTheme = 'olive';
+        if (['night', 'evening-glass'].includes(c.appThemeDark)) c.appThemeDark = 'olive-night';
+        await writeFile(f, JSON.stringify(c, null, 2));
+      }
+    },
+  },
 ];
 
 async function backupSmallData(from) {

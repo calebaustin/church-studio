@@ -2,6 +2,15 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## Unreleased
+
+### New
+- **Four base looks, each with a night version.** Olive (the standard), Sermon (blue and coral), and two new ones: Classic (tan, classic blue and honey yellow) and Clay (warm cream, heirloom tomato and tawny). Each has a matching night version: Olive Night, Sermon Night, Classic Night and Clay Night. Morning Sage, Night and Evening Glass are retired; if you used one, you're moved to Olive or Olive Night. Pick yours in My App.
+- **A clear next step after an update downloads.** A big prompt shows what to do: quit Church Studio, drag the new version into Applications, choose Replace, and open it again. There's a Quit Church Studio button right there. Your work is never touched by an update.
+
+### Fixed
+- The sidebar highlight snaps to size when you resize the window, instead of animating.
+
 ## 0.13.1 · November 20, 2026
 
 ### Fixed

@@ -6,7 +6,9 @@
   green `#4A7C59`, and a clay accent `#C08A4E`. Natural and calm.
 - The background is one still color with a faint frosted grain and a soft light from the top. No moving
   color blobs. Panels sit on it as mostly solid cards (glass blur stays for menus and pop-ups over content).
-- **Night** is the true dark option: neutral grays with no tint.
+- Four base looks, each with a night version: **Olive** (the standard), **Sermon** (blue and coral), **Classic**
+  (tan, classic blue, honey) and **Clay** (cream, heirloom tomato, tawny). The older themes were retired in 0.13.2
+  and saved choices move to Olive.
 - Every color in the stylesheet goes through a token. Fixed colors (white, shadows, the video stage, the
   checkerboard, snapping guides) are named once at the top of `styles.css`; rules use `var(--…)` or
   `rgba(var(--shade-rgb), a)` / `rgba(var(--sheen-rgb), a)`. The only literal colors left are the hue strip
