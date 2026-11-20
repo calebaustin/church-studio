@@ -44,10 +44,10 @@ function analyze(words, range) {
 
 /** A short, complete heading: the punchiest short line in a section, or a clean cut at a natural break. */
 function headingFor(part, avoid = '') {
-  const ranked = [...part].sort((x, y) => y.score - x.score).filter((x, i, arr) => arr.length < 2 || clean(x.text).replace(/[.?!]$/, '').toLowerCase() !== avoid.toLowerCase());
+  const ranked = [...part].sort((x, y) => y.score - x.score).filter((x, i, arr) => arr.length < 2 || clean(x.text).replace(/[\s.,;:?!]+$/, '').toLowerCase() !== avoid.toLowerCase());
   const short = ranked.find((s) => clean(s.text).length <= 60 && !s.f.dangling);
   if (short) return titleCase(clean(short.text).replace(/[.?!,;:]$/, ''));
-  let words = clean(ranked[0].text).replace(/[.?!]$/, '').split(' ');
+  let words = clean(ranked[0].text).replace(/[\s.,;:?!]+$/, '').split(' ');
   const cut = words.findIndex((w, i) => i >= 4 && /[,;:]$/.test(w));
   words = words.slice(0, cut > 0 && cut < 9 ? cut + 1 : 8);
   while (words.length > 3 && /^(a|an|the|and|but|or|of|to|in|on|for|with|my|your|his|her|our|their|that|this|i|we|you|was|is)$/i.test(words.at(-1).replace(/[,;:]$/, ''))) words.pop();
@@ -174,14 +174,14 @@ function blogFor(a, project, { title, keyphrase = '', angle = 'teaching' } = {})
     for (const s of [...pool, ...a.best.filter((x) => !x.f.question && !x.f.dangling && !x.f.housekeeping)]) if (picked.length < (pool.length >= 3 ? 5 : 4) && picked.every((p) => Math.abs(p.i - s.i) > 2)) picked.push(s);
     const steps = picked.sort((x, y) => x.i - y.i);
     const stepHead = (s) => {
-      const t = clean(s.text).replace(/[.?!]$/, '');
+      const t = clean(s.text).replace(/[\s.,;:?!]+$/, '');
       const colon = t.split(/:\s+/);
       if (colon.length === 2 && colon[1].length <= 60) return titleCase(colon[1].replace(/^./, (c) => c.toUpperCase()));
       return t.length <= 64 ? titleCase(t) : headingFor([s]);
     };
     const list = steps.map((s, k) => {
       const head = stepHead(s);
-      const lead = clean(s.text).replace(/[.?!]$/, '').length <= 64 ? '' : `${sentenceEnd(clean(s.text))} `;
+      const lead = clean(s.text).replace(/[\s.,;:?!]+$/, '').length <= 64 ? '' : `${sentenceEnd(clean(s.text))} `;
       return `### ${k + 1}. ${head}\n\n${lead}${after(a, s, 2)}`;
     });
     body = [intro, `## ${steps.length} ${kp ? `steps toward ${kp}` : 'things to take into this week'}`, ...list, scripture, join];
@@ -291,7 +291,7 @@ function devotionalFor(a, title, days = 5) {
 export async function devotional(projectId, days = 5) {
   const { project, a } = await load(projectId);
   const titleLine = a.best.find((s) => s.text.length <= 70 && !s.f.dangling) || a.best[0];
-  return { text: devotionalFor(a, titleCase(clean(titleLine.text).replace(/[.?!]$/, '')) || project.title, days) };
+  return { text: devotionalFor(a, titleCase(clean(titleLine.text).replace(/[\s.,;:?!]+$/, '')) || project.title, days) };
 }
 
 export async function generate(projectId) {
@@ -299,7 +299,7 @@ export async function generate(projectId) {
   const main = a.best.find((s) => s.f.apply || s.f.quotable) || a.best[0];
   const topic = phrases(a.sentences, 1)[0] || a.keys[0] || 'faith';
   const titleLine = a.best.find((s) => s.text.length <= 70 && !s.f.dangling) || main;
-  const title = titleCase(clean(titleLine.text).replace(/[.?!]$/, ''));
+  const title = titleCase(clean(titleLine.text).replace(/[\s.,;:?!]+$/, ''));
   const metaDescription = metasFor(a, topic, 1)[0] || sentenceEnd(clean(main.text)).slice(0, 155);
   const takeaways = topIn(a.best.slice(0, 12), 4).map((s) => `- ${sentenceEnd(clean(s.text))}`);
   const watch = project.sourceUrl ? `[Watch the full message](${project.sourceUrl})` : '[ADD: link to the full message]';
@@ -390,7 +390,7 @@ export async function outline(projectId) {
   const quotes = topIn(a.best.filter((s) => ok(s) && !s.f.question && clean(s.text).length <= 120).slice(0, 12), 6).map((s) => sentenceEnd(clean(s.text)));
   const steps = a.sentences.filter((s) => s.f.apply && ok(s) && !s.f.question).sort((x, y) => y.score - x.score).slice(0, 3).map((s) => sentenceEnd(clean(s.text)));
   return {
-    title: titleCase(clean(titleLine.text).replace(/[.?!]$/, '')), sermon: project.title,
+    title: titleCase(clean(titleLine.text).replace(/[\s.,;:?!]+$/, '')), sermon: project.title,
     refs: a.refs, points, quotes, questions: a.questions.slice(0, 3).map((q) => clean(q.text)), steps,
   };
 }

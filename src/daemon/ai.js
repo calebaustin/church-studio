@@ -174,6 +174,11 @@ export async function rerank(cfg, cands, { title, count }) {
     : p === 'cshelper' ? cands.slice(0, 24).map((c) => ({ ...c, text: c.text.slice(0, 600) })) : cands;
   const out = await ask(cfg, prompt(shown, title, count));
   const seen = new Set();
+  // Small local models sometimes score 1-10 instead of 0-100: put those on the same scale.
+  const raw = (out.clips || []).map((x) => Number(x.score) || 0);
+  const scale = raw.length && Math.max(...raw) <= 10 ? 10 : 1;
+  // A hook is a few words on screen. If the model wrote a whole sentence, keep the app's own short hook.
+  const shortHook = (h, fallback) => { const w = String(h || '').trim().split(/\s+/).filter(Boolean); return w.length && w.length <= 8 ? String(h).trim() : fallback || w.slice(0, 7).join(' ').replace(/[,;:]$/, ''); };
   return (out.clips || [])
     .filter((p) => Number.isInteger(p.index) && cands[p.index] && !seen.has(p.index) && seen.add(p.index))
     .slice(0, count)
@@ -181,9 +186,9 @@ export async function rerank(cfg, cands, { title, count }) {
       const { text, ...c } = cands[p.index];
       return {
         ...c,
-        score: Math.max(0, Math.min(100, Math.round(p.score))),
+        score: Math.max(0, Math.min(100, Math.round((Number(p.score) || 0) * scale))),
         title: String(p.title).slice(0, 90),
-        summary: p.summary, hook: p.hook,
+        summary: p.summary, hook: shortHook(p.hook, c.hook),
         hashtags: (p.hashtags || []).map((h) => String(h).replace(/^#/, '').trim()).filter(Boolean).slice(0, 6),
         reasons: [p.reason, ...c.reasons].filter(Boolean),
         source: cfg.llmProvider,
