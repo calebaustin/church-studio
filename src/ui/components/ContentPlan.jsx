@@ -16,6 +16,9 @@ const day = (d) => (d ? new Date(d).toLocaleDateString('en-US', { weekday: 'shor
 export default function ContentPlan({ project, setStep, onChange }) {
   const { go, toast, trackJob, onJobFinished, config, saveConfig, ai } = useApp();
   const [linking, setLinking] = useState(false);
+  // A Sermon is its own project type (same rule as the engine: the sermon was found, or marked by hand).
+  const sermonType = typeof project.isSermon === 'boolean' ? project.isSermon : (project.kind === 'sermon' || !project.kind) && Boolean(project.sermon?.confirmed) && project.sermon?.method !== 'whole';
+  const markSermon = async (v) => { await api.patch(`/api/projects/${project.id}`, { isSermon: v }); onChange?.(); toast({ text: v ? `${project.title} is now a Sermon. Find it under All projects › Sermons too.` : 'Taken out of Sermons. It stays in Videos.' }); };
   const [plan, setPlan] = useState(null);
   const [showIdeas, setShowIdeas] = useState(false);
   const [podcast, setPodcast] = useState(false);
@@ -70,9 +73,16 @@ export default function ContentPlan({ project, setStep, onChange }) {
           )}
           {sm.points?.length > 0 && <ol className="sermon-points">{sm.points.map((p) => <li key={p}>{p}</li>)}</ol>}
           {sm.themes?.length > 0 && <div className="row wrap" style={{ gap: 6 }}>{sm.themes.map((t) => <span key={t} className="chip">{t}</span>)}</div>}
+          {!sermonType && (
+            <div className="sermon-note small">
+              <span>This recording isn't a Sermon yet. Finding the sermon makes it one, so it's listed under All projects › Sermons.</span>
+              <button className="btn sm" onClick={() => markSermon(true)}>Mark as a sermon</button>
+            </div>
+          )}
           <div className="row wrap" style={{ gap: 8 }}>
             <button className="btn sm" onClick={() => setStep(project.status === 'transcribed' ? 'text' : 'transcribe')}><FileText size={13} />Transcript</button>
             {sm.watch && <button className="btn sm ghost" onClick={() => openLink(sm.watch)}><ExternalLink size={13} />Watch</button>}
+            {sermonType && <button className="btn sm ghost" title="Take this out of Sermons. Everything tied to it stays." onClick={() => markSermon(false)}>Not a sermon</button>}
           </div>
         </div>
         <label className="field small sermon-series"><span className="row" style={{ gap: 6 }}><Layers size={13} />Series</span>

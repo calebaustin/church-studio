@@ -226,7 +226,9 @@ route('PATCH', '/api/projects/:id', async ({ id }, b) => {
   await requireProject(id);
   const project = await updateProject(id, (p) => {
     if (typeof b.title === 'string') p.title = b.title.slice(0, 200);
-    if (b.sermon) p.sermon = { ...p.sermon, ...b.sermon };
+    // Finding the sermon makes a sermon recording a Sermon (a project type of its own).
+    if (b.sermon) { p.sermon = { ...p.sermon, ...b.sermon }; if (b.sermon.confirmed && (p.kind === 'sermon' || !p.kind) && p.isSermon !== false) p.isSermon = true; }
+    if (typeof b.isSermon === 'boolean') p.isSermon = b.isSermon;
     if (Array.isArray(b.clips)) p.clips = b.clips;
     if ('videoTheme' in b) p.videoTheme = b.videoTheme;
     if (typeof b.series === 'string') p.series = b.series.trim().slice(0, 80) || null;

@@ -18,7 +18,8 @@ import { loadTags } from './finder.js';
 
 // ------------------------------------------------------------------ reading the question
 const KINDS = [
-  ['sermon', /^(sermons?|messages?|services?|talks?|teachings?|videos?)$/],
+  ['sermon', /^(sermons?|messages?|talks?|teachings?)$/],
+  ['video', /^(videos?|services?|recordings?)$/],
   ['clip', /^(clips?|reels?|shorts?)$/],
   ['design', /^(designs?|graphics?|slides?|decks?|flyers?|posters?|stories|carousels?|thumbnails?|cards?)$/],
   ['writing', /^(writing|blogs?|drafts?|emails?|newsletters?|devotionals?|guides?|articles?)$/],
@@ -118,7 +119,7 @@ async function buildIndex() {
   for (const s of await listProjects()) {
     const p = await getProject(s.id).catch(() => null);
     if (!p) continue;
-    docs.push({ key: `sermon:${p.id}`, type: 'sermon', title: p.title, text: await transcriptText(p.id), date: p.created, thumb: p.thumbnail || null, go: { name: 'project', id: p.id }, tags: T(`sermon:${p.id}`), projectId: p.id });
+    docs.push({ key: `sermon:${p.id}`, type: s.isSermon ? 'sermon' : 'video', title: p.title, text: await transcriptText(p.id), date: p.created, thumb: p.thumbnail || null, go: { name: 'project', id: p.id }, tags: T(`sermon:${p.id}`), projectId: p.id });
     for (const c of p.clips || []) {
       if (!['kept', 'exported'].includes(c.status) && !c.export) continue;
       docs.push({ key: `clip:${p.id}/${c.id}`, type: 'clip', title: c.title || 'Clip', text: [c.hook, c.summary, c.text, (c.hashtags || []).join(' ')].filter(Boolean).join(' '), date: c.export?.at || p.created, sub: p.title, go: { name: 'project', id: p.id, clip: c.id }, tags: T(`clip:${p.id}/${c.id}`) });
@@ -205,7 +206,7 @@ export async function search(q, { limit = 40 } = {}) {
     results.push({
       key: d.key, type: d.type, title: d.title, sub: d.sub || null, date: d.date, thumb: d.thumb || null, tags: d.tags || [], go: d.go || null, link: d.link || null, score,
       snippet: flat.length ? snippet(d, flat) : null,
-      at: d.type === 'sermon' && flat.length ? momentOf(d.projectId, flat) : null,
+      at: (d.type === 'sermon' || d.type === 'video') && flat.length ? momentOf(d.projectId, flat) : null,
     });
   }
   results.sort((a, b) => b.score - a.score);

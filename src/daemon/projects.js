@@ -7,6 +7,12 @@ import { randomUUID } from 'node:crypto';
 import { PROJECTS_DIR } from './tools.js';
 import { normalizeWords } from './scripture.js';
 
+/**
+ * A Sermon is a project type: a sermon recording whose sermon has been found (its range confirmed), or one
+ * someone marked as a sermon. Older projects count by the same rule, so nothing needs converting.
+ */
+export const isSermon = (p) => (typeof p?.isSermon === 'boolean' ? p.isSermon : (p?.kind === 'sermon' || !p?.kind) && Boolean(p?.sermon?.confirmed) && p?.sermon?.method !== 'whole');
+
 export function projectDir(id) {
   if (!/^[a-z0-9-]+$/i.test(id)) throw new Error('Bad project id');
   return path.join(PROJECTS_DIR, id);
@@ -67,7 +73,7 @@ export async function listProjects() {
       if (p) out.push({
         id: p.id, title: p.title, status: p.status, created: p.created, updated: p.updated,
         thumbnail: p.thumbnail, youtubeId: p.youtubeId || null, duration: p.media?.duration ?? null, clips: p.clips.length,
-        exported: p.clips.filter((c) => c.export).length,
+        exported: p.clips.filter((c) => c.export).length, isSermon: isSermon(p), kind: p.kind || 'sermon',
       });
     } catch { /* skip broken folders */ }
   }

@@ -51,7 +51,7 @@ function TimeInput({ value, onChange }) {
 }
 
 export default function Project({ id, initialStep, initialClip, initialTime }) {
-  const { go, trackJob, onJobFinished, jobs, confirmLeave } = useApp();
+  const { go, trackJob, onJobFinished, jobs, confirmLeave, toast } = useApp();
   const [project, setProject] = useState(null);
   const [sharing, setSharing] = useState(false);
   const [transcript, setTranscript] = useState(null);
@@ -174,7 +174,12 @@ export default function Project({ id, initialStep, initialClip, initialTime }) {
       {step === 'sermon' && transcript && (
         <SermonStep project={project} transcript={transcript} src={src} player={player} patch={patch} audioOnly={audioOnly}
           busy={busyKind('propose')} job={jobOf('propose')}
-          onConfirm={async (range) => { await patch({ sermon: { ...range, confirmed: true } }); if (audioOnly) setStep('text'); else start('propose', {}); }} />
+          onConfirm={async (range) => {
+            const wasSermon = project.isSermon === true || (project.sermon?.confirmed && project.sermon?.method !== 'whole');
+            await patch({ sermon: { ...range, confirmed: true } });
+            if (!wasSermon && (project.kind === 'sermon' || !project.kind) && project.isSermon !== false) toast({ keep: false, text: `${project.title} is now a Sermon. Keep working here, or find it later under All projects › Sermons.` });
+            if (audioOnly) setStep('text'); else start('propose', {});
+          }} />
       )}
       {step === 'clips' && (
         <ClipsStep project={project} src={src} player={player} patch={patch} busy={busyKind('propose')} job={jobOf('propose')} start={start}

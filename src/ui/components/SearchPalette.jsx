@@ -2,12 +2,12 @@
 // last fall" or "flyers from October".
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { CalendarDays, Clapperboard, FileText, Image as ImageIcon, Megaphone, Search, Send, Shapes, Video, ExternalLink } from 'lucide-react';
+import { BookOpen, CalendarDays, Clapperboard, FileText, Image as ImageIcon, Megaphone, Search, Send, Shapes, Video, ExternalLink } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { api, fmt, openLink } from '../api.js';
 
 const TYPE = {
-  sermon: ['Sermons and videos', Video], clip: ['Clips', Clapperboard], writing: ['Writing', FileText], design: ['Designs', Shapes],
+  sermon: ['Sermons', BookOpen], video: ['Videos', Video], clip: ['Clips', Clapperboard], writing: ['Writing', FileText], design: ['Designs', Shapes],
   post: ['Posts', Send], campaign: ['Campaigns', Megaphone], photo: ['Brand library', ImageIcon], event: ['Church events', CalendarDays],
 };
 const EXAMPLES = ['sermons about prayer', 'clips on hope this year', 'flyers from October', 'posts last month', 'photos of kids'];
@@ -35,7 +35,9 @@ export default function SearchPalette({ onClose }) {
   const open = (r) => {
     onClose();
     if (r.link) return openLink(r.link);
-    if (r.type === 'sermon' && r.at != null) return go({ ...r.go, step: 'text' });
+    // A match in what was said opens the transcript right at that moment.
+    if ((r.type === 'sermon' || r.type === 'video') && r.at != null) return go({ ...r.go, step: 'text', t: r.at });
+    if (r.type === 'sermon') return go({ ...r.go, step: 'plan' });
     if (r.go) go(r.go);
   };
   const onKey = (e) => {

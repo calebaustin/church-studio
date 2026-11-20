@@ -9,6 +9,7 @@ Every update keeps your sermons, designs, drafts and settings. Before a new vers
   - **The sermon at a glance:** its main idea, date and length, series, the Bible passages read (tap one to open the transcript right there), its main points and themes, and links to the transcript and the video.
   - **The sermon plan:** every way to share it, what's made, and one tap to make the rest.
   - **Tied to this sermon:** clips, writing, designs, posts and campaigns made from it, each one tap to open. **Link something** ties in anything you've already made, and the × unties it.
+- **Sermons are their own project type.** When you find the sermon in a recording (the Find the sermon step), it becomes a Sermon. Keep working right where you are in Videos, where it's labeled Sermon, or find it later under All projects › Sermons, which opens it on its Sermon page. Other recordings stay Videos. Sermons you've already found count right away. A Sermon page can also mark a recording as a sermon, or take one out of Sermons, by hand.
 - **"From sermon" everywhere you make things.** The design editor, your own writing, and new posts each have a **From sermon** picker, so they show up on that Sermon page. A post with a clip or design brings its sermon along.
 - **Connected search and helper.** Search finds items by the sermon they came from (like "grace blog"). The helper knows what's been made from a sermon, shows a design's sermon at the top of the chat, and its sermon links open the Sermon page.
 

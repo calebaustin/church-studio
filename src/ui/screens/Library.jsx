@@ -97,7 +97,7 @@ export default function Library({ openPicker = false }) {
             <div className="body">
               <div className="title">{p.title}</div>
               <div className="row wrap">
-                <StatusChip status={p.status} />
+                {p.isSermon ? <span className="chip accent" title="A Sermon: also listed under All projects › Sermons">Sermon</span> : <StatusChip status={p.status} />}
                 {p.duration && <span className="chip">{fmt(p.duration)}</span>}
                 {p.clips > 0 && <span className="chip accent">{p.clips} clips</span>}
                 {p.exported > 0 && <span className="chip ok">{p.exported} exported</span>}

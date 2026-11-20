@@ -35,7 +35,12 @@ data/  projects/  config.local.json   (local only, never in git)
 4. Crop each frame to 9:16 (or draw whole frame / three stack layouts) and pipe to ffmpeg.
 
 ## The sermon as the hub
-A transcribed sermon (a project) is the hub that everything made from it points back to. `src/daemon/links.js` reads
+A **Sermon** is a project type: `isSermon(p)` in `projects.js` is true when `p.isSermon` is set, or when a sermon
+recording's sermon range was confirmed (Find the sermon). Confirming sets `p.isSermon = true`; the Sermon page can set
+it by hand either way. All projects lists Sermons and Videos separately (finder `type: 'sermon' | 'video'`, the key
+stays `sermon:<id>` so stars, folders and tags never move), and a Sermon opens on its Sermon page.
+
+A Sermon is the hub that everything made from it points back to. `src/daemon/links.js` reads
 and writes those links, reusing fields the app already stored, so older work keeps its links without a migration:
 
 | Item | Tied by |

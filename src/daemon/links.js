@@ -66,7 +66,10 @@ export async function linkCandidates() {
 
 /** Sermons to pick from: transcribed, newest first. */
 export async function sermonChoices() {
-  return (await listProjects()).filter((p) => p.status === 'transcribed').map((p) => ({ id: p.id, title: p.title, date: p.created, thumb: p.thumbnail || null }));
+  // Sermons first; until there are any, every transcribed recording so nothing is out of reach.
+  const all = (await listProjects()).filter((p) => p.status === 'transcribed');
+  const sermons = all.filter((p) => p.isSermon);
+  return (sermons.length ? sermons : all).map((p) => ({ id: p.id, title: p.title, date: p.created, thumb: p.thumbnail || null }));
 }
 
 /** Which sermon an item is tied to (for the pickers). */

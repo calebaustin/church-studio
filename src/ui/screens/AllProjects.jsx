@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import ToolIntro from '../components/ToolIntro.jsx';
 import { createPortal } from 'react-dom';
 import {
-  ArrowUpDown, ChevronDown, Clapperboard, Clock, Info, Film, Folder, FolderOpen, FolderPlus, LayoutGrid, MoreHorizontal, PenLine, Pencil,
+  ArrowUpDown, BookOpen, ChevronDown, Clapperboard, Clock, Info, Film, Folder, FolderOpen, FolderPlus, LayoutGrid, MoreHorizontal, PenLine, Pencil,
   RotateCcw, Search, Shapes, Star, Trash2, X, Tag, Archive, Copy,
 } from 'lucide-react';
 import { useApp } from '../App.jsx';
@@ -12,7 +12,8 @@ import Popover from '../components/Popover.jsx';
 import Modal, { ModalHead } from '../components/Modal.jsx';
 
 export const TYPES = {
-  sermon: { label: 'Video', plural: 'Videos', icon: Clapperboard },
+  sermon: { label: 'Sermon', plural: 'Sermons', icon: BookOpen },
+  video: { label: 'Video', plural: 'Videos', icon: Clapperboard },
   clip: { label: 'Clip', plural: 'Clips', icon: Film },
   writing: { label: 'Writing', plural: 'Writing', icon: PenLine },
   design: { label: 'Design', plural: 'Designs', icon: Shapes },
@@ -136,7 +137,8 @@ export default function AllProjects() {
 
   const open = (i) => {
     if (i.trashed) return;
-    if (i.type === 'sermon') go({ name: 'project', id: i.id });
+    if (i.type === 'sermon') go({ name: 'project', id: i.id, step: 'plan' }); // a Sermon opens on its Sermon page
+    if (i.type === 'video') go({ name: 'project', id: i.id });
     if (i.type === 'clip') go({ name: 'project', id: i.projectId, clip: i.clipId });
     if (i.type === 'writing') go({ name: 'writing', project: i.id });
     if (i.type === 'design') go({ name: 'graphics', design: i.id });
@@ -185,7 +187,7 @@ export default function AllProjects() {
   let items = !data ? [] : view.name === 'trash' ? data.trash.map((t) => ({ ...t, trashed: true }))
     : data.items.filter((i) => (view.name === 'archive' ? i.archived : i.archived ? false : view.name === 'starred' ? i.starred : view.name === 'recents' ? Date.now() - Date.parse(i.updated || 0) < 30 * 86400_000 : view.name === 'folder' ? folderKeys.has(i.key) : view.name === 'tag' ? i.tags?.includes(view.tag) : view.name === 'dupes' ? dupeKeys.has(i.key) : true));
   items = items.filter((i) => (type === 'all' || i.type === type) && (!ql || `${i.name} ${(i.tags || []).join(' ')}`.toLowerCase().includes(ql)));
-  const KIND_ORDER = ['sermon', 'clip', 'writing', 'design'];
+  const KIND_ORDER = ['sermon', 'video', 'clip', 'writing', 'design'];
   const byName = (a, b) => String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base', numeric: true });
   const byRecent = (a, b) => String(b.updated || b.at || '').localeCompare(String(a.updated || a.at || ''));
   const sorter = sort === 'name' ? byName : sort === 'kind' ? (a, b) => KIND_ORDER.indexOf(a.type) - KIND_ORDER.indexOf(b.type) || byRecent(a, b) : byRecent;

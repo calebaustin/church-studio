@@ -944,7 +944,7 @@ button.side-foot.ai-on { opacity: .92; }
 .tone-1 { --t: var(--tone-1); } .tone-2 { --t: var(--tone-2); } .tone-3 { --t: var(--tone-3); }
 .tone-4 { --t: var(--tone-4); } .tone-5 { --t: var(--tone-5); } .tone-6 { --t: var(--tone-6); }
 .type-badge { display: inline-grid; place-items: center; border-radius: 30%; flex: none; color: var(--white); --t: var(--tone-1); background: linear-gradient(145deg, color-mix(in oklab, var(--t) 80%, var(--white)), var(--t)); box-shadow: inset 0 1px 0 rgba(var(--sheen-rgb), .3); }
-.type-badge.t-sermon { --t: var(--tone-1); } .type-badge.t-clip { --t: var(--tone-2); }
+.type-badge.t-sermon { --t: var(--tone-1); } .type-badge.t-video { --t: var(--tone-5); } .type-badge.t-clip { --t: var(--tone-2); }
 .type-badge.t-writing { --t: var(--tone-4); } .type-badge.t-design { --t: var(--tone-3); }
 
 /* ---------- all projects ---------- */
@@ -1631,3 +1631,4 @@ input[type='range']:active::-webkit-slider-thumb { transform: scale(1.22); trans
 .link-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px; border-radius: 10px; }
 .link-row:hover { background: var(--hover); }
 .writing-sermon { max-width: 320px; }
+.sermon-note { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 10px 8px 12px; border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--text); }

@@ -31,7 +31,8 @@ async function allItems(state) {
   const items = [];
   const trashed = new Set(state.trash.map((t) => t.key));
   for (const p of await listProjects()) {
-    items.push({ key: `sermon:${p.id}`, type: 'sermon', id: p.id, name: p.title, thumb: p.thumbnail || null, updated: p.updated || p.created, meta: p.duration ? `${Math.round(p.duration / 60)} min` : p.status });
+    // The key stays sermon:<id> for every project, so stars, folders and tags never move.
+    items.push({ key: `sermon:${p.id}`, type: p.isSermon ? 'sermon' : 'video', id: p.id, name: p.title, thumb: p.thumbnail || null, updated: p.updated || p.created, meta: p.duration ? `${Math.round(p.duration / 60)} min` : p.status });
     const full = await getProject(p.id).catch(() => null);
     for (const c of full?.clips || []) {
       if (!c.export) continue;
