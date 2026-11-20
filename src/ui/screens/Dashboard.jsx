@@ -287,7 +287,7 @@ function ChannelFeed({ onAdd, projects }) {
             <div style={{ padding: 8 }}>
               <div className="thumb" style={{ position: 'relative' }}>
                 <img src={v.thumb} alt="" loading="lazy" />
-                {v.duration && <span className="chip num" style={{ position: 'absolute', right: 6, bottom: 6, background: 'rgba(0,0,0,.7)', color: '#fff' }}>{fmt(v.duration)}</span>}
+                {v.duration && <span className="chip num" style={{ position: 'absolute', right: 6, bottom: 6, background: 'rgba(var(--shade-rgb), .7)', color: 'var(--white)' }}>{fmt(v.duration)}</span>}
               </div>
             </div>
             <div className="body">

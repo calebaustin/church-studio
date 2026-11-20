@@ -123,6 +123,13 @@ const APP_BUILTINS = [
       '--glass-rgb': '37, 42, 34', '--radius': '18px', '--glass-blur': '14px', '--glass-tint': '0.9',
       '--font-sans': sans, '--font-display': "'Avenir Next', -apple-system, system-ui, sans-serif" },
   },
+  // True dark: neutral night-mode grays with no tint, easy on the eyes in a dark room.
+  {
+    id: 'night', name: 'Night', mode: 'dark', builtin: true,
+    tokens: { '--bg': '#141414', '--bg-2': '#181818', '--ink': '#EDEDED', '--accent': '#8CC49A', '--accent-2': '#E2AE72',
+      '--glass-rgb': '34, 34, 34', '--radius': '18px', '--glass-blur': '14px', '--glass-tint': '0.9',
+      '--font-sans': sans, '--font-display': "'Avenir Next', -apple-system, system-ui, sans-serif" },
+  },
   {
     id: 'sermon-light', name: 'Sermon Light', mode: 'light', builtin: true,
     tokens: { '--bg': '#EEF2F8', '--bg-2': '#F8F4EE', '--ink': '#141821', '--accent': '#3D6BFF', '--accent-2': '#FF8A5B',

@@ -455,7 +455,7 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
             {clip.endCard?.rel && outTime >= outLen - (clip.endCard.seconds ?? 3) && (
               <img alt="" src={`/library/${clip.endCard.rel.split('/').map(encodeURIComponent).join('/')}`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 4, pointerEvents: 'none' }} />
             )}
-            {!playing && <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#fff', fontSize: 46, textShadow: '0 4px 20px rgba(0,0,0,.4)', pointerEvents: 'none' }}>▶︎</div>}
+            {!playing && <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: 'var(--white)', fontSize: 46, textShadow: '0 4px 20px rgba(var(--shade-rgb), .4)', pointerEvents: 'none' }}>▶︎</div>}
           </div>
           <div className="transport" style={{ width: FW }}>
             <button className="btn icon sm" onClick={toggle} aria-label={playing ? 'Pause' : 'Play'}>{playing ? <Pause size={14} /> : <Play size={14} />}</button>

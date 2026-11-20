@@ -505,7 +505,7 @@ export function Composer({ s, plat, init, onClose, onConnect }) {
         {(editing?.campaignId || init.campaignId) && <CampaignHeader campaignId={editing?.campaignId || init.campaignId} postId={editing?.id} onOpenPost={init.onOpenPost} />}
         <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: 20, alignItems: 'start' }}>
           <div className="stack">
-            <div className="vframe" style={{ width: 200, display: 'grid', placeItems: 'center', color: '#aab', cursor: 'pointer' }} onClick={() => setPickMedia(true)}>
+            <div className="vframe" style={{ width: 200, display: 'grid', placeItems: 'center', color: 'var(--muted)', cursor: 'pointer' }} onClick={() => setPickMedia(true)}>
               {media?.thumb ? <img src={media.thumb} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: media.kind === 'image' ? 'contain' : 'cover' }} /> : <span className="small" style={{ padding: 10, textAlign: 'center', wordBreak: 'break-word' }}>{preparing ? 'Preparing…' : media ? media.title : 'Nothing attached'}</span>}
             </div>
             <button className="btn sm" onClick={() => setPickMedia(!pickMedia)}>{media ? 'Change' : 'Attach a clip or design'}</button>

@@ -7,6 +7,10 @@ Every update keeps your sermons, designs, drafts and settings. Before a new vers
 ### Better
 - **A calmer standard look.** The new Olive palette is the default: a warm off-white leaning olive, leaf green and a soft clay accent, with Olive Night for dark mode. The background is one still color with a faint frosted grain instead of moving color blobs, and panels sit on top as mostly solid cards. Moving between screens also uses less of your Mac. If you picked another theme on purpose, you keep it; the other themes are still in My App.
 
+- **The app feels alive.** Things move like real objects now, on springs instead of flat fades. Buttons press in and spring back. Switches stretch while you hold them and snap across. Slider knobs grow under your finger. In the sidebar, tab rows and every picker, the highlight glides to your choice with a slight liquid stretch, and stays smooth even while the next tool is loading. Switching tabs slides the new panel in from the side you moved toward. Screens settle in panel by panel, and dialogs, menus and messages grow in from where they start. Nothing moves while the app sits still, and Reduce motion in macOS turns it all off.
+- **Night, a true dark theme.** Neutral dark grays with no tint, for a dark room. Pick it in My App.
+- **Every color comes from the theme.** The app's own colors all run through theme settings, so themes stay consistent as things change.
+
 ### Removed
 - **Church logo in the Dock.** The Dock always shows the Church Studio icon now. Your logo still shows at the top of the menu.
 

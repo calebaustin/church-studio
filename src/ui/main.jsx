@@ -2,6 +2,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
 import { PresentOut } from './design/Presenter.jsx';
 import './styles.css';
+import { startMotion } from './motion.js';
 
 // Sliders show a filled track up to the thumb. Kept in sync for every range input in the app.
 function syncRange(el) {
@@ -40,4 +41,5 @@ document.addEventListener('pointerup', (e) => {
 }, true);
 document.addEventListener('click', (e) => { if (swallowClick) { e.preventDefault(); e.stopPropagation(); swallowClick = false; } }, true);
 
+startMotion();
 createRoot(document.getElementById('root')).render(location.hash === '#present-out' ? <PresentOut /> : <App />);

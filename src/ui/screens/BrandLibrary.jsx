@@ -174,7 +174,7 @@ function BrandKit({ lib, reload }) {
             <span style={{ fontFamily: `'${fonts.body}'`, color: primary, fontWeight: 700, fontSize: 12 }}>Romans 3:24</span>
           </div>
           <div className="kit-video">
-            <span className="kit-tag" style={{ color: '#fff' }}>Video caption</span>
+            <span className="kit-tag" style={{ color: 'var(--white)' }}>Video caption</span>
             <div className="kit-video-frame" style={{ background: `linear-gradient(160deg, ${accent}, ${text})` }}>
               <span className="kit-cap" style={{ fontFamily: `'${fonts.heading}'` }}>
                 you are <span style={{ background: secondary, color: on(secondary) }}>loved</span> more

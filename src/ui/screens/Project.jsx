@@ -201,7 +201,7 @@ function TranscribeStep({ project, src, player, job, onStart, audioOnly, onRead 
     <div className="stack" style={{ gap: 18 }}>
       <div className="grid2" style={{ gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 1fr)', alignItems: 'start' }}>
         <section className="glass panel stack">
-          {src ? <Player player={player} src={src} audioOnly={audioOnly} /> : <div className="player" style={{ display: 'grid', placeItems: 'center', color: '#aab' }}>Downloading…</div>}
+          {src ? <Player player={player} src={src} audioOnly={audioOnly} /> : <div className="player" style={{ display: 'grid', placeItems: 'center', color: 'var(--muted)' }}>Downloading…</div>}
           {src && !audioOnly && <Filmstrip project={project} player={player} range={mode === 'range' ? range : null}
             onSetStart={mode === 'range' ? (t) => setRange((r) => ({ ...r, start: t })) : null}
             onSetEnd={mode === 'range' ? (t) => setRange((r) => ({ ...r, end: t })) : null} />}

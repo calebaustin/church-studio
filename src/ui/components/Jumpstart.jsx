@@ -15,7 +15,7 @@ export default function JumpstartCard() {
   return (
     <section className="glass strong panel stack" id="jumpstart">
       <div className="row" style={{ gap: 10 }}>
-        <span className="feed-icon tone tone-2" style={{ color: '#fff' }}><Rocket size={16} /></span>
+        <span className="feed-icon tone tone-2" style={{ color: 'var(--white)' }}><Rocket size={16} /></span>
         <div className="stack grow" style={{ gap: 0 }}><h2 style={{ margin: 0 }}>Jumpstart</h2><span className="muted small">Set up in a minute, or bring your settings to another Mac or teammate.</span></div>
       </div>
       <button className="feed-item" onClick={() => setOpen('web')}>
