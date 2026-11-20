@@ -64,7 +64,12 @@
       "CHANGELOG.md",
       "!node_modules/ffmpeg-static/**",
       "!node_modules/@ffprobe-installer/**",
-      "!node_modules/@expo-google-fonts/**"
+      "!node_modules/@expo-google-fonts/**",
+      "!**/node_modules/**/*.d.ts",
+      "!**/node_modules/**/*.d.mts",
+      "!**/node_modules/**/*.d.cts",
+      "!**/node_modules/**/*.map",
+      "!**/node_modules/**/*.md"
     ],
     "extraResources": [
       {
