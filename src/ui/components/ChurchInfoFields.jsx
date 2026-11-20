@@ -3,7 +3,7 @@ import { useApp } from '../App.jsx';
 
 const FIELDS = [
   ['name', 'Church name', 'Grace Community Church'],
-  ['pastor', 'Lead pastor', 'Pastor Sam Lee'],
+  ['pastor', 'Minister name', 'Sam Lee'], // stored as "pastor" so earlier settings keep working
   ['times', 'Service times', 'Sundays at 9 and 11am'],
   ['address', 'Address', '123 Main St, Peachtree City, GA'],
   ['website', 'Website', 'gracecommunity.org'],

@@ -97,7 +97,7 @@ function meadow(kind) {
       photo({ shape: 'wave', x: 0.72, y: 0.5, w: 0.44, h: 0.8, fill: sky }),
       B('SERMON SERIES', { x: 0.3, y: 0.28, w: 0.46, align: 'left', size: 34, weight: 800, letter: 8, color: olive }),
       H('Rooted', { size: 200, x: 0.3, y: 0.48, w: 0.48, align: 'left', color: ink }),
-      B(ctx.church?.pastor || 'Pastor Name', { x: 0.3, y: 0.66, w: 0.46, align: 'left', size: 40, color: ink }),
+      B(ctx.church?.pastor || 'Minister Name', { x: 0.3, y: 0.66, w: 0.46, align: 'left', size: 40, color: ink }),
       shape({ shape: 'scallop', x: 0.08, y: 0.84, w: 0.07, h: 0.12, fill: peach }),
     ] })],
   }[kind];
@@ -368,13 +368,26 @@ export const PACK2_TEMPLATES = Object.entries(PACKS2).flatMap(([id, P]) => SETS.
   build: (ctx) => BUILDERS[id](key)(ctx),
 })));
 
-/** Swap a pack's own colors for the church's brand colors, keeping each color's job. */
+/**
+ * Swap a pack's own colors for the church's brand colors, keeping each color's job. One-off shades
+ * map to the brand color of the nearest pack color; white, black and grays stay as they are.
+ */
 export function inBrandColors(pages, packColors, brand) {
-  const map = Object.fromEntries(packColors.map((c, i) => [c.toUpperCase(), brand[i] || c]));
-  const sw = (v) => (typeof v === 'string' && map[v.toUpperCase()]) || v;
+  const rgb = (h) => { const x = String(h).replace('#', ''); return [0, 2, 4].map((i) => parseInt(x.slice(i, i + 2), 16)); };
+  const neutral = (h) => { const [r, g, b] = rgb(h); return Math.max(r, g, b) - Math.min(r, g, b) < 18; };
+  const exact = Object.fromEntries(packColors.map((c, i) => [c.toUpperCase(), brand[i] || c]));
+  const sw = (v) => {
+    if (typeof v !== 'string' || !/^#[0-9a-f]{6}$/i.test(v)) return v;
+    if (exact[v.toUpperCase()]) return exact[v.toUpperCase()];
+    if (neutral(v)) return v;
+    const [r, g, b] = rgb(v);
+    let best = 0; let bd = Infinity;
+    packColors.forEach((c, i) => { const [r2, g2, b2] = rgb(c); const d = (r - r2) ** 2 + (g - g2) ** 2 + (b - b2) ** 2; if (d < bd) { bd = d; best = i; } });
+    return brand[best] || v;
+  };
   return pages.map((pg) => ({
     ...pg,
-    bg: { ...pg.bg, color: sw(pg.bg?.color), color2: sw(pg.bg?.color2), from: sw(pg.bg?.from), to: sw(pg.bg?.to), colors: pg.bg?.colors?.map(sw) },
+    bg: { ...pg.bg, color: sw(pg.bg?.color), color2: sw(pg.bg?.color2), from: sw(pg.bg?.from), to: sw(pg.bg?.to), colors: pg.bg?.type === 'mesh' ? [brand[0], brand[1], brand[4] || brand[0], brand[3] || brand[1], brand[2] || brand[0]] : pg.bg?.colors?.map(sw) },
     items: pg.items.map((it) => ({ ...it, id: uid(), fill: sw(it.fill), color: sw(it.color), stroke: sw(it.stroke) })),
   }));
 }

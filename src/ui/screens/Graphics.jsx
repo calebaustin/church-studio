@@ -96,7 +96,7 @@ export function eventForDesign(e) {
     countdown: days > 1 ? `${days} DAYS TO GO` : days === 1 ? 'TOMORROW' : 'TODAY' };
 }
 
-export default function Graphics({ image, design, event, eventMode, quote, make }) {
+export default function Graphics({ image, design, event, eventMode, quote, make, campaignId }) {
   const { toast } = useApp();
   const ctx = useBrandCtx();
   const [open, setOpen] = useState(design || null);
@@ -109,10 +109,12 @@ export default function Graphics({ image, design, event, eventMode, quote, make 
   const [redate, setRedate] = useState(null); // a design to copy for a new date
   const [pickFor, setPickFor] = useState(null); // a calendar event to pick a template for
   const [cat, setCat] = useState(null); // the open category in the Design bar
+  const [inBrand, setInBrand] = useState(true); // show templates in the church's brand colors
   const load = () => api.get('/api/designs').then((r) => setDesigns(r.designs)).catch(() => setDesigns([]));
   useEffect(() => { if (!open) load(); }, [open]);
 
-  const create = async (doc) => { await api.put(`/api/designs/${doc.id}`, doc); setOpen(doc.id); };
+  // Designs made for a campaign remember it, so the editor can show the campaign's details.
+  const create = async (doc) => { const d = campaignId ? { ...doc, source: { ...(doc.source || {}), campaignId } } : doc; await api.put(`/api/designs/${d.id}`, d); setOpen(d.id); };
   // From the brand library: a post with that photo behind it.
   useEffect(() => {
     if (!image) return;
@@ -250,6 +252,7 @@ export default function Graphics({ image, design, event, eventMode, quote, make 
           {kind && <span className="muted small">{KINDS[kind].hint} · {KINDS[kind].w}×{KINDS[kind].h}</span>}
         </div>
         <div className="row wrap" style={{ gap: 6 }} role="radiogroup" aria-label="Template pack">
+          <label className="switch small" style={{ marginRight: 8 }}><input type="checkbox" checked={inBrand} onChange={(e) => setInBrand(e.target.checked)} />My brand colors</label>
           <button className={`pill-choice ${!pack ? 'on' : ''}`} onClick={() => setPack(null)}>All styles</button>
           {Object.entries(PACKS).map(([id, P]) => (
             <button key={id} className={`pill-choice pack-chip ${pack === id ? 'on' : ''}`} title={P.about} onClick={() => { setPack(pack === id ? null : id); setTab('templates'); }}>
@@ -266,8 +269,8 @@ export default function Graphics({ image, design, event, eventMode, quote, make 
             </button>
           )}
           {tpls.map((t) => (
-            <button key={t.id} className="dz-card glass dz-tpl" onClick={() => create(newDoc(t.kind, t, ctx))}>
-              <span className="dz-card-cover"><TemplateThumb tpl={t} ctx={ctx} /></span>
+            <button key={t.id} className="dz-card glass dz-tpl" onClick={() => create(newDoc(t.kind, t, ctx, undefined, { brand: inBrand }))}>
+              <span className="dz-card-cover"><TemplateThumb tpl={t} ctx={ctx} brand={inBrand} /></span>
               <span className="dz-card-meta"><span className="stack" style={{ gap: 0 }}><strong className="small">{t.name}</strong><span className="muted" style={{ fontSize: 12 }}>{KINDS[t.kind].label}{t.pack ? ` · ${PACKS[t.pack].name} pack` : ''}</span></span></span>
             </button>
           ))}
@@ -446,7 +449,7 @@ function EventTemplates({ event, ctx, onClose, onPick }) {
   const ev = useMemo(() => eventForDesign(event), [event]);
   const ectx = useMemo(() => ({ ...ctx, ev }), [ctx, ev]);
   const [kind, setKind] = useState('post');
-  const [brand, setBrand] = useState(false);
+  const [brand, setBrand] = useState(true); // templates are a starting point: show them in the church's colors
   const list = TEMPLATES.filter((t) => t.event && (kind === 'all' || t.kind === kind));
   return (
     <Modal label="Make from template" onClose={onClose} width={980}
@@ -544,7 +547,7 @@ function DeckMaker({ ctx, onClose, onCreate }) {
       <div className="seg">{[['sermon', 'Sermon'], ['class', 'Class or study']].map(([k, l]) => <button key={k} className={a.kind === k ? 'on' : ''} onClick={() => set({ kind: k })}>{l}</button>)}</div>
       <div className="token-grid">
         <label className="field">Title<input className="input" value={a.title} placeholder={a.kind === 'class' ? 'Romans, week 3' : 'Rooted'} onChange={(e) => set({ title: e.target.value })} /></label>
-        <label className="field">Speaker or date <span className="hint">Optional</span><input className="input" value={a.subtitle} placeholder="Pastor Name · Nov 23" onChange={(e) => set({ subtitle: e.target.value })} /></label>
+        <label className="field">Speaker or date <span className="hint">Optional</span><input className="input" value={a.subtitle} placeholder="Minister Name · Nov 23" onChange={(e) => set({ subtitle: e.target.value })} /></label>
       </div>
       <label className="field">Key passages <span className="hint">Separate with commas</span><input className="input" value={a.passages} placeholder="Colossians 2:6-7, Psalm 1:3" onChange={(e) => set({ passages: e.target.value })} /></label>
       <div className="stack" style={{ gap: 6 }}>

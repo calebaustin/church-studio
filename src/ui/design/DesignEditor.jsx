@@ -16,6 +16,7 @@ import { DEVICE_ASPECT, KINDS, PATTERNS, RESIZE_TARGETS, SHAPES, resizeDesign, b
 import { snapMove } from './snap.js';
 import PhotoEdits from './PhotoEdits.jsx';
 import Layers from './Layers.jsx';
+import CampaignHeader from '../components/CampaignHeader.jsx';
 import { exportDesign } from './exporters.js';
 import { BLACK_KEYS, NEXT_KEYS, PREV_KEYS, PresentHere, PresenterConsole, openChannel } from './Presenter.jsx';
 
@@ -467,6 +468,7 @@ export default function DesignEditor({ id, onClose }) {
 
         {/* canvas */}
         <div className="dz-center" onPointerDown={(e) => { if (e.target === e.currentTarget && !editing) setSel(null); }}>
+          {doc.source?.campaignId && <CampaignHeader campaignId={doc.source.campaignId} compact />}
           <div ref={stageRef} className="dz-stage" onPointerDown={(e) => { if (e.target === e.currentTarget && !editing) setSel(null); }}>
             <div className="dz-canvas" style={{ width: dispW, height: dispH }}>
               <canvas ref={canvas} style={{ width: dispW, height: dispH }} aria-label="Page" />

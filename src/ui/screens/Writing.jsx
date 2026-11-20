@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import ToolIntro from '../components/ToolIntro.jsx';
-import { ArrowLeft, CalendarDays, Copy, FileDown, FileText, Heart, PenLine, Plus, Sparkles, Wand2, Check, RefreshCw, Undo2, Link2, Info, Printer, Mail, Users } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Copy, FileDown, FileText, Heart, PenLine, Plus, Sparkles, Wand2, Check, RefreshCw, Undo2, Link2, Info, Printer, Mail, Users, ChevronDown } from 'lucide-react';
 import Modal, { ModalHead } from '../components/Modal.jsx';
 import { Masonry } from '../components/Masonry.jsx';
 import { useChurchEvents } from '../components/ChurchEvents.jsx';
@@ -177,6 +177,7 @@ function WritingEditor({ pid, onBack, startKind }) {
     toast({ text: asHtml ? 'Copied with formatting. Paste into your website or email tool.' : 'Copied.' });
   };
   const [rewriteMenu, setRewriteMenu] = useState(false);
+  const [moreMenu, setMoreMenu] = useState(false);
   const [rewritten, setRewritten] = useState(null); // { audience, text, local, busy }
   const rewriteForAudience = async (audience) => {
     setRewritten({ audience, text: '', busy: true });
@@ -211,18 +212,25 @@ function WritingEditor({ pid, onBack, startKind }) {
             <div className="seg">{KINDS.filter(([k]) => (k !== 'newsletter' || draft.newsletter != null) && !(draft.source?.type === 'newsletter' && ['blog', 'email', 'group', 'devotional'].includes(k) && !draft[k]) && !(standalone && (k === 'group' || k === 'devotional') && !draft[k])).map(([k, l]) => <button key={k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>{l}</button>)}</div>
             <div className="row wrap">
               {placeholders > 0 && <span className="chip warn">{placeholders} spot{placeholders > 1 ? 's' : ''} to fill in</span>}
-              <button className="btn sm" onClick={() => copy(false)}><Copy size={13} />Copy</button>
               <button className="btn sm" onClick={() => copy(true)}><Copy size={13} />Copy formatted</button>
-              {kind !== 'social' && <button className="btn sm" onClick={() => setPrinting(true)}><Printer size={13} />Print or PDF</button>}
-              <button className="btn sm" onClick={() => api.post(`/api/writing/${pid}/save-file`, { name: `${draft.title} - ${KINDS.find((k) => k[0] === kind)[1]}`, text: draft[kind] })}><FileDown size={13} />Save to library</button>
-              {config.llmProvider !== 'none' && <button className="btn sm" disabled={busy} onClick={polish}><Sparkles size={13} />Polish with AI</button>}
               <div style={{ position: 'relative' }}>
                 <button className="btn sm" data-pop-trigger onClick={() => setRewriteMenu(!rewriteMenu)}><Users size={13} />Rewrite for…</button>
                 <Popover open={rewriteMenu} onClose={() => setRewriteMenu(false)} align="right" width={300}>
                   <PopList items={AUDIENCE_LIST.map(([id, label, about]) => ({ label, hint: about, value: id }))} onPick={(id) => { setRewriteMenu(false); rewriteForAudience(id); }} />
                 </Popover>
               </div>
-              {kind === 'blog' && <button className="btn sm" onClick={saveToVoice}><Heart size={13} />Save to brand voice</button>}
+              <div style={{ position: 'relative' }}>
+                <button className="btn sm" data-pop-trigger onClick={() => setMoreMenu(!moreMenu)}>More<ChevronDown size={13} /></button>
+                <Popover open={moreMenu} onClose={() => setMoreMenu(false)} align="right" width={240}>
+                  <PopList onPick={(v) => { setMoreMenu(false); v(); }} items={[
+                    { label: 'Copy plain text', value: () => copy(false) },
+                    ...(kind !== 'social' ? [{ label: 'Print or PDF', value: () => setPrinting(true) }] : []),
+                    { label: 'Save a copy to the brand library', value: () => api.post(`/api/writing/${pid}/save-file`, { name: `${draft.title} - ${KINDS.find((k) => k[0] === kind)[1]}`, text: draft[kind] }) },
+                    ...(config.llmProvider !== 'none' ? [{ label: 'Polish with AI', hint: 'Smoother wording, same facts', value: polish }] : []),
+                    ...(kind === 'blog' ? [{ label: 'Save to brand voice', hint: 'Helps future drafts sound like you', value: saveToVoice }] : []),
+                  ]} />
+                </Popover>
+              </div>
               <button className="btn sm primary" onClick={async () => { if (dirty) await save(); showNext({ kind: 'writing', title: draft.title, text: draft.blog, caption: draft.metaDescription || draft.title, projectId: standalone ? null : pid }); }}><Check size={13} />Done</button>
               <button className={`btn sm ${dirty ? 'accent' : ''}`} disabled={!dirty} onClick={save}><Check size={13} />{dirty ? 'Save' : 'Saved'}</button>
             </div>

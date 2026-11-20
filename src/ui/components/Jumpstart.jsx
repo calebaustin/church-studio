@@ -221,7 +221,7 @@ function BrandAtWork({ found, keep }) {
     const ctx = { c: colors, h: fonts.heading, b: fonts.body, o: { quotes: [quote.slice(0, 160)] } };
     const pages = TEMPLATES.find((t) => t.id === 'post-quote').build(ctx);
     if (logo) pages[0].items.push({ id: uid(), type: 'image', rel: 'jumpstart-logo', x: 0.5, y: 0.13, w: 0.16, opacity: 1 });
-    pages[0].items = pages[0].items.map((it) => (it.text === 'Pastor Name · Sunday message' ? { ...it, text: ci.name || 'Sunday message' } : it));
+    pages[0].items = pages[0].items.map((it) => (it.text === 'Minister Name · Sunday message' ? { ...it, text: ci.name || 'Sunday message' } : it));
     return { id: 'preview', size: { w: 1080, h: 1350 }, palette: colors, tint: { color: '#FF9A62', amount: 0 }, pages };
   }, [colors.join(), fonts.heading, fonts.body, logo?.url, ci.name, quote]);
   useEffect(() => {

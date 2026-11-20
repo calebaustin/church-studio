@@ -106,7 +106,7 @@ export default function MyApp({ section } = {}) {
 
         <div className="stack">
           <section className="glass panel row between wrap" style={{ gap: 12 }}>
-            <div className="stack" style={{ gap: 2 }}><strong>Welcome walkthrough</strong><span className="muted small">See the welcome again and choose the kinds of work you do.</span></div>
+            <div className="stack" style={{ gap: 2 }}><strong>Welcome walkthrough</strong><span className="muted small">See the welcome again, with the website jumpstart.</span></div>
             <button className="btn sm" onClick={async () => { await saveConfig({ onboarded: false }); go({ name: 'home' }); }}><Sparkles size={14} />Start the walkthrough</button>
           </section>
           <Activity />

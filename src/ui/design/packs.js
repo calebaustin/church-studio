@@ -84,7 +84,7 @@ function sermonSlides(P) {
       frame({ x: 0.72, y: 0.5, w: 0.38, h: P.frame === 'arch' ? 0.8 : 0.72, fill: P.c[0] }),
       A(P.accent === 'Caveat' ? 'new series' : 'Sermon series', { x: 0.3, y: 0.26, w: 0.48, align: 'left', size: P.accent === 'Caveat' ? 80 : 40, color: P.c[1] }),
       H('Rooted', { size: 190, x: 0.3, y: 0.46, w: 0.5, align: 'left', color: titleInk }),
-      B('Part 1 · Pastor Name', { x: 0.3, y: 0.66, w: 0.5, align: 'left', size: 40, color: titleInk, opacity: 0.85 }),
+      B('Part 1 · Minister Name', { x: 0.3, y: 0.66, w: 0.5, align: 'left', size: 40, color: titleInk, opacity: 0.85 }),
     ], notes: 'Title slide. Click the photo spot to add your own photo.' }),
     page({ bg: lightBg, items: [
       ...(P === PACKS.traditional ? [shape({ x: 0.5, y: 0.2, w: 0.12, h: 0.004, fill: P.c[1] })] : [shape({ x: 0.08, y: 0.5, w: 0.006, h: 0.46, fill: P.c[1] })]),

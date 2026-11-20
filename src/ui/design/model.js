@@ -58,7 +58,7 @@ function sermonDeck(ctx) {
     page({ bg: mesh(11, 0.25), items: [
       B(ctx, { text: (o.sermon ? 'THIS SUNDAY' : 'SERMON SERIES'), size: 34, weight: 700, letter: 8, x: 0.5, y: 0.22, opacity: 0.85 }),
       H(ctx, { text: o.title || 'Sermon Title', size: fit(o.title, 128), x: 0.5, y: 0.5, w: 0.8 }),
-      B(ctx, { text: 'Pastor Name · Church Name', size: 38, x: 0.5, y: 0.8, opacity: 0.85 }),
+      B(ctx, { text: 'Minister Name · Church Name', size: 38, x: 0.5, y: 0.8, opacity: 0.85 }),
     ] }),
   ];
   const refs = (o.refs?.length ? o.refs.slice(0, 2) : ['John 3:16']);
@@ -110,7 +110,7 @@ export const TEMPLATES = [
   // single posts
   { id: 'post-quote', kind: 'post', name: 'Quote card', build: (ctx) => [page({ bg: mesh(7, 0.12), items: [
     H(ctx, { text: `“${ctx.o?.quotes?.[0]?.replace(/^“|”$/g, '') || 'Grace is not something you earn. It is something you receive.'}”`, size: 78, x: 0.5, y: 0.44, w: 0.8, lh: 1.2 }),
-    B(ctx, { text: 'Pastor Name · Sunday message', size: 34, x: 0.5, y: 0.8, opacity: 0.85 }),
+    B(ctx, { text: 'Minister Name · Sunday message', size: 34, x: 0.5, y: 0.8, opacity: 0.85 }),
   ] })] },
   { id: 'post-verse', kind: 'post', name: 'Verse of the day', build: (ctx) => [page({ bg: solid(ctx.c[3] || '#F4EFE6'), items: [
     shape({ x: 0.5, y: 0.5, w: 0.86, h: 0.86, fill: '#FFFFFF', radius: 40, opacity: 0.7 }),
@@ -703,7 +703,7 @@ export function copyForDate(doc, when, name) {
 // ---------------------------------------------------------------- church details in templates
 /**
  * Swap the sample church details in a template for the real ones from Settings › Church info:
- * the name, lead pastor, website, address and service times. Anything not filled in stays as is.
+ * the name, minister, website, address and service times. Anything not filled in stays as is.
  */
 export function fillChurch(pages, info = {}) {
   const site = String(info.website || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
@@ -711,7 +711,7 @@ export function fillChurch(pages, info = {}) {
   const swaps = [
     info.name && [/\b(Church Name|Your Church|Business Name)\b/g, info.name],
     info.name && [/\bCHURCH NAME\b/g, info.name.toUpperCase()],
-    info.pastor && [/\bPastor Name\b/g, info.pastor],
+    info.pastor && [/\b(Minister|Pastor) Name\b/g, info.pastor],
     site && [/\byourchurch\.org\b/g, site],
     info.address && [/\b123 Main St\b/g, info.address.split(',')[0]],
     times && [/\bSundays at (9 & 11|9 and 11|10am)\b/g, times],

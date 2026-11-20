@@ -50,7 +50,7 @@ export const DEFAULTS = {
   jumpstart: null, // { at, website } when the website setup ran
   dismissed: {}, // setup checklists the user closed
   toolIntros: {}, // tools whose first-visit hello was put away
-  churchInfo: { name: '', pastor: '', address: '', website: '', phone: '', email: '', times: '' }, // printed footers
+  churchInfo: { name: '', pastor: '' /* the minister's name */, address: '', website: '', phone: '', email: '', times: '' }, // printed footers
   appLogo: '', // brand library path of the logo for the sidebar and Dock; empty means the first in Logos
   dockLogo: true, // show the church logo in the Dock
   logoKinds: {}, // { 'Logos/file.png': 'full' | 'light' | 'dark' | 'icon' | 'wordmark' }

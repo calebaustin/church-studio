@@ -43,12 +43,15 @@ export default function Campaigns({ s, onEdit, start }) {
 function CampaignCard({ c, onEdit, onRepeat, reload }) {
   const { go, toast } = useApp();
   const done = c.steps.filter((x) => x.post && x.post.status !== 'draft').length;
+  // Each step's design or clip, with the campaign attached so its details stay in view.
   const asset = (st) => {
-    if (st.asset === 'flyer' && c.event) return go({ name: 'graphics', event: c.event, eventMode: 'flyer' });
-    if (st.asset === 'countdown' && c.event) return go({ name: 'graphics', event: c.event, eventMode: 'countdown' });
+    const camp = { campaignId: c.id };
+    if (st.asset === 'flyer' && c.event) return go({ name: 'graphics', event: c.event, eventMode: 'pick', ...camp });
+    if (st.asset === 'countdown' && c.event) return go({ name: 'graphics', event: c.event, eventMode: 'countdown', ...camp });
     if (st.asset === 'clip' && c.projectId) return go({ name: 'project', id: c.projectId, step: 'edit' });
     if (st.asset === 'photo') return go({ name: 'assets' });
-    if (c.projectId) return go({ name: 'graphics', make: { projectId: c.projectId, template: st.key === 'quote' ? 'post-quote' : 'story-recap' } });
+    if (c.projectId) return go({ name: 'graphics', make: { projectId: c.projectId, template: st.key === 'quote' ? 'post-quote' : 'story-recap' }, ...camp });
+    if (c.event) return go({ name: 'graphics', event: c.event, eventMode: 'pick', ...camp });
     return go({ name: 'graphics' });
   };
   const ICON = { flyer: Shapes, countdown: Shapes, design: Shapes, clip: Clapperboard, photo: ImageIcon };

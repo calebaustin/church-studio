@@ -5,7 +5,7 @@ Every update keeps your sermons, designs, drafts and settings. Before a new vers
 ## Unreleased
 
 ### New
-- **Six new template packs.** Meadow, Pulse, Grove, Ember, Dusk and Collage, each with an event post, event story, welcome, announcement, sermon quote, verse and series title slide. Built to be plug and play: your church's name, pastor, website and service times fill in, and most need just one photo.
+- **Six new template packs.** Meadow, Pulse, Grove, Ember, Dusk and Collage, each with an event post, event story, welcome, announcement, sermon quote, verse and series title slide. Built to be plug and play: your church's name, minister, website and service times fill in, and most need just one photo.
 - **Make from template, from any event.** Click an event on the calendar and choose Make from template. Every event template already shows that event's name, day, time and place. Pick one and it opens with the photo spot selected, so adding a photo is the last step. Use my brand colors switches any pack to your colors. Planning a post from an event offers Make from template or From your computer.
 - **Photo edits in Design.** A color wash in your brand colors (tint, darken or lighten), one-tap looks (Duotone, Deep tint, Warm, Cool, Faded, Moody, Black and white, Soft focus), and sliders for brightness, contrast, color, warmth, black and white, and soften. Works on photos, photo spots and background photos.
 - **Layers.** A layers list under the page settings and under any selected item: click to select, drag to change what's in front, or delete.
@@ -13,15 +13,20 @@ Every update keeps your sermons, designs, drafts and settings. Before a new vers
 - **New shapes and backgrounds.** Wavy photo frames, scalloped badges, starbursts, window cards and outlined tags. Pattern backgrounds (checker, grid, dots, stripes) and film grain on gradients.
 - **Two speakers.** A new clip layout puts one person on top and one below, cropped from the same shot. Great for interviews, panels and two hosts.
 - **Editor files.** From Export, get a clip as a Final Cut Pro or DaVinci Resolve project (.fcpxml) and a Premiere Pro project (.xml), with captions (.srt), using your original video.
-- **Messages from every account.** Social › Messages gathers comments and mentions from YouTube, Facebook Pages, Instagram and Mastodon, newest first.
+- **Messages from every account.** Social › Messages gathers comments from Instagram, Facebook Pages and YouTube (and mentions from Mastodon), newest first.
+- **Campaign header.** Any post or design that's part of a campaign shows the campaign at the top: its name, day, time, place, link, website and a hashtag, each one click to copy, plus every post in the campaign with this one marked. Jump between the campaign's posts from there.
 - **A friendlier start.** The welcome is three short steps: what Church Studio is, a jumpstart from your website, and one place to start. Each tool says hello the first time you open it, with a few ways to try it.
 - **Tag a batch of photos.** Add several pictures at once and Church Studio asks what they are, then adds a description and tags to all of them for search.
 - **Seasons you mark.** Turn off seasons your church doesn't observe, like Advent or Lent. They leave Inspiration and the calendar. Seasons now show on the calendar too.
 
 ### Changed
+- Templates show in your brand colors by default, with a switch to see each pack's own colors. Every color in a template follows your brand, not just the main ones.
+- Social accounts put Instagram, Facebook and YouTube first. TikTok, X, LinkedIn, Threads, Bluesky, Telegram, Discord and Mastodon are under Other social media.
+- The Brand library has three tabs: Brand kit, Voice and Files.
+- Writing's bar keeps the main actions in view and puts the rest in a More menu.
 - Design's bar is six choices: Create new, Design, Video, Social, Print and Custom. Each opens the kinds of design inside it.
 - Custom size shows a live preview of the canvas shape and size.
-- Your church name, lead pastor, website, address and service times fill into templates. Church info has a new Lead pastor field.
+- Your church name, minister, website, address and service times fill into templates. Church info has a new Minister name field.
 - Clicking outside the page in Design puts the selected item down.
 - Speaker notes only show for presentations.
 - Writing starts with Blank post.

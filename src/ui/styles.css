@@ -1327,3 +1327,19 @@ div.cn-card { cursor: default; }
 .logo-tile { position: relative; }
 .logo-tile:hover .logo-trash, .logo-trash:focus-visible { opacity: 1; }
 .banner.warn { background: var(--warn-soft); }
+
+/* Campaign header */
+.camp-head { display: grid; gap: 10px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--field); box-shadow: inset 0 0 0 1px var(--line); }
+.camp-head-top { display: flex; align-items: center; gap: 10px; border: 0; background: transparent; font: inherit; color: inherit; cursor: pointer; padding: 0; min-width: 0; }
+.camp-facts { display: flex; flex-wrap: wrap; gap: 6px; }
+.camp-fact { display: inline-grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 6px; max-width: 260px; padding: 5px 9px; border: 0; border-radius: 999px; background: var(--surface-solid); box-shadow: inset 0 0 0 1px var(--line); font: inherit; color: var(--text); cursor: pointer; }
+.camp-fact:hover { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.camp-strip { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+.camp-chip { flex: none; display: flex; align-items: center; gap: 8px; min-width: 150px; max-width: 200px; padding: 6px 10px; border: 0; border-radius: 10px; background: var(--surface-solid); box-shadow: inset 0 0 0 1px var(--line); font: inherit; color: var(--text); cursor: pointer; text-align: left; }
+.camp-chip:disabled { cursor: default; }
+.camp-chip.here { box-shadow: inset 0 0 0 2px var(--accent); }
+.camp-chip.done { box-shadow: inset 3px 0 0 var(--ok), inset 0 0 0 1px var(--line); }
+.other-social > summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; cursor: pointer; list-style: none; }
+.other-social > summary::-webkit-details-marker { display: none; }
+.other-social[open] > summary svg { transform: rotate(180deg); }
+.brand-tabs { justify-self: start; }

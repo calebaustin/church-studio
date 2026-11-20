@@ -32,7 +32,7 @@ export default function CalendarScreen({ tab: startTab, campaign }) {
       {tab === 'calendar' && <Calendar s={s} plat={plat} onEdit={(p) => setComposer({ post: p })} onNew={(d, e) => setComposer({ when: d, event: e || null })} />}
       {tab === 'campaigns' && <Campaigns s={s} start={campaign} onEdit={(p) => setComposer({ post: p })} />}
       {tab === 'inspiration' && <Inspiration embedded />}
-      {composer && <Composer s={s} plat={plat} init={composer} onClose={() => { setComposer(null); s.load(); }} onConnect={() => { setComposer(null); go({ name: 'social' }); }} />}
+      {composer && <Composer key={composer.post?.id || 'new'} s={s} plat={plat} init={{ ...composer, onOpenPost: (p) => setComposer({ post: p }) }} onClose={() => { setComposer(null); s.load(); }} onConnect={() => { setComposer(null); go({ name: 'social' }); }} />}
     </div>
   );
 }

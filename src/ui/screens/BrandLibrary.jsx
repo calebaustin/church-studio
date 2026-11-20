@@ -197,6 +197,8 @@ export default function BrandLibrary({ section }) {
     return () => clearInterval(t);
   }, [section]);
   const { go, onJobFinished } = useApp();
+  // Three tabs keep the page short. Links to a section (like "voice") open its tab.
+  const [tab, setTab] = useState(section === 'voice' || section === 'brand-voice' ? 'voice' : section === 'files' ? 'files' : 'kit');
   const [lib, setLib] = useState(null);
   const [folder, setFolder] = useState('All');
   const [q, setQ] = useState('');
@@ -217,7 +219,7 @@ export default function BrandLibrary({ section }) {
     if (pics.length) setBatch(pics.map((rel) => ({ rel })));
   };
   const addTo = async (target) => { if (!desktop?.pickFiles) return api.post('/api/library/open', { folder: target }); const paths = await desktop.pickFiles(); if (paths.length) await imported(paths, target); };
-  const kit = () => document.getElementById('brand-kit')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const kit = () => { setTab('kit'); setTimeout(() => document.getElementById('brand-kit')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60); };
   const [webSetup, setWebSetup] = useState(false);
   const [erasingFile, setErasingFile] = useState(null);
   const [notes, setNotes] = useState({});
@@ -260,9 +262,13 @@ export default function BrandLibrary({ section }) {
           { label: 'Make your first graphic', help: 'A quote card from Sunday is a good start.', ok: (counts.Graphics || 0) >= 1, action: () => go({ name: 'graphics' }), cta: 'Make one' },
         ]} />
       )}
-      {lib && <BrandKit lib={lib} reload={load} />}
-      <BrandVoice />
-      <div className="stack" style={{ gap: 10, marginTop: 8 }}>
+      <div className="seg brand-tabs" role="tablist">
+        {[['kit', 'Brand kit'], ['voice', 'Voice'], ['files', `Files${lib ? ` · ${lib.items.length}` : ''}`]].map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}
+      </div>
+      {tab === 'kit' && lib && <BrandKit lib={lib} reload={load} />}
+      {tab === 'voice' && <BrandVoice />}
+      {tab === 'files' && (<>
+      <div className="stack" style={{ gap: 10 }}>
         <div className="row between wrap">
           <div className="stack" style={{ gap: 2, minWidth: 0 }}>
             <h2>Brand files</h2>
@@ -302,6 +308,7 @@ export default function BrandLibrary({ section }) {
           );
         })}
       </div>
+      </>)}
     </div>
   );
 }

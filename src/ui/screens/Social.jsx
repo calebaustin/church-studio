@@ -3,10 +3,11 @@ import ToolIntro from '../components/ToolIntro.jsx';
 import { useApp } from '../App.jsx';
 import { api, desktop, fmt, openLink } from '../api.js';
 import { usePoll } from '../poll.js';
-import { Laptop, MessageSquare, Repeat2, Shapes } from 'lucide-react';
+import { ChevronDown, Laptop, MessageSquare, Repeat2, Shapes } from 'lucide-react';
 import { exportDesign } from '../design/exporters.js';
 import { checkCaption } from '../captionCheck.js';
 import Modal from '../components/Modal.jsx';
+import CampaignHeader from '../components/CampaignHeader.jsx';
 import { EventCard, RefreshEvents, eventTime, useChurchEvents } from '../components/ChurchEvents.jsx';
 
 const STATUS = {
@@ -253,7 +254,7 @@ function Messages({ s, plat }) {
   const sources = s.accounts.filter((a) => READABLE.includes(a.platform));
   const load = () => { setState({ loading: true }); api.get('/api/social/messages').then((r) => setState(r)).catch((e) => setState({ error: e.message })); };
   useEffect(() => { if (sources.length) load(); else setState({}); }, [sources.length]);
-  if (!sources.length) return <div className="glass empty"><MessageSquare size={40} /><h3>No message sources yet</h3><p>Connect YouTube, a Facebook Page, Instagram or Mastodon in Accounts. Comments and mentions from all of them gather here.</p></div>;
+  if (!sources.length) return <div className="glass empty"><MessageSquare size={40} /><h3>No message sources yet</h3><p>Connect Instagram, a Facebook Page or YouTube in Accounts. Comments from all of them gather here.</p></div>;
   const list = (state.messages || []).filter((m) => only === 'all' || m.platform === only);
   const platforms = [...new Set((state.messages || []).map((m) => m.platform))];
   return (
@@ -285,10 +286,12 @@ function Messages({ s, plat }) {
 }
 
 // ------------------------------------------------------------------ accounts
+const BIG = ['instagram', 'facebook', 'youtube', 'instagram-manual'];
+
 function Accounts({ s }) {
   const [connecting, setConnecting] = useState(null);
-  const api_ = s.platforms.filter((p) => p.kind === 'api');
-  const manual = s.platforms.filter((p) => p.kind === 'manual');
+  // The big three first; everything else tucked under Other social media.
+  const others = s.platforms.filter((p) => !BIG.includes(p.id));
   const act = async (fn) => { try { await fn(); } catch (e) { alert(e.message); } s.load(); };
   return (
     <div className="stack" style={{ gap: 18 }}>
@@ -319,30 +322,32 @@ function Accounts({ s }) {
         </section>
       )}
       <section className="glass panel stack">
-        <h3>Post directly</h3>
-        <p className="muted small">Uploads straight from this Mac. Keys are stored encrypted.</p>
+        <h3>Instagram, Facebook and YouTube</h3>
+        <p className="muted small">Where most churches post. Connect once and post or schedule straight from this Mac. Keys are stored encrypted.</p>
         <div className="provider-grid">
-          {api_.map((p) => (
-            <div key={p.id} className={`provider ${connecting?.id === p.id ? 'on' : ''}`} onClick={() => setConnecting(p)}>
+          {BIG.map((id) => s.platforms.find((p) => p.id === id)).filter(Boolean).map((p) => (
+            <div key={p.id} className={`provider ${connecting?.id === p.id ? 'on' : ''}`} onClick={() => (p.kind === 'api' ? setConnecting(p) : act(() => api.post('/api/social/accounts', { platform: p.id })))}>
               <div className="row"><span className="dot" style={{ color: p.color }} /><strong>{p.name}</strong></div>
-              <span className="muted small">{p.note || `Up to ${Math.round(p.maxSeconds / 60) || 1} min`}</span>
+              <span className="muted small">{p.kind === 'manual' ? 'Post by hand: we copy the caption and open Instagram.' : p.note || `Up to ${Math.round(p.maxSeconds / 60) || 1} min`}</span>
             </div>
           ))}
         </div>
-        {connecting?.kind === 'api' && <ConnectForm platform={connecting} onDone={() => { setConnecting(null); s.load(); }} />}
+        {connecting?.kind === 'api' && BIG.includes(connecting.id) && <ConnectForm platform={connecting} onDone={() => { setConnecting(null); s.load(); }} />}
       </section>
-      <section className="glass panel stack">
-        <h3>Guided hand-off</h3>
-        <p className="muted small">No direct posting here. At post time we copy the caption, show the file, and open the upload page.</p>
-        <div className="provider-grid">
-          {manual.map((p) => (
-            <div key={p.id} className="provider" onClick={() => act(() => api.post('/api/social/accounts', { platform: p.id }))}>
-              <div className="row"><span className="dot" style={{ color: p.color }} /><strong>{p.name}</strong></div>
-              <span className="muted small">{p.note || 'Add to planner'}</span>
-            </div>
-          ))}
+      <details className="glass panel other-social" open={Boolean(connecting && !BIG.includes(connecting.id))}>
+        <summary><span className="stack" style={{ gap: 2 }}><strong>Other social media</strong><span className="muted small">TikTok, X, LinkedIn, Threads, Bluesky, Telegram, Discord and Mastodon.</span></span><ChevronDown size={16} /></summary>
+        <div className="stack" style={{ gap: 10, paddingTop: 12 }}>
+          <div className="provider-grid">
+            {others.map((p) => (
+              <div key={p.id} className={`provider ${connecting?.id === p.id ? 'on' : ''}`} onClick={() => (p.kind === 'api' ? setConnecting(p) : act(() => api.post('/api/social/accounts', { platform: p.id })))}>
+                <div className="row"><span className="dot" style={{ color: p.color }} /><strong>{p.name}</strong></div>
+                <span className="muted small">{p.kind === 'manual' ? 'Post by hand: we copy the caption, show the file and open the site.' : p.note || 'Posts directly'}</span>
+              </div>
+            ))}
+          </div>
+          {connecting?.kind === 'api' && !BIG.includes(connecting.id) && <ConnectForm platform={connecting} onDone={() => { setConnecting(null); s.load(); }} />}
         </div>
-      </section>
+      </details>
     </div>
   );
 }
@@ -497,6 +502,7 @@ export function Composer({ s, plat, init, onClose, onConnect }) {
   return (
     <Modal onClose={onClose} width={1000} label={editing ? 'Edit post' : 'New post'}>
         <h2>{editing ? 'Edit post' : 'New post'}</h2>
+        {(editing?.campaignId || init.campaignId) && <CampaignHeader campaignId={editing?.campaignId || init.campaignId} postId={editing?.id} onOpenPost={init.onOpenPost} />}
         <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: 20, alignItems: 'start' }}>
           <div className="stack">
             <div className="vframe" style={{ width: 200, display: 'grid', placeItems: 'center', color: '#aab', cursor: 'pointer' }} onClick={() => setPickMedia(true)}>
