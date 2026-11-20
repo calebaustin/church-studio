@@ -12,7 +12,6 @@ Every update keeps your sermons, designs, drafts and settings. Before a new vers
 - **Eraser depth.** An eraser can cut through everything under it, or only the layers right under it, so the background stays.
 - **New shapes and backgrounds.** Wavy photo frames, scalloped badges, starbursts, window cards and outlined tags. Pattern backgrounds (checker, grid, dots, stripes) and film grain on gradients.
 - **Two speakers.** A new clip layout puts one person on top and one below, cropped from the same shot. Great for interviews, panels and two hosts.
-- **Editor files.** From Export, get a clip as a Final Cut Pro or DaVinci Resolve project (.fcpxml) and a Premiere Pro project (.xml), with captions (.srt), using your original video.
 - **Messages from every account.** Social › Messages gathers comments from Instagram, Facebook Pages and YouTube (and mentions from Mastodon), newest first.
 - **Campaign header.** Any post or design that's part of a campaign shows the campaign at the top: its name, day, time, place, link, website and a hashtag, each one click to copy, plus every post in the campaign with this one marked. Jump between the campaign's posts from there.
 - **A friendlier start.** The welcome is three short steps: what Church Studio is, a jumpstart from your website, and one place to start. Each tool says hello the first time you open it, with a few ways to try it.

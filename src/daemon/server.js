@@ -20,7 +20,6 @@ import * as inspiration from './inspiration.js';
 import * as campaigns from './campaigns.js';
 import * as search from './search.js';
 import * as backup from './backup.js';
-import * as nle from './nle.js';
 import * as blog from './blog.js';
 import * as photos from './photos.js';
 import * as library from './library.js';
@@ -270,9 +269,6 @@ route('POST', '/api/projects/:id/clips/:cid/move', async ({ id, cid }, b) => {
   try { return await moveExport(id, cid, String(b.folder || '')); } catch (e) { throw new HttpError(400, e.message); }
 });
 route('GET', '/api/export/defaults', () => ({ folder: downloadsDir() }));
-route('POST', '/api/projects/:id/clips/:cid/editors', async ({ id, cid }) => {
-  try { const r = await nle.exportForEditors(id, cid); await revealInFinder(r.folder); return r; } catch (e) { throw new HttpError(400, e.message); }
-});
 route('POST', '/api/projects/:id/clips/:cid/frames', async ({ id, cid }, b) => ({ frames: await sampleFrames(id, cid, Math.min(9, Number(b.count) || 6)) }));
 route('GET', '/api/speaker', () => prefs.speakerPrior());
 route('POST', '/api/speaker/hints', async (_p, b) => prefs.addSpeakerHints(Array.isArray(b.points) ? b.points : []));

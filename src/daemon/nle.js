@@ -1,3 +1,4 @@
+// Not used yet: kept for a future "expert mode" that turns on advanced settings across the app.
 // Open a clip in a full video editor: Final Cut Pro (.fcpxml, also opens in DaVinci Resolve), Premiere
 // Pro (.xml) and a caption file (.srt). The edit points match the clip, including words you cut and
 // tightened pauses, and point at the original video, so nothing is re-encoded.
