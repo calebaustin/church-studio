@@ -2,7 +2,7 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
-## Unreleased
+## 0.13.2 · November 20, 2026
 
 ### New
 - **Four base looks, each with a night version.** Olive (the standard), Sermon (blue and coral), and two new ones: Classic (tan, classic blue and honey yellow) and Clay (warm cream, heirloom tomato and tawny). Each has a matching night version: Olive Night, Sermon Night, Classic Night and Clay Night. Morning Sage, Night and Evening Glass are retired; if you used one, you're moved to Olive or Olive Night. Pick yours in My App.
