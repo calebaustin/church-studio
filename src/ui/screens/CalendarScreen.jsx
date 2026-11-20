@@ -1,5 +1,6 @@
 // Calendar: church events, planned and scheduled posts, campaigns, and inspiration for what's next.
 // It's bigger than social media, so it has its own place.
+import ToolIntro from '../components/ToolIntro.jsx';
 import { useState } from 'react';
 import { CalendarDays, Lightbulb, Megaphone } from 'lucide-react';
 import { Calendar, Composer, useSocial } from './Social.jsx';
@@ -17,6 +18,7 @@ export default function CalendarScreen({ tab: startTab, campaign }) {
   const plat = (id) => s.platforms.find((p) => p.id === id);
   return (
     <div className="page">
+      <ToolIntro id="calendar" />
       <div className="row between wrap" style={{ gap: 12 }}>
         <div className="stack" style={{ gap: 2 }}>
           <h1>Calendar</h1>

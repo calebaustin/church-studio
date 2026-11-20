@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import ToolIntro from '../components/ToolIntro.jsx';
 import { createPortal } from 'react-dom';
 import {
   ArrowUpDown, ChevronDown, Clapperboard, Clock, Info, Film, Folder, FolderOpen, FolderPlus, LayoutGrid, MoreHorizontal, PenLine, Pencil,
@@ -225,6 +226,7 @@ export default function AllProjects() {
       </aside>
 
       <div className="stack" style={{ gap: 18, minWidth: 0 }}>
+      <ToolIntro id="projects" />
         <div className="row between wrap">
           <div className="row" style={{ gap: 10, minWidth: 0 }}>
             <h1 className="truncate">{title}</h1>

@@ -19,18 +19,37 @@ export const UPDATE_REPO = process.env.SC_UPDATE_REPO || pkg.updateRepo || null;
 export const FEEDBACK_URL = process.env.SC_FEEDBACK_URL || pkg.feedbackUrl || null;
 
 /** Send feedback (stars, a note, or a request for a connection). Falls back to a GitHub issue page. */
-export async function sendFeedback({ kind = 'feedback', stars = null, text = '', name = '' }) {
-  const body = { kind: String(kind).slice(0, 30), stars: stars ? Math.max(1, Math.min(5, Number(stars))) : null, text: String(text).slice(0, 4000), name: String(name).slice(0, 80), version: VERSION };
+export const FEEDBACK_EMAIL = process.env.SC_FEEDBACK_EMAIL || pkg.feedbackEmail || null;
+
+/**
+ * Feedback reaches the maker in the first way that's set up:
+ * 1. feedbackUrl: sent quietly as JSON (Formspree, a Google Apps Script, or any form endpoint),
+ * 2. feedbackEmail: the person's Mail app opens with everything filled in,
+ * 3. updateRepo: a GitHub issue page opens, filled in.
+ * A copy always stays on this Mac in data/feedback.json.
+ */
+export async function sendFeedback({ kind = 'feedback', stars = null, text = '', name = '', email = '' }) {
+  const body = { kind: String(kind).slice(0, 30), stars: stars ? Math.max(1, Math.min(5, Number(stars))) : null, text: String(text).slice(0, 4000), name: String(name).slice(0, 80), email: String(email).slice(0, 120), version: VERSION, at: new Date().toISOString() };
   if (!body.text.trim() && !body.stars) throw new Error('Add a few words or a star rating first.');
-  if (FEEDBACK_URL) {
-    const r = await fetch(FEEDBACK_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) });
-    if (!r.ok) throw new Error(`Couldn't send it right now (${r.status}). Try again later.`);
-    return { sent: true };
-  }
-  if (!UPDATE_REPO) throw new Error('Feedback is not set up for this copy.');
+  await keepCopy(body).catch(() => {});
   const title = body.kind === 'connection' ? `Connection request: ${body.text.split('\n')[0].slice(0, 60)}` : `${body.stars ? `${'★'.repeat(body.stars)} ` : ''}Feedback from Church Studio ${VERSION}`;
-  const md = `${body.stars ? `Rating: ${'★'.repeat(body.stars)}${'☆'.repeat(5 - body.stars)}\n\n` : ''}${body.text}\n\n---\nChurch Studio ${VERSION}${body.name ? ` · ${body.name}` : ''}`;
-  return { sent: false, url: `https://github.com/${UPDATE_REPO}/issues/new?${new URLSearchParams({ title, body: md, labels: body.kind })}` };
+  const md = `${body.stars ? `Rating: ${'★'.repeat(body.stars)}${'☆'.repeat(5 - body.stars)}\n\n` : ''}${body.text}\n\n---\nChurch Studio ${VERSION}${body.name ? ` · ${body.name}` : ''}${body.email ? ` · ${body.email}` : ''}`;
+  if (FEEDBACK_URL) {
+    const r = await fetch(FEEDBACK_URL, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify({ ...body, subject: title, message: md }), signal: AbortSignal.timeout(15000) }).catch(() => null);
+    if (r?.ok) return { sent: true };
+    if (!FEEDBACK_EMAIL && !UPDATE_REPO) throw new Error(`Couldn't send it right now${r ? ` (${r.status})` : ''}. Try again later.`);
+  }
+  if (FEEDBACK_EMAIL) return { sent: false, url: `mailto:${FEEDBACK_EMAIL}?${new URLSearchParams({ subject: title, body: md }).toString().replace(/\+/g, '%20')}`, how: 'email' };
+  if (!UPDATE_REPO) throw new Error('Feedback is not set up for this copy.');
+  return { sent: false, url: `https://github.com/${UPDATE_REPO}/issues/new?${new URLSearchParams({ title, body: md, labels: body.kind })}`, how: 'github' };
+}
+
+async function keepCopy(body) {
+  const f = path.join(BASE, 'data', 'feedback.json');
+  await mkdir(path.dirname(f), { recursive: true });
+  const list = existsSync(f) ? JSON.parse(await readFile(f, 'utf8')) : [];
+  list.push(body);
+  await writeFile(f, JSON.stringify(list.slice(-200), null, 2));
 }
 
 /** "1.2.10" > "1.2.9". Pre-release tags sort before the release. */

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import ToolIntro from '../components/ToolIntro.jsx';
 import {
   Clapperboard, Copy, GalleryHorizontalEnd, Heart, LayoutGrid, MonitorPlay, NotebookPen, Presentation, Printer,
   Scaling, Search, Smartphone, Sparkles, Trash2, Home as HomeIcon, Wand2, X, BookOpen, Plus, PenTool, Film, Laptop, CalendarClock,
@@ -172,6 +173,7 @@ export default function Graphics({ image, design, event, eventMode, quote, make 
 
   return (
     <div className="page">
+      <ToolIntro id="graphics" />
       <section className="dz-hero">
         <div className="dz-hero-bg" style={{ '--c1': ctx.c[0], '--c2': ctx.c[1], '--c3': ctx.c[4] || ctx.c[2] }}><i /><i /><i /></div>
         <h1>What will you design today?</h1>

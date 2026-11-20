@@ -34,7 +34,7 @@ export const PLATFORMS = [
     ],
     steps: [
       { text: 'Create a Meta app (type Business) and add “Facebook Login for Business”.', link: 'https://developers.facebook.com/apps/creation/' },
-      { text: 'In Graph API Explorer, pick your app and add: pages_show_list, pages_read_engagement, pages_manage_posts, publish_video.', link: 'https://developers.facebook.com/tools/explorer/' },
+      { text: 'In Graph API Explorer, pick your app and add: pages_show_list, pages_read_engagement (also lets comments show in Messages), pages_manage_posts, publish_video.', link: 'https://developers.facebook.com/tools/explorer/' },
       { text: 'Generate a token, then choose your Page under “User or Page” to get a Page token.', link: 'https://developers.facebook.com/tools/explorer/' },
       { text: 'Make it long-lived: paste it in the Access Token Debugger and press “Extend access token”.', link: 'https://developers.facebook.com/tools/debug/accesstoken/' },
       { text: 'Find your Page ID under About > Page transparency on your Page.', link: 'https://www.facebook.com/pages/?category=your_pages' },
@@ -51,7 +51,7 @@ export const PLATFORMS = [
     ],
     steps: [
       { text: 'Switch Instagram to a Professional account and link it to your Facebook Page.', link: 'https://help.instagram.com/502981923235522' },
-      { text: 'In Graph API Explorer add: instagram_basic, instagram_content_publish, pages_show_list, pages_read_engagement.', link: 'https://developers.facebook.com/tools/explorer/' },
+      { text: 'In Graph API Explorer add: instagram_basic, instagram_content_publish, instagram_manage_comments (so comments show in Messages), pages_show_list, pages_read_engagement.', link: 'https://developers.facebook.com/tools/explorer/' },
       { text: 'Generate a token and extend it in the Access Token Debugger.', link: 'https://developers.facebook.com/tools/debug/accesstoken/' },
       { text: 'Run me/accounts?fields=instagram_business_account in Graph API Explorer to get the account ID.', link: 'https://developers.facebook.com/tools/explorer/?method=GET&path=me%2Faccounts%3Ffields%3Dinstagram_business_account' },
     ],

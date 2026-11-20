@@ -49,3 +49,32 @@ export default function PhotoNotes({ item, note, onClose, onSaved }) {
     </Modal>
   );
 }
+
+/**
+ * After adding a batch of pictures (an event, a branding shoot): one quick question so they're
+ * searchable later. Tags and a short description go on every picture in the batch.
+ */
+export function TagBatch({ items, onClose, onSaved }) {
+  const [about, setAbout] = useState('');
+  const [tags, setTags] = useState('');
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    setBusy(true);
+    const list = tags.split(',').map((t) => t.trim()).filter(Boolean);
+    for (const it of items) await api.put('/api/library/notes', { rel: it.rel, alt: about.trim() || undefined, tags: list });
+    onSaved?.();
+  };
+  return (
+    <Modal onClose={onClose} width={620} label="Tag these pictures"
+      footer={<><button className="btn ghost" onClick={onClose}>Skip</button><button className="btn primary" disabled={busy || (!about.trim() && !tags.trim())} onClick={save}>Save to {items.length} picture{items.length === 1 ? '' : 's'}</button></>}>
+      <ModalHead title={`What are ${items.length === 1 ? 'this' : 'these'}?`} sub="A few words now makes them easy to find later in search." />
+      <div className="batch-thumbs">{items.slice(0, 12).map((it) => <img key={it.rel} src={libUrl(it.rel)} alt="" />)}{items.length > 12 && <span className="muted small">+{items.length - 12}</span>}</div>
+      <label className="field">Describe them <span className="hint">Used as alt text. You can edit each one later.</span>
+        <input className="input" autoFocus value={about} placeholder="Easter Sunday 2026, families on the front lawn" onChange={(e) => setAbout(e.target.value)} />
+      </label>
+      <label className="field">Tags <span className="hint">Comma separated</span>
+        <input className="input" value={tags} placeholder="easter, kids, outdoor, 2026" onChange={(e) => setTags(e.target.value)} />
+      </label>
+    </Modal>
+  );
+}

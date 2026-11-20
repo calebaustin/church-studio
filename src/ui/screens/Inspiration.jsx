@@ -5,6 +5,7 @@ import { BookOpen, CalendarDays, ExternalLink, Lightbulb, PenLine, RefreshCw, Rs
 import { useApp } from '../App.jsx';
 import { api, openLink } from '../api.js';
 import { yearReviewDoc } from '../design/yearReview.js';
+import Popover from '../components/Popover.jsx';
 import { Masonry } from '../components/Masonry.jsx';
 
 const PERIODS = [['month', 'Month'], ['quarter', 'Quarter'], ['year', 'Year'], ['all', 'All time']];
@@ -12,7 +13,8 @@ const KIND = { sermon: 'sermon', writing: 'writing', post: 'post', blog: 'blog p
 const day = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: new Date(d).getFullYear() === new Date().getFullYear() ? undefined : 'numeric' });
 
 export default function Inspiration({ embedded = false }) {
-  const { go, toast, config } = useApp();
+  const { go, toast, config, saveConfig } = useApp();
+  const [seasonMenu, setSeasonMenu] = useState(false);
   const [period, setPeriod] = useState('quarter');
   const [data, setData] = useState(null);
   const [blogUrl, setBlogUrl] = useState(config.churchInfo?.website || '');
@@ -95,7 +97,22 @@ export default function Inspiration({ embedded = false }) {
             </section>
 
             <section className="glass panel stack" style={{ gap: 10 }}>
-              <h2>Coming up</h2>
+              <div className="row between" style={{ gap: 6 }}>
+                <h2>Coming up</h2>
+                <div style={{ position: 'relative' }}>
+                  <button className="btn ghost sm" data-pop-trigger onClick={() => setSeasonMenu(!seasonMenu)}>Seasons you mark</button>
+                  <Popover open={seasonMenu} onClose={() => setSeasonMenu(false)} align="right" width={260}>
+                    <div className="stack" style={{ gap: 4, padding: 8 }}>
+                      <span className="small muted" style={{ padding: '2px 4px 6px' }}>Turn off any your church doesn’t observe. They leave Inspiration and the calendar.</span>
+                      {(data.allSeasons || []).map((x) => (
+                        <label key={x.id} className="row small" style={{ gap: 8, padding: '4px' }}>
+                          <input type="checkbox" checked={!data.seasonsOff?.includes(x.id)} onChange={async (e) => { const off = new Set(data.seasonsOff || []); if (e.target.checked) off.delete(x.id); else off.add(x.id); await saveConfig({ seasonsOff: [...off] }); load(); }} />{x.name}
+                        </label>
+                      ))}
+                    </div>
+                  </Popover>
+                </div>
+              </div>
               <span className="muted small">Church seasons in the next three months. Start about three weeks ahead.</span>
               {data.seasons.slice(0, 5).map((s) => (
                 <div key={s.id + s.date} className="insp-season">

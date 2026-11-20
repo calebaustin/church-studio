@@ -349,10 +349,29 @@ route('POST', '/api/social/youtube/auth', (_p, b) => {
 });
 route('GET', '/api/social/posts', async () => ({ posts: await socialStore.listPosts() }));
 route('GET', '/api/social/messages', async () => {
-  const { youtubeComments } = await import('./social/providers.js');
-  const out = [];
-  for (const a of (await socialStore.listAccounts()).filter((x) => x.platform === 'youtube')) {
-    const full = await socialStore.getAccount(a.id, { withCredentials: true });
+  // One place for comments and mentions from every connected account that allows reading them.
+  const prov = await import('./social/providers.js');
+  const out = []; const problems = []; const sources = [];
+  for (const a of await socialStore.listAccounts()) {
+    if (!['youtube', 'facebook', 'instagram', 'mastodon'].includes(a.platform)) continue;
+    sources.push(a.platform);
+    try {
+      const full = await socialStore.getAccount(a.id, { withCredentials: true });
+      let items = [];
+      if (a.platform === 'youtube') {
+        const channelId = (a.url || '').match(/channel\/([\w-]+)/)?.[1];
+        if (!channelId) continue;
+        const r = await prov.youtubeComments(full.credentials, channelId);
+        if (r.credentials) await socialStore.saveAccount({ id: a.id, credentials: r.credentials });
+        items = r.items;
+      } else if (a.platform === 'facebook') items = await prov.facebookComments(full.credentials);
+      else if (a.platform === 'instagram') items = await prov.instagramComments(full.credentials);
+      else if (a.platform === 'mastodon') items = await prov.mastodonMentions(full.credentials);
+      out.push(...items.map((m) => ({ ...m, account: a.label, platform: a.platform })));
+    } catch (e) { problems.push({ account: a.label, platform: a.platform, error: e.message }); }
+  }
+  return { messages: out.sort((x, y) => String(y.at).localeCompare(String(x.at))).slice(0, 150), problems, sources: [...new Set(sources)] };
+});
     const channelId = (a.url || '').match(/channel\/([\w-]+)/)?.[1];
     if (!channelId) continue;
     try {
@@ -420,6 +439,7 @@ route('DELETE', '/api/campaigns/:cid', async ({ cid }) => campaigns.deleteCampai
 
 // ---------------------------------------------------------------- inspiration, blog, photo notes
 route('GET', '/api/inspiration', async (_p, _b, q) => inspiration.inspiration({ period: q?.searchParams?.get('period') || 'quarter' }));
+route('GET', '/api/seasons', async () => ({ seasons: await inspiration.seasonDays() }));
 route('GET', '/api/inspiration/year', async (_p, _b, q) => inspiration.yearInReview(Number(q?.searchParams?.get('year')) || new Date().getFullYear()));
 route('POST', '/api/blog/sync', async (_p, b) => { try { return await blog.syncBlog({ url: b.url || null }); } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/blog/forget', async () => blog.forgetBlog());

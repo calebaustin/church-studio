@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import ToolIntro from '../components/ToolIntro.jsx';
 import { useApp } from '../App.jsx';
 import { api, desktop, fmt, openLink } from '../api.js';
 import { usePoll } from '../poll.js';
@@ -39,6 +40,7 @@ export default function Social({ compose: initialCompose, caption: initialCaptio
   const plat = (id) => s.platforms.find((p) => p.id === id);
   return (
     <div className="page">
+      <ToolIntro id="social" />
       <div className="row between">
         <div className="stack" style={{ gap: 2 }}>
           <h1>Social</h1>
@@ -56,7 +58,7 @@ export default function Social({ compose: initialCompose, caption: initialCaptio
       </div>
       {tab === 'posts' && <Posts s={s} plat={plat} onEdit={(p) => setComposer({ post: p })} onConnect={() => setTab('accounts')} onShareAgain={(p) => setComposer({ caption: p.caption, media: p.media, title: p.title, hashtags: p.hashtags })} />}
       {tab === 'accounts' && <Accounts s={s} />}
-      {tab === 'messages' && <Messages s={s} />}
+      {tab === 'messages' && <Messages s={s} plat={plat} />}
       {composer && <Composer s={s} plat={plat} init={composer} onClose={() => { setComposer(null); s.load(); }} onConnect={() => { setComposer(null); setTab('accounts'); }} />}
     </div>
   );
@@ -170,6 +172,8 @@ export function Calendar({ s, plat, onEdit, onNew }) {
   const [view, setView] = useState('month'); // 'month' | 'weeks' (this week and next)
   const cal = useChurchEvents();
   const [ev, setEv] = useState(null);
+  const [seasons, setSeasons] = useState([]);
+  useEffect(() => { api.get('/api/seasons').then((r) => setSeasons(r.seasons)).catch(() => {}); }, []);
   const weeks = view === 'weeks';
   const month = useMemo(() => { const d = new Date(); d.setDate(1); d.setHours(0, 0, 0, 0); d.setMonth(d.getMonth() + (weeks ? 0 : offset)); return d; }, [offset, weeks]);
   const start = useMemo(() => {
@@ -212,6 +216,7 @@ export function Calendar({ s, plat, onEdit, onNew }) {
                 <span className="small num" style={{ fontWeight: 600 }}>{weeks && (d.getDate() === 1 || d === days[0]) ? d.toLocaleDateString([], { month: 'short', day: 'numeric' }) : d.getDate()}</span>
                 {!past && <button className="btn ghost sm" style={{ minHeight: 20, padding: '0 6px' }} aria-label={`Schedule a post on ${d.toDateString()}`} onClick={() => { const t = new Date(d); t.setHours(12, 0, 0, 0); onNew(t); }}>+</button>}
               </div>
+              {seasons.filter((x) => new Date(x.date).toDateString() === d.toDateString()).map((x) => <span key={x.id} className="month-season truncate" title={x.name}>{x.name}</span>)}
               {evs.slice(0, evMax).map((e) => (
                 <button key={e.id} className="month-event" onClick={() => setEv(e)} title={`${e.title} · ${eventTime(e)}`}>
                   <span className="truncate">{e.allDay ? '' : `${eventTime(e)} `}{e.title}</span>
@@ -240,29 +245,39 @@ export function Calendar({ s, plat, onEdit, onNew }) {
 }
 
 // ------------------------------------------------------------------ messages (YouTube comments)
-function Messages({ s }) {
+const READABLE = ['youtube', 'facebook', 'instagram', 'mastodon'];
+/** One inbox for comments and mentions from every connected account that allows reading them. */
+function Messages({ s, plat }) {
   const [state, setState] = useState({ loading: true });
-  const hasYT = s.accounts.some((a) => a.platform === 'youtube');
-  useEffect(() => {
-    if (!hasYT) { setState({}); return; }
-    api.get('/api/social/messages').then((r) => setState(r)).catch((e) => setState({ error: e.message }));
-  }, [hasYT]);
-  if (!hasYT) return <div className="glass empty"><MessageSquare size={40} /><h3>No message sources yet</h3><p>Connect your YouTube channel to see new comments here.</p></div>;
+  const [only, setOnly] = useState('all');
+  const sources = s.accounts.filter((a) => READABLE.includes(a.platform));
+  const load = () => { setState({ loading: true }); api.get('/api/social/messages').then((r) => setState(r)).catch((e) => setState({ error: e.message })); };
+  useEffect(() => { if (sources.length) load(); else setState({}); }, [sources.length]);
+  if (!sources.length) return <div className="glass empty"><MessageSquare size={40} /><h3>No message sources yet</h3><p>Connect YouTube, a Facebook Page, Instagram or Mastodon in Accounts. Comments and mentions from all of them gather here.</p></div>;
+  const list = (state.messages || []).filter((m) => only === 'all' || m.platform === only);
+  const platforms = [...new Set((state.messages || []).map((m) => m.platform))];
   return (
     <section className="glass strong panel stack">
-      <div className="row between"><h3>Recent comments</h3><span className="muted small">From YouTube</span></div>
+      <div className="row between wrap" style={{ gap: 8 }}>
+        <div className="stack" style={{ gap: 2 }}><h3 style={{ margin: 0 }}>Messages</h3><span className="muted small">Comments and mentions from all your accounts, newest first.</span></div>
+        <div className="row" style={{ gap: 6 }}>
+          {platforms.length > 1 && <div className="seg sm"><button className={only === 'all' ? 'on' : ''} onClick={() => setOnly('all')}>All</button>{platforms.map((p) => <button key={p} className={only === p ? 'on' : ''} onClick={() => setOnly(p)}>{plat(p)?.name?.split(' ')[0] || p}</button>)}</div>}
+          <button className="btn sm ghost" disabled={state.loading} onClick={load}>Refresh</button>
+        </div>
+      </div>
       {state.loading && [0, 1, 2].map((i) => <div key={i} className="skeleton" style={{ height: 60 }} />)}
       {state.error && <div className="banner bad">{state.error}</div>}
-      {state.messages && !state.messages.length && <p className="muted">No comments yet.</p>}
-      {state.messages?.map((m) => (
-        <div key={m.id} className="feed-item" style={{ alignItems: 'flex-start' }}>
-          {m.avatar ? <img src={m.avatar} alt="" width={32} height={32} style={{ borderRadius: '50%' }} /> : <span className="feed-icon"><MessageSquare size={15} /></span>}
-          <div className="stack grow" style={{ gap: 2 }}>
-            <div className="row between"><strong className="truncate">{m.author}</strong><span className="muted small">{new Date(m.at).toLocaleDateString()}</span></div>
+      {state.problems?.map((p) => <div key={p.account} className="banner warn small">{p.account}: {p.error}</div>)}
+      {state.messages && !list.length && <p className="muted">Nothing new.</p>}
+      {list.map((m) => (
+        <div key={`${m.platform}-${m.id}`} className="feed-item" style={{ alignItems: 'flex-start' }}>
+          {m.avatar ? <img src={m.avatar} alt="" width={32} height={32} style={{ borderRadius: '50%' }} /> : <span className="feed-icon" style={{ color: plat(m.platform)?.color }}><MessageSquare size={15} /></span>}
+          <div className="stack grow" style={{ gap: 2, minWidth: 0 }}>
+            <div className="row between" style={{ gap: 8 }}><strong className="truncate">{m.author}</strong><span className="muted small" style={{ flex: 'none' }}>{new Date(m.at).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span></div>
             <span style={{ whiteSpace: 'pre-wrap' }}>{m.text}</span>
-            <span className="muted small truncate">On “{m.videoTitle || m.videoId}”{m.replies ? ` · ${m.replies} replies` : ''}</span>
+            <span className="muted small truncate"><span className="dot" style={{ color: plat(m.platform)?.color, width: 6, height: 6, display: 'inline-block', marginRight: 6 }} />{m.account}{m.replies ? ` · ${m.replies} replies` : ''}</span>
           </div>
-          <button className="btn sm" onClick={() => openLink(m.url)}>Reply ↗</button>
+          {m.url && <button className="btn sm" onClick={() => openLink(m.url)}>Reply ↗</button>}
         </div>
       ))}
     </section>

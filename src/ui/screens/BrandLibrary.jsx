@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import ToolIntro, { introSeen } from '../components/ToolIntro.jsx';
 import { FolderOpen, Plus, Image as ImageIcon, Film, FileText, Shapes, Eye, X, Wand2, Palette, Heart, Trash2, MoreHorizontal, Star, RefreshCw, Search, Globe, Eraser } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { api, desktop, sizeLabel } from '../api.js';
@@ -7,7 +8,7 @@ import ColorField from '../components/ColorField.jsx';
 import FontMenu, { useFamilies } from '../components/FontMenu.jsx';
 import { WebsiteSetup } from '../components/Jumpstart.jsx';
 import BackgroundEraser from '../components/BackgroundEraser.jsx';
-import PhotoNotes from '../components/PhotoNotes.jsx';
+import PhotoNotes, { TagBatch } from '../components/PhotoNotes.jsx';
 import SetupChecklist from '../components/SetupChecklist.jsx';
 import Popover from '../components/Popover.jsx';
 
@@ -77,6 +78,7 @@ function LogoManager({ lib, reload }) {
           return (
             <div key={l.rel} className={`logo-tile ${l === primary ? 'primary' : ''}`}>
               <div className={`logo-thumb ${k === 'light' ? 'on-dark' : ''}`}><img src={l.url} alt={l.name} /></div>
+              <button className="rt-btn logo-trash" aria-label={`Delete ${l.name}`} title="Delete (moves it to the Trash)" onClick={() => remove(l)}><Trash2 size={14} /></button>
               <div className="row between" style={{ gap: 4, minWidth: 0 }}>
                 <div className="stack" style={{ gap: 0, minWidth: 0 }}>
                   <strong className="small truncate" title={l.name}>{l.name.replace(/\.[a-z0-9]+$/i, '')}</strong>
@@ -207,26 +209,35 @@ export default function BrandLibrary({ section }) {
   const items = (lib?.items || []).filter((i) => (folder === 'All' || i.folder === folder) && (!q || q.toLowerCase().split(/\s+/).every((w) => hay(i).includes(w))));
   const counts = Object.fromEntries((lib?.folders || []).map((f) => [f, (lib?.items || []).filter((i) => i.folder === f).length]));
   const { config, saveConfig } = useApp();
-  const addTo = async (target) => { if (!desktop?.pickFiles) return api.post('/api/library/open', { folder: target }); const paths = await desktop.pickFiles(); if (paths.length) { await api.post('/api/library/import', { paths, folder: target }); load(); } };
+  // Pictures brought in get a quick "what are these?" so they're searchable.
+  const imported = async (paths, folder) => {
+    const r = await api.post('/api/library/import', { paths, folder });
+    await load();
+    const pics = (r.rels || []).filter((rel) => /\.(png|jpe?g|webp|gif|heic)$/i.test(rel) && !rel.startsWith('Logos/'));
+    if (pics.length) setBatch(pics.map((rel) => ({ rel })));
+  };
+  const addTo = async (target) => { if (!desktop?.pickFiles) return api.post('/api/library/open', { folder: target }); const paths = await desktop.pickFiles(); if (paths.length) await imported(paths, target); };
   const kit = () => document.getElementById('brand-kit')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   const [webSetup, setWebSetup] = useState(false);
   const [erasingFile, setErasingFile] = useState(null);
   const [notes, setNotes] = useState({});
+  const [batch, setBatch] = useState(null); // pictures just added, waiting for a description and tags
   const [noting, setNoting] = useState(null);
   useEffect(() => { api.get('/api/library/notes').then((r) => setNotes(r.notes || {})).catch(() => {}); }, []);
   return (
     <div className="page">
+      <ToolIntro id="assets" />
       <div className="row between wrap">
         <div className="stack" style={{ gap: 2 }}>
           <h1>Brand library</h1>
           <span className="muted">Photos, logos and graphics you reuse. It's a normal folder, so you can add files in Finder too.</span>
         </div>
         <div className="row">
-          {desktop?.pickFiles && <button className="btn" onClick={async () => { const paths = await desktop.pickFiles(); if (paths.length) { await api.post('/api/library/import', { paths, folder: folder === 'All' || folder === 'Writing' ? 'Photos' : folder }); load(); } }}><Plus size={15} />Add files</button>}
+          {desktop?.pickFiles && <button className="btn" onClick={async () => { const paths = await desktop.pickFiles(); if (paths.length) await imported(paths, folder === 'All' || folder === 'Writing' ? 'Photos' : folder); }}><Plus size={15} />Add files</button>}
           <button className="btn primary" onClick={() => api.post('/api/library/open', { folder: folder === 'All' ? null : folder })}><FolderOpen size={15} />Open in Finder</button>
         </div>
       </div>
-      {lib && !config.jumpstart?.at && !config.dismissed?.['brand-jumpstart'] && (
+      {lib && introSeen(config, 'assets') && !config.jumpstart?.at && !config.dismissed?.['brand-jumpstart'] && (
         <div className="banner info row wrap" style={{ gap: 10 }}>
           <Globe size={16} />
           <span className="grow">Have a church website? Fill most of this in from it in about a minute.</span>
@@ -235,9 +246,10 @@ export default function BrandLibrary({ section }) {
         </div>
       )}
       {webSetup && <WebsiteSetup onClose={() => setWebSetup(false)} />}
+      {batch && <TagBatch items={batch} onClose={() => setBatch(null)} onSaved={async () => { setBatch(null); const r = await api.get('/api/library/notes'); setNotes(r.notes || {}); }} />}
       {noting && <PhotoNotes item={noting} note={notes[noting.rel]} onClose={() => setNoting(null)} onSaved={(n) => { setNotes((x) => { const y = { ...x }; if (n) y[noting.rel] = n; else delete y[noting.rel]; return y; }); setNoting(null); }} />}
       {erasingFile && <BackgroundEraser rel={erasingFile} onClose={() => setErasingFile(null)} onSaved={() => { setErasingFile(null); load(); }} />}
-      {lib && (
+      {lib && introSeen(config, 'assets') && (
         <SetupChecklist id="brand-setup" eyebrow="Set up your brand" title={(done, total) => (done === 0 ? 'A few building blocks' : `${done} of ${total} done`)} steps={[
           { label: 'Add your logo', help: 'An SVG, or a PNG with a see-through background, works best.', ok: (counts.Logos || 0) >= 1, action: () => addTo('Logos'), cta: 'Add logo' },
           { label: 'Add a light version', help: 'A white or one-color logo for dark backgrounds and video.', ok: Object.values(config.logoKinds || {}).includes('light') || (counts.Logos || 0) >= 2, action: () => addTo('Logos'), cta: 'Add' },

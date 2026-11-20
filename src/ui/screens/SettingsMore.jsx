@@ -166,10 +166,10 @@ export function Feedback() {
     try {
       const r = await api.post('/api/feedback', { kind: 'feedback', stars, text, name });
       if (r.url) openLink(r.url);
-      setSent(true);
+      setSent(r.sent ? 'sent' : r.how || 'sent');
     } catch (e) { toast({ kind: 'error', text: e.message }); }
   };
-  if (sent) return <section className="glass strong panel stack"><h2>Thank you.</h2><p className="muted">Every note helps make Church Studio better for churches.</p><button className="btn sm" onClick={() => { setSent(false); setStars(0); setText(''); }}>Send another</button></section>;
+  if (sent) return <section className="glass strong panel stack"><h2>Thank you.</h2><p className="muted">{sent === 'email' ? 'Your email app opened with your note filled in. Press Send there to finish.' : sent === 'github' ? 'A GitHub page opened with your note filled in. Press Submit there to finish.' : 'It’s on its way. Every note helps make Church Studio better for churches.'}</p><button className="btn sm" onClick={() => { setSent(false); setStars(0); setText(''); }}>Send another</button></section>;
   return (
     <section className="glass strong panel stack" style={{ gap: 14 }}>
       <div className="stack" style={{ gap: 4 }}>

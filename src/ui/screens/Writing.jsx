@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import ToolIntro from '../components/ToolIntro.jsx';
 import { ArrowLeft, CalendarDays, Copy, FileDown, FileText, Heart, PenLine, Plus, Sparkles, Wand2, Check, RefreshCw, Undo2, Link2, Info, Printer, Mail, Users } from 'lucide-react';
 import Modal, { ModalHead } from '../components/Modal.jsx';
 import { Masonry } from '../components/Masonry.jsx';
@@ -361,18 +362,19 @@ function WritingHome({ onOpen }) {
   const upcoming = cal.events.filter((e) => new Date(e.end || e.start) >= new Date()).slice(0, 30);
   return (
     <div className="page">
+      <ToolIntro id="writing" />
       <div className="stack" style={{ gap: 2 }}>
         <h1>Writing</h1>
         <span className="muted">Turn a transcript into a blog, or write your own.</span>
       </div>
       <div className="start-grid">
-        <button className="start-tile glass" onClick={() => setPickSermon(true)}>
-          <span className="type-badge" style={{ width: 40, height: 40, '--t': 'var(--tone-1)' }}><FileText size={19} /></span>
-          <strong>From a transcript</strong><span className="small muted">A blog post, email, small group guide and captions, written from the sermon's own words.</span>
-        </button>
         <button className="start-tile glass" onClick={() => create({ type: 'blank' })}>
           <span className="type-badge" style={{ width: 40, height: 40, '--t': 'var(--tone-2)' }}><Plus size={19} /></span>
           <strong>Blank post</strong><span className="small muted">Start from a clean page with the same editor, SEO and brand voice checks.</span>
+        </button>
+        <button className="start-tile glass" onClick={() => setPickSermon(true)}>
+          <span className="type-badge" style={{ width: 40, height: 40, '--t': 'var(--tone-1)' }}><FileText size={19} /></span>
+          <strong>From a transcript</strong><span className="small muted">A blog post, email, small group guide and captions, written from the sermon's own words.</span>
         </button>
         <button className="start-tile glass" onClick={() => create({ type: 'newsletter' })}>
           <span className="type-badge" style={{ width: 40, height: 40, '--t': 'var(--tone-4)' }}><Mail size={19} /></span>

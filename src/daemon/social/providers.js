@@ -215,5 +215,27 @@ export async function youtubeComments(creds, channelId) {
   return { items, credentials: refreshed ? next : undefined };
 }
 
+/** Recent comments on a Facebook Page's posts. */
+export async function facebookComments(creds) {
+  const { pageId, pageToken } = creds;
+  const r = await json(await req(`https://graph.facebook.com/${GRAPH}/${encodeURIComponent(pageId)}/feed?fields=permalink_url,comments.limit(10).order(reverse_chronological){from,message,created_time,permalink_url}&limit=15&access_token=${encodeURIComponent(pageToken)}`), 'Facebook');
+  return (r.data || []).flatMap((post) => (post.comments?.data || []).map((c) => ({ id: c.id, author: c.from?.name || 'Someone', text: c.message || '', at: c.created_time, url: c.permalink_url || post.permalink_url })));
+}
+
+/** Recent comments on Instagram posts. */
+export async function instagramComments(creds) {
+  const { igUserId, accessToken } = creds;
+  const r = await json(await req(`https://graph.facebook.com/${GRAPH}/${encodeURIComponent(igUserId)}/media?fields=permalink,comments.limit(10){username,text,timestamp}&limit=15&access_token=${encodeURIComponent(accessToken)}`), 'Instagram');
+  return (r.data || []).flatMap((m) => (m.comments?.data || []).map((c) => ({ id: c.id, author: c.username ? `@${c.username}` : 'Someone', text: c.text || '', at: c.timestamp, url: m.permalink })));
+}
+
+/** Mentions and replies on Mastodon. */
+export async function mastodonMentions(creds) {
+  const base = instance(creds.instance);
+  const r = await json(await req(`${base}/api/v1/notifications?types[]=mention&limit=30`, { headers: { authorization: `Bearer ${creds.token}` } }), 'Mastodon');
+  const strip = (h) => String(h || '').replace(/<br\s*\/?>/g, '\n').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+  return (r || []).map((n) => ({ id: n.id, author: n.account?.display_name || `@${n.account?.acct}`, avatar: n.account?.avatar, text: strip(n.status?.content), at: n.created_at, url: n.status?.url }));
+}
+
 export const PROVIDERS = { telegram, discord, mastodon, youtube, facebook, instagram };
 export { ProviderError };

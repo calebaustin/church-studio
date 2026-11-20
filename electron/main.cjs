@@ -130,7 +130,8 @@ ipcMain.handle('notify', (_e, { title, body } = {}) => {
   n.show();
   return true;
 });
-ipcMain.handle('open-external', (_e, url) => { if (/^https:\/\//.test(url)) shell.openExternal(url); });
+// Web links, and mailto: so feedback can open the person's Mail app filled in.
+ipcMain.handle('open-external', (_e, url) => { if (/^https:\/\//.test(url) || /^mailto:[^\s@]+@[^\s@]+/.test(url)) shell.openExternal(url); });
 
 /** The app used to be called Sermon Clips. Move its data to the new folder once, keeping workspace paths valid. */
 function migrateOldData() {

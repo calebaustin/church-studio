@@ -66,7 +66,7 @@ const isQuestion = (t) => /\?\s*$/.test(t);
 
 const FIRST = [['videos', 'Video clips', 'library'], ['social', 'Social posts', 'social'], ['writing', 'Blogs and emails', 'writing'], ['design', 'Graphics and slides', 'graphics']];
 
-export function WebsiteSetup({ onClose }) {
+export function WebsiteSetup({ onClose, stayHere = false }) {
   const { config, saveConfig, go, toast, refreshLogo, reloadConfig } = useApp();
   const families = useFamilies();
   const [step, setStep] = useState('ask'); // ask | scan | review
@@ -110,7 +110,7 @@ export function WebsiteSetup({ onClose }) {
       await reloadConfig?.(); refreshLogo?.();
       toast({ text: 'Church Studio looks like your church now.', celebrate: true });
       onClose();
-      go({ name: FIRST.find(([k]) => k === first)?.[2] || 'home' });
+      if (!stayHere) go({ name: FIRST.find(([k]) => k === first)?.[2] || 'home' });
     } catch (e) { setError(e.message); setBusy(false); }
   };
 

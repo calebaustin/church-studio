@@ -11,6 +11,7 @@ import * as socialStore from './social/store.js';
 import { blogHistory } from './blog.js';
 import { contentPlan } from './hub.js';
 import { listDesigns } from './designs.js';
+import { loadConfig } from './config.js';
 
 /** Topics most churches come back to. A topic counts when one of its word stems shows up. */
 export const TOPICS = [
@@ -145,6 +146,13 @@ function seasonsFor(y) {
     { id: 'christmas', name: 'Christmas Eve', date: new Date(y, 11, 24), idea: 'Service times everywhere, a countdown, and a warm welcome for guests.' },
   ];
 }
+/** Every season in this year and next, minus the ones the church doesn't mark (for the calendar). */
+export async function seasonDays() {
+  const off = new Set((await loadConfig()).seasonsOff || []);
+  const y = new Date().getFullYear();
+  return [...seasonsFor(y - 1), ...seasonsFor(y), ...seasonsFor(y + 1)].filter((x) => !off.has(x.id)).map((x) => ({ id: x.id, name: x.name, date: x.date.toISOString() }));
+}
+
 export function upcomingSeasons(now = new Date(), days = 90) {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   return [...seasonsFor(now.getFullYear()), ...seasonsFor(now.getFullYear() + 1)]
@@ -155,6 +163,7 @@ export function upcomingSeasons(now = new Date(), days = 90) {
 
 // ------------------------------------------------------------------ the report
 export async function inspiration({ period = 'quarter' } = {}) {
+  const cfgSeasonsOff = (await loadConfig()).seasonsOff;
   const days = PERIODS[period] || PERIODS.quarter;
   const since = Date.now() - days * 86400000;
   const { items, blog } = await corpus();
@@ -218,7 +227,9 @@ export async function inspiration({ period = 'quarter' } = {}) {
     period, since: new Date(since).toISOString(),
     counts: { sermons: by('sermon'), writing: by('writing'), posts: by('post'), blog: by('blog'), total: inPeriod.length },
     words, topics, blindSpots, scripture,
-    seasons: upcomingSeasons(),
+    seasons: upcomingSeasons().filter((x) => !(cfgSeasonsOff || []).includes(x.id)),
+    allSeasons: seasonsFor(new Date().getFullYear()).map(({ id, name }) => ({ id, name })),
+    seasonsOff: cfgSeasonsOff || [],
     blog: blog.feed ? {
       feed: blog.feed, site: blog.site, fetched: blog.fetched, total: posts.length, months,
       lastPost: lastPost ? { title: lastPost.title, link: lastPost.link, date: lastPost.date } : null,

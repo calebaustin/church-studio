@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import ToolIntro, { introSeen } from '../components/ToolIntro.jsx';
 import { useApp } from '../App.jsx';
 import { ArrowRight, Check, MonitorPlay, FolderOpen, Link2, Clapperboard, AudioLines, FileAudio, ScissorsLineDashed, Search } from 'lucide-react';
 import CleanAudioDialog from '../components/CleanAudioDialog.jsx';
@@ -42,6 +43,7 @@ export default function Library({ openPicker = false }) {
 
   return (
     <div className="page">
+      <ToolIntro id="library" />
       <section className="glass strong hero">
         <div>
           <h1>Turn Sunday's sermon or a video into a clip worth sharing.</h1>
@@ -177,7 +179,7 @@ function GettingStarted({ projects, onPick }) {
   const { config, go } = useApp();
   const [social, setSocial] = useState(null);
   useEffect(() => { api.get('/api/social/accounts').then((r) => setSocial(r.accounts.length)).catch(() => setSocial(0)); }, []);
-  if (!projects || social == null) return null;
+  if (!projects || social == null || !introSeen(config, 'library')) return null; // after the hello is put away
   const transcribed = projects.some((p) => p.status === 'transcribed');
   const exported = projects.some((p) => p.exported > 0);
   const steps = [

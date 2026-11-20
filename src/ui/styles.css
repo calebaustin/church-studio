@@ -1317,3 +1317,13 @@ div.cn-card { cursor: default; }
 .size-preview { display: grid; justify-items: center; gap: 4px; text-align: center; }
 .size-stage { width: 200px; height: 200px; display: grid; place-items: center; border-radius: var(--radius-sm); background: var(--field); box-shadow: inset 0 0 0 1px var(--line); }
 .size-canvas { display: grid; place-items: center; border-radius: 6px; background: var(--surface-solid); box-shadow: var(--shadow), inset 0 0 0 1px var(--line-strong); color: var(--muted); transition: width var(--fast) var(--ease), height var(--fast) var(--ease); }
+.start-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } @media (max-width: 560px) { .start-choices { grid-template-columns: minmax(0, 1fr); } }
+.tool-intro { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 16px; align-items: start; animation: rise var(--med) var(--ease); }
+.tool-intro-steps { margin: 0; padding-left: 20px; display: grid; gap: 3px; color: var(--text); font-size: 14px; }
+.month-season { font-size: 10.5px; font-weight: 700; color: var(--accent-text); letter-spacing: .02em; display: block; min-width: 0; }
+.batch-thumbs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.batch-thumbs img { width: 64px; height: 64px; object-fit: cover; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--line); }
+.logo-trash { position: absolute; top: 6px; right: 6px; opacity: 0; background: var(--surface-strong); }
+.logo-tile { position: relative; }
+.logo-tile:hover .logo-trash, .logo-trash:focus-visible { opacity: 1; }
+.banner.warn { background: var(--warn-soft); }
