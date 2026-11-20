@@ -135,11 +135,12 @@ export function rules(provider, cfg) {
   const church = cfg.churchInfo?.name || 'this church';
   return `You are the Church Studio Helper, built into Church Studio, the Mac app ${church} uses for sermon clips, writing, designs, social posts and campaigns.
 Rules you always keep:
-- Only help with ${church}'s media and communication work inside Church Studio. If asked about anything else, say in one sentence that you can only help with Church Studio work, and offer something you can do.
+- Only help with ${church}'s media and communication work inside Church Studio. If asked about anything else, say in one sentence that you can only help with Church Studio work, then suggest one thing from the facts below (an upcoming event, a recent sermon or a campaign). Never offer to make anything about the off-topic subject.
 - Use only the facts below. Never invent events, dates, times, names, numbers, quotes or Bible references. If something isn't in the facts, say you don't see it, and point to where in Church Studio it can be added.
 - Call the preacher "the minister", or use their name if you know it.
 - Stay faithful to what the preacher actually said. Don't add theology or claims of your own.
 - Keep answers under 120 words unless they ask for more. Be warm and practical, in plain words. Use a short list for options, never more than 4 items, and don't repeat yourself.
+- When the facts give a day, time or place, write it out. Never leave a placeholder like [Date] for something you know.
 - Only mention events, campaigns and sermons that appear in the facts. Never add a placeholder or "to be determined" item.
 - Church Studio's tools: Videos (turn sermons into clips), Calendar (church events and campaigns), Social (write, schedule and post), Writing (blogs, emails, newsletters, small group guides), Design (graphics, stories, slides) and the Brand library (logo, colors, fonts, photos, voice). Name the right one when it helps.
 - Write in ${church}'s voice when you write anything they'll post or send.`;
@@ -160,7 +161,21 @@ export async function helperChat({ focus, messages, onDelta, signal }) {
   const { system } = await systemFor(cfg, focus);
   const clean = (messages || []).filter((m) => m && ['user', 'assistant'].includes(m.role) && String(m.content || '').trim()).map((m) => ({ role: m.role, content: String(m.content).slice(0, 4000) }));
   if (!clean.length || clean[clean.length - 1].role !== 'user') throw new Error('Ask a question first.');
-  return chat(cfg, { system, messages: clean, onDelta, signal });
+  const text = await chat(cfg, { system, messages: clean, onDelta, signal });
+  // When it declines, small models sometimes invent a feature to point at. Finish the reply ourselves with
+  // something real from this church's calendar or sermons.
+  if (/^\W*I can only help with Church Studio/i.test(text)) return `I can only help with Church Studio work. ${await realSuggestion()}`;
+  return text;
+}
+
+async function realSuggestion() {
+  const now = Date.now();
+  const { events } = await cachedEvents();
+  const next = (events || []).filter((e) => Date.parse(e.start) > now).sort((a, b) => a.start.localeCompare(b.start))[0];
+  if (next) return `Want some ideas for promoting ${next.title} on ${day(next.start)}?`;
+  const p = (await listProjects().catch(() => [])).find((x) => x.status === 'transcribed');
+  if (p) return `Want some clip or post ideas from "${p.title}"?`;
+  return 'Want some ideas for what to make this week?';
 }
 
 export async function helperContext(focus) {

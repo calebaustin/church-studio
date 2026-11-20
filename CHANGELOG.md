@@ -7,7 +7,7 @@ Every update keeps your sermons, designs, drafts and settings. Before a new vers
 ### New
 - **AI helpers that run on your Mac.** Settings › AI helper now has four choices: Off, Apple Intelligence, CS Helper and External AI. It's still off unless you turn it on.
   - **Apple Intelligence** comes first. It uses the AI built into your Mac, privately, with nothing to download.
-  - **CS Helper** is your own AI that works only inside Church Studio. It's a one-time 2 GB download and then needs no internet. (Built with Llama.)
+  - **CS Helper** is your own AI that works only inside Church Studio. Download it only if you want it: a one-time 2 GB download, then no internet needed. You can pause the download, and a clear **Delete from this Mac** button on the same card frees the space when you're done with it. (Built with Llama.)
   - **External AI** connects Claude, ChatGPT or Gemini. These work only online and need your own account with them, which may cost money.
 - **The helper chat.** With a helper on, a button in the corner opens a chat about what you're working on. Your design, clip, sermon or writing shows at the top. It knows your church's calendar, sermons, voice and brand from Church Studio, and it sticks to them: it won't make up events, names or Bible references.
 - **Helper Passes.** One tap for ideas on the page you're on: hooks, titles and captions for a clip, headlines and a caption for a design, titles and openings for writing, and plans for the week. Press Use to put one right on the page; Undo takes it back.

@@ -44,6 +44,7 @@ export default function AIHelperSettings() {
   const [local, setLocal] = useState(null);
   const [pickExternal, setPickExternal] = useState(false);
   const [test, setTest] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const p = config.llmProvider || 'none';
   const external = EXTERNAL.some((x) => x.id === p);
   const load = () => api.get('/api/ai/local').then(setLocal).catch(() => setLocal({ apple: { available: false, reason: 'Could not check.' }, cshelper: {} }));
@@ -54,7 +55,13 @@ export default function AIHelperSettings() {
 
   const choose = (id) => { setTest(null); saveConfig({ llmProvider: id }); };
   const download = async () => { const r = await api.post('/api/ai/cshelper/download'); trackJob(r.job); };
-  const remove = async () => { await api.del('/api/ai/cshelper'); if (p === 'cshelper') await saveConfig({ llmProvider: 'none' }); load(); toast({ text: 'CS Helper removed from this Mac.' }); };
+  const remove = async () => {
+    setConfirmDelete(false);
+    await api.del('/api/ai/cshelper');
+    if (p === 'cshelper') await saveConfig({ llmProvider: 'none' });
+    load();
+    toast({ text: `CS Helper is deleted. ${gb(cs.size || cs.bytes)} freed on this Mac.` });
+  };
   const runTest = async () => {
     setTest({ busy: true });
     try { const r = await api.post('/api/ai/test'); setTest(r.ok ? { ok: true, msg: `Working. Sample title: “${r.sample}”` } : { ok: false, msg: r.error }); } catch (e) { setTest({ ok: false, msg: e.message }); }
@@ -84,21 +91,36 @@ export default function AIHelperSettings() {
             {p === 'apple' && <Check size={16} className="ai-check" />}
           </button>
 
-          <div className={`ai-choice ${p === 'cshelper' ? 'on' : ''}`} role="button" tabIndex={0} onClick={() => cs.ready && choose('cshelper')} onKeyDown={(e) => e.key === 'Enter' && cs.ready && choose('cshelper')} aria-disabled={!cs.ready}>
+          <div className={`ai-choice cs-card ${p === 'cshelper' ? 'on' : ''} ${cs.ready ? '' : 'idle'}`} role="button" tabIndex={cs.ready ? 0 : -1} onClick={() => cs.ready && choose('cshelper')} onKeyDown={(e) => e.key === 'Enter' && cs.ready && choose('cshelper')} aria-disabled={!cs.ready}>
             <span className="cn-icon tone tone-2"><Cpu size={17} /></span>
-            <span className="stack" style={{ gap: 6 }}>
+            <span className="stack" style={{ gap: 8 }}>
               <span className="stack" style={{ gap: 2 }}>
-                <strong>CS Helper</strong>
-                <span className="muted small">Download your own AI that works and thinks only inside Church Studio. It learns your church from what's here: your calendar, sermons, voice and brand. No internet needed once it's downloaded.</span>
+                <strong>CS Helper {cs.ready && <span className="chip" style={{ marginLeft: 4 }}>On this Mac</span>}</strong>
+                <span className="muted small">Your own AI that works and thinks only inside Church Studio. It learns your church from what's here: your calendar, sermons, voice and brand. Download it only if you want it. No internet needed after that.</span>
               </span>
-              {!cs.ready && !dl && (
+              {!cs.model && !dl && (
                 <span className="row wrap" style={{ gap: 8 }}>
-                  <button className="btn sm primary" onClick={(e) => { e.stopPropagation(); download(); }} disabled={!cs.engine && cs.engine !== undefined}><Download size={14} />Download ({gb(cs.bytes || 2.0e9)})</button>
+                  <button className="btn sm primary" disabled={cs.engine === false} onClick={(e) => { e.stopPropagation(); download(); }}>
+                    <Download size={14} />{cs.partial ? `Resume download (${gb(cs.bytes - cs.partial)} left)` : `Download CS Helper (${gb(cs.bytes || 2.0e9)})`}
+                  </button>
                   {cs.engine === false && <span className="small muted">Needs the next Church Studio update to run.</span>}
                 </span>
               )}
-              {dl && <span className="stack" style={{ gap: 4 }}><span className="meter"><i style={{ width: `${dl.progress || 0}%` }} /></span><span className="small muted">{dl.message}</span></span>}
-              {cs.model && <button className="btn sm ghost danger" onClick={(e) => { e.stopPropagation(); remove(); }}><Trash2 size={14} />Remove from this Mac</button>}
+              {dl && (
+                <span className="stack" style={{ gap: 6 }} onClick={(e) => e.stopPropagation()}>
+                  <span className="meter"><i style={{ width: `${dl.progress || 0}%` }} /></span>
+                  <span className="row between wrap" style={{ gap: 8 }}>
+                    <span className="small muted">{dl.message}</span>
+                    <button className="btn sm ghost" onClick={async () => { await api.del(`/api/jobs/${dl.id}`); setTimeout(load, 400); }}>Pause</button>
+                  </span>
+                </span>
+              )}
+              {cs.model && (
+                <span className="cs-installed" onClick={(e) => e.stopPropagation()}>
+                  <span className="small"><strong>Downloaded</strong> <span className="muted">· using {gb(cs.size || cs.bytes)} on this Mac</span></span>
+                  <button className="btn sm danger" onClick={() => setConfirmDelete(true)}><Trash2 size={14} />Delete from this Mac</button>
+                </span>
+              )}
               <span className="tiny muted">Built with Llama. Uses Meta's Llama 3.2 3B under the <button className="linklike" onClick={(e) => { e.stopPropagation(); openLink(cs.license); }}>Llama 3.2 Community License</button> and <button className="linklike" onClick={(e) => { e.stopPropagation(); openLink(cs.policy); }}>use policy</button>. Downloading it means you agree to them.</span>
             </span>
             {p === 'cshelper' && <Check size={16} className="ai-check" />}
@@ -128,6 +150,16 @@ export default function AIHelperSettings() {
         </section>
       ))}
 
+      {confirmDelete && (
+        <Modal label="Delete CS Helper" width={440} onClose={() => setConfirmDelete(false)}>
+          <ModalHead title="Delete CS Helper from this Mac?" sub={`This frees ${gb(cs.size || cs.bytes)}. Church Studio keeps working, and you can download it again anytime.`} />
+          {p === 'cshelper' && <p className="small muted" style={{ marginTop: 10 }}>The AI helper turns off. You can pick Apple Intelligence or another helper after.</p>}
+          <div className="row" style={{ justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+            <button className="btn ghost" onClick={() => setConfirmDelete(false)}>Keep it</button>
+            <button className="btn danger" onClick={remove}><Trash2 size={14} />Delete</button>
+          </div>
+        </Modal>
+      )}
       {pickExternal && (
         <Modal label="External AI" width={560} onClose={() => setPickExternal(false)}>
           <ModalHead title="Connect an External AI" sub="These run on the company's computers, not your Mac." />

@@ -49,6 +49,18 @@ Tool welcome cards show a small "Try it with Apple Intelligence!" nudge when the
 - llama.cpp is MIT. The Apple bridge is our own code; the Apple-Intelligence-Chat sample (MIT) was the reference.
 - RunAnywhere was studied only. Its license needs a paid license for larger organizations, so none of its code is used.
 
+## The CS Helper engine
+`scripts/fetch-llama.sh` downloads one pinned llama.cpp release (`TAG`, checked against `SHA`), and copies
+`llama-server` plus only the libraries it loads (as real files, no symlinks) into `build/bin/llama`. The packaged
+app has them in `Resources/bin/llama`. `scripts/build-app.sh` runs it. To move to a newer llama.cpp, change `TAG`
+and `SHA` (from the release asset's digest), run the script, and test a chat and a pass.
+
+## Download and delete (Settings › AI helper › CS Helper)
+- Nothing is downloaded unless the person presses **Download CS Helper (2.0 GB)**.
+- While downloading: a progress bar and **Pause**. A paused download keeps its `.part` file and offers
+  **Resume download**.
+- Once downloaded: a "Downloaded · using 2.0 GB on this Mac" strip with **Delete from this Mac**, which asks first,
+  frees the space, and turns the helper off if it was on.
+
 ## Not done yet
-- Bundling `llama-server` in the app (build step), so CS Helper can run in the packaged app.
 - Picture descriptions with a local model.

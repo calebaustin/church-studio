@@ -39,8 +39,11 @@ else
   cp "$(node -e "process.stdout.write(require('ffmpeg-static'))")" build/bin/ffmpeg
   cp "$(node -e "process.stdout.write(require('@ffprobe-installer/ffprobe').path)")" build/bin/ffprobe
 fi
-if [ "$ARCH" != "x64" ]; then echo "==> Building the Apple Intelligence bridge"; ./scripts/build-apple-ai.sh; fi
-chmod +x build/bin/*
+if [ "$ARCH" != "x64" ]; then
+  echo "==> Building the Apple Intelligence bridge"; ./scripts/build-apple-ai.sh
+  echo "==> Adding the CS Helper engine (llama.cpp)"; ./scripts/fetch-llama.sh
+fi
+chmod +x build/bin/* 2>/dev/null || true
 file build/bin/ffmpeg build/sc-media/sc-media | sed 's/^/   /'
 
 echo "==> Building the app"

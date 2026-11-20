@@ -14,7 +14,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { BASE, tool } from './tools.js';
+import { BASE, RESOURCES, ROOT, tool } from './tools.js';
 
 // ------------------------------------------------------------------ Apple Intelligence
 let apple = { checked: 0, available: false, reason: 'Not checked yet.' };
@@ -80,18 +80,26 @@ export const CS_MODEL = {
   policy: 'https://www.llama.com/llama3_2/use-policy/',
 };
 // Shared by every workspace, so a second brand doesn't download it again.
+// llama-server and its libraries sit together in bin/llama (packaged) or build/bin/llama (dev).
+function llamaBin() {
+  const c = [RESOURCES && path.join(RESOURCES, 'bin', 'llama', 'llama-server'), path.join(ROOT, 'build', 'bin', 'llama', 'llama-server'), tool('llama-server')].filter(Boolean);
+  return c.find((x) => existsSync(x)) || c[c.length - 1];
+}
+
 export const MODELS_DIR = path.join(BASE, 'models');
 const modelPath = () => path.join(MODELS_DIR, CS_MODEL.file);
 
 export async function csHelperStatus() {
-  const engine = tool('llama-server');
+  const engine = llamaBin();
   const hasEngine = existsSync(engine);
   let size = 0;
   try { size = (await stat(modelPath())).size; } catch { /* not downloaded */ }
   const model = size > CS_MODEL.bytes * 0.95;
-  return { model, engine: hasEngine, ready: model && hasEngine, bytes: CS_MODEL.bytes, name: CS_MODEL.name, running: Boolean(server.proc), license: CS_MODEL.license, policy: CS_MODEL.policy };
+  let partial = 0;
+  try { partial = (await stat(`${modelPath()}.part`)).size; } catch { /* none */ }
+  return { model, partial: model ? 0 : partial, size, engine: hasEngine, ready: model && hasEngine, bytes: CS_MODEL.bytes, name: CS_MODEL.name, running: Boolean(server.proc), license: CS_MODEL.license, policy: CS_MODEL.policy };
 }
-export const csHelperReadySync = () => existsSync(modelPath()) && existsSync(tool('llama-server'));
+export const csHelperReadySync = () => existsSync(modelPath()) && existsSync(llamaBin());
 
 /** Download the model (a job): resumable into a .part file, renamed when complete. */
 export async function downloadCsModel(ctx) {
@@ -137,7 +145,7 @@ async function startServer() {
   if (server.starting) return server.starting;
   server.starting = (async () => {
     if (!existsSync(modelPath())) throw new Error('Download CS Helper first, in Settings › AI helper.');
-    const bin = tool('llama-server');
+    const bin = llamaBin();
     if (!existsSync(bin)) throw new Error('The CS Helper engine is missing from this copy of Church Studio. Update to the latest version.');
     const port = await freePort();
     const proc = spawn(bin, ['-m', modelPath(), '--host', '127.0.0.1', '--port', String(port), '--ctx-size', '8192', '-ngl', '99', '--threads', '4', '--log-disable'], { stdio: 'ignore' });

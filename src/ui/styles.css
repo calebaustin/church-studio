@@ -1530,3 +1530,5 @@ input[type='range']:active::-webkit-slider-thumb { transform: scale(1.22); trans
 .ai-nudge { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 8px 8px 12px; border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--text); }
 .ai-nudge svg { color: var(--accent-text); flex: none; }
 .ai-nudge > span { flex: 1 1 220px; min-width: 0; }
+.ai-choice.idle:hover { border-color: var(--line-strong); }
+.cs-installed { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 8px 8px 12px; border-radius: var(--radius-sm); background: var(--hover); cursor: default; }
