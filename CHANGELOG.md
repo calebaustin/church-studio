@@ -2,7 +2,7 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
-## Unreleased
+## 0.14.0 · November 20, 2026
 
 ### New
 - **AI helpers that run on your Mac.** Settings › AI helper now has four choices: Off, Apple Intelligence, CS Helper and External AI. It's still off unless you turn it on.
