@@ -2,7 +2,7 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
-## Unreleased
+## 0.13.1 · November 20, 2026
 
 ### Fixed
 - **The menu scrolls in a short window.** When the window is too short to show every button, the left menu scrolls instead of hiding Settings and the buttons below it. The idea card steps aside first to make room.
