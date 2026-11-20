@@ -10,10 +10,17 @@ Every update keeps your sermons, designs, drafts and settings. Before a new vers
 - **Pictures from your Brand library.** In a design, the helper knows your brand photos by name and description. Ask for a picture, or tap **Pick a photo**, and press **Add**: it fills the selected photo spot, or goes on the page.
 - **It knows what's selected.** In a design, "this" means the item you've selected (or the whole design). If it isn't sure what you mean, it asks.
 - **Saved chats.** Each chat is saved and named by its first question. Press **New chat** to start fresh, or the clock to open a past chat. Delete any you don't need.
+- **The helper grows from its button.** Tap the helper button and it grows into the chat; press the minimize button in its top corner and it shrinks back into the button.
+- **"Wondering what to work on today?"** Open the helper on the Dashboard, or use the new card at the top of Inspiration, for a few real places to start (events with no posts yet, sermons with clips or writing left, a new video on your channel), each with a button that starts it.
+- **AI Helper tips.** A list of the kinds of things you can ask, by tool. Tap one to try it.
+- **It knows its way around.** Ask where a setting is or how to do something, like "Where do I change our service times?", and the helper answers with a link straight there.
+- **Bible references for writing.** Ask for verses on a topic and the helper suggests references, starting with ones your minister has preached. It doesn't quote verse wording from memory (small models get it wrong), it reminds you to check your Bible's wording, and it leaves doctrine to your minister.
+- **Image Playground in Design.** With Apple Intelligence on, the helper offers ready prompts for the design you're in, like "An illustration of Fall Harvest Festival", or "Restyle the selected picture". Apple's Image Playground opens with it, and the image you pick goes onto your design and into your Brand library.
 - **A working wave.** While an AI helper works on something, a soft wave of color moves over that panel: the design canvas, the writing, or the clip panel. Rewrites in Writing show it too.
 
 ### Better
 - The helper's header keeps its width: long names end in "…".
+- Notifications keep only the big things you might have missed: finished exports, downloads and transcripts, work that didn't finish, updates, and "working locally" notices. Small confirmations no longer pile up there.
 - The design editor's right panel never scrolls sideways. Long layer names end in "…", rows wrap, and the background choices (Gradient to Photo) fill the width.
 - The left menu fits a full-screen window on a 13-inch MacBook, with slightly smaller buttons.
 

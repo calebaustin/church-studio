@@ -210,3 +210,29 @@ export async function llamaChat({ system, messages, onDelta, schema, temperature
   touch();
   return text.trim();
 }
+
+// ------------------------------------------------------------------ Image Playground (Apple Intelligence)
+/**
+ * Open Apple's Image Playground window with a prompt and, optionally, a starting picture. Resolves with the
+ * created image's path, or null if they closed it. Apple only makes images for an app on screen, so this
+ * opens its own small window instead of working in the background.
+ */
+export function imagePlayground({ prompt, source }) {
+  return new Promise((resolve, reject) => {
+    const bin = tool('cs-image-playground');
+    if (!existsSync(bin)) return reject(new Error('Image Playground needs Apple Intelligence on macOS 26.'));
+    const p = spawn(bin, [], { stdio: ['pipe', 'pipe', 'ignore'] });
+    let buf = '';
+    p.stdout.on('data', (c) => { buf += c.toString(); });
+    p.on('error', reject);
+    p.on('close', () => {
+      const line = buf.trim().split('\n').pop();
+      try {
+        const o = JSON.parse(line || '{}');
+        if (o.error) return reject(new Error(o.error));
+        resolve(o.file || null);
+      } catch { resolve(null); }
+    });
+    p.stdin.end(JSON.stringify({ prompt, source, title: 'Image Playground · Church Studio' }));
+  });
+}

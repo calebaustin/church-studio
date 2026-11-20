@@ -142,9 +142,10 @@ export default function App() {
     // Good moments (an export, a post, a finished draft) sometimes carry a word of encouragement.
     const note = t.celebrate ? maybeNote(t.kind === 'export' ? 0.6 : 0.34) : null;
     setToasts((ts) => [...ts.slice(-3), { id, ...t, ...(note ? { note } : {}) }]);
-    // Keep a short history so missed notifications can be seen again.
+    // Keep a short history of only the big things someone might have missed: finished exports, downloads
+    // and transcripts, failed work, updates, and "working locally" banners (marked keep: true).
     const text = t.kind === 'export' ? `Clip exported: ${t.result?.title || 'your clip'}` : t.text;
-    if (text) setNotes((ns) => [{ id, text, kind: t.kind, at: Date.now(), action: t.action || (t.kind === 'export' && t.result?.file ? { label: 'Show in Finder', run: () => api.post('/api/reveal', { path: t.result.file }) } : null), read: false }, ...ns].slice(0, 30));
+    if (text && (t.keep || t.kind === 'export')) setNotes((ns) => [{ id, text, kind: t.kind, at: Date.now(), action: t.action || (t.kind === 'export' && t.result?.file ? { label: 'Show in Finder', run: () => api.post('/api/reveal', { path: t.result.file }) } : null), read: false }, ...ns].slice(0, 30));
     return id;
   }, []);
   const dismissToast = useCallback((id) => setToasts((ts) => ts.filter((t) => t.id !== id)), []);
@@ -157,7 +158,7 @@ export default function App() {
     const poll = () => api.get('/api/ai-status').then((st) => {
       if (!live) return;
       setAi(st);
-      if (st.notice && seenNotice.current !== null && st.notice.id !== seenNotice.current) toast({ text: st.notice.text });
+      if (st.notice && seenNotice.current !== null && st.notice.id !== seenNotice.current) toast({ text: st.notice.text, keep: true });
       seenNotice.current = st.notice?.id ?? 0;
     }).catch(() => {});
     poll();
@@ -176,7 +177,7 @@ export default function App() {
       api.put('/api/config', { lastUpdateCheck: new Date().toISOString() }).catch(() => {});
       if (r.available) {
         setUpdate(r);
-        toast({ text: `Church Studio ${r.latest} is ready to download.`, action: { label: 'See what\'s new', run: () => setRoute({ name: 'settings', section: 'updates' }) } });
+        toast({ keep: true, text: `Church Studio ${r.latest} is ready to download.`, action: { label: 'See what\'s new', run: () => setRoute({ name: 'settings', section: 'updates' }) } });
       }
     }).catch(() => {});
   }, [config == null]);
@@ -257,11 +258,11 @@ export default function App() {
     if (j.status === 'done' && (j.kind === 'download' || j.kind === 'import') && j.result?.projectId) {
       const r = j.result;
       const what = r.range ? `Sermon downloaded (${fmtClock(r.range.start)} to ${fmtClock(r.range.end)})` : j.kind === 'import' ? (r.height ? 'Video added' : 'Recording added') : 'Video downloaded';
-      toast({ text: `${what}. ${r.summary || ''}`.trim(), duration: 9000, action: { label: 'Open', run: () => setRoute({ name: 'project', id: r.projectId }) } });
+      toast({ keep: true, text: `${what}. ${r.summary || ''}`.trim(), duration: 9000, action: { label: 'Open', run: () => setRoute({ name: 'project', id: r.projectId }) } });
     }
-    if (j.status === 'done' && j.kind === 'export-joined') toast({ celebrate: true, text: `Joined ${j.result?.clips || ''} clips into one video.`, duration: 9000, action: { label: 'Show', run: () => api.post('/api/reveal', { path: j.result?.file }) } });
-    if (j.status === 'done' && j.kind === 'transcribe') toast({ text: `Transcribed ${j.result?.words?.toLocaleString() || ''} words. Check the sermon range next.`, duration: 7000 });
-    if (j.status === 'error' && ['export', 'export-joined', 'download', 'transcribe'].includes(j.kind)) toast({ kind: 'error', text: `${j.label} didn't finish: ${j.error?.slice(0, 160)}`, duration: 9000 });
+    if (j.status === 'done' && j.kind === 'export-joined') toast({ keep: true, celebrate: true, text: `Joined ${j.result?.clips || ''} clips into one video.`, duration: 9000, action: { label: 'Show', run: () => api.post('/api/reveal', { path: j.result?.file }) } });
+    if (j.status === 'done' && j.kind === 'transcribe') toast({ keep: true, text: `Transcribed ${j.result?.words?.toLocaleString() || ''} words. Check the sermon range next.`, duration: 7000 });
+    if (j.status === 'error' && ['export', 'export-joined', 'download', 'transcribe'].includes(j.kind)) toast({ keep: true, kind: 'error', text: `${j.label} didn't finish: ${j.error?.slice(0, 160)}`, duration: 9000 });
   }), [onJobFinished, toast]);
 
   // What the helper chat is looking at (set by the open editor), and how to use a suggestion there.
@@ -270,10 +271,18 @@ export default function App() {
   const setHelperFocus = useCallback((f, apply) => { setHelperFocusState(f); helperApply.current = apply || null; }, []);
   // Which page an AI helper is working on right now ('design', 'writing', 'clip'), for the working wave.
   const [aiWorking, setAiWorking] = useState(null);
+  // Open the helper with a question from another screen: askHelper('today' | 'tips').
+  const [helperAsk, setHelperAsk] = useState(null);
+  const askHelper = useCallback((kind) => setHelperAsk({ kind, at: Date.now() }), []);
 
   // A downloaded update: ask, big and clear, to quit and replace the app.
   const [updateReady, setUpdateReady] = useState(null);
-  useEffect(() => onJobFinished((j) => { if (j.kind === 'update' && j.status === 'done') setUpdateReady(j.result || {}); }), [onJobFinished]);
+  useEffect(() => onJobFinished((j) => {
+    if (j.kind !== 'update' || j.status !== 'done') return;
+    const info = j.result || {};
+    setUpdateReady(info);
+    setNotes((ns) => [{ id: `upd${Date.now()}`, text: `Church Studio ${info.version || ''} is downloaded and ready to install.`, kind: 'update', at: Date.now(), action: { label: 'How to install', run: () => setUpdateReady(info) }, read: false }, ...ns].slice(0, 30));
+  }), [onJobFinished]);
 
   const trackJob = useCallback((job) => {
     if (!job) return;
@@ -291,7 +300,7 @@ export default function App() {
   const [logoTick, setLogoTick] = useState(0);
   const logo = useChurchLogo(config ? { ...config, _t: logoTick } : null);
 
-  const value = { route, go, showNext, logo, refreshLogo: () => setLogoTick((n) => n + 1), setGuard, confirmLeave, config, saveConfig, reloadConfig, keyGuide, themes, reloadThemes, jobs, trackJob, onJobFinished, toast, helperFocus, setHelperFocus, helperApply, ai, aiWorking, setAiWorking };
+  const value = { route, go, showNext, logo, refreshLogo: () => setLogoTick((n) => n + 1), setGuard, confirmLeave, config, saveConfig, reloadConfig, keyGuide, themes, reloadThemes, jobs, trackJob, onJobFinished, toast, helperFocus, setHelperFocus, helperApply, ai, aiWorking, setAiWorking, helperAsk, askHelper };
 
   if (error) {
     return (

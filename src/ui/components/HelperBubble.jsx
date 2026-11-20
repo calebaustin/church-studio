@@ -3,13 +3,21 @@
 // Helper Passes for it. Answers stream in. Names of your things in an answer become pills that open them,
 // and a few next steps appear under it. Chats are saved: start a new one, or open an old one by its name.
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowUp, CalendarDays, Check, Clapperboard, Copy, FileText, History, Image as ImageIcon, Megaphone, Plus, Shapes, Sparkles, Square, Trash2, Wand2, X } from 'lucide-react';
+import { Apple, ArrowLeft, ArrowUp, CalendarDays, Check, Clapperboard, Compass, Copy, FileText, History, Image as ImageIcon, Lightbulb, Megaphone, Minus, Plus, Settings2, Shapes, Sparkles, Square, Trash2, Wand2 } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { api } from '../api.js';
 import { mdToHtml } from '../markdown.js';
 
 const NAMES = { apple: 'Apple Intelligence', cshelper: 'CS Helper', anthropic: 'Claude', openai: 'ChatGPT', gemini: 'Gemini', ollama: 'Ollama' };
-const REF_ICON = { event: CalendarDays, sermon: Clapperboard, design: Shapes, writing: FileText, campaign: Megaphone, file: ImageIcon };
+const REF_ICON = { event: CalendarDays, sermon: Clapperboard, design: Shapes, writing: FileText, campaign: Megaphone, file: ImageIcon, place: Settings2 };
+// What people can ask for. Each one fills the box so they can send it or change it first.
+const TIPS = [
+  ['Planning', ['What should we post this week?', 'How does this sermon connect to upcoming events?', 'Which events need posts soon?']],
+  ['Writing', ['Give me 3 titles for this', 'Make this sound more like our church', 'Suggest verses about hope for this post']],
+  ['Clips', ['Which part of this sermon makes the best clip?', 'Write a hook for this clip', 'Write a caption for this clip']],
+  ['Design', ['Pick a photo from my brand files', 'Write a headline for this design', 'Help me rewrite the selected text']],
+  ['Finding your way', ['Where do I change our service times?', 'How do I connect our church calendar?', 'Where do I add our logo?']],
+];
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const ago = (iso) => {
   const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
@@ -24,6 +32,7 @@ function routeFor(r) {
   if (r.type === 'design') return { name: 'graphics', design: r.id };
   if (r.type === 'writing') return { name: 'writing', project: r.id };
   if (r.type === 'campaign') return { name: 'calendar', tab: 'campaigns' };
+  if (r.type === 'place') return r.go;
   return { name: 'assets' };
 }
 /** The answer as HTML, with each named item turned into a pill button (first mention only). */
@@ -39,8 +48,16 @@ function withPills(md, refs = []) {
 }
 
 export default function HelperBubble({ ai }) {
-  const { route, go, helperFocus, helperApply, toast, setAiWorking } = useApp();
+  const { route, go, helperFocus, helperApply, toast, setAiWorking, helperAsk } = useApp();
   const [open, setOpen] = useState(false);
+  const [closing, setClosing] = useState(false); // shrinking back into the button
+  const minimize = () => {
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) { setOpen(false); return; } // no animation to wait for
+    if (closing) return;
+    setClosing(true);
+    // Finish even if the browser skips the animation's end signal (a hidden window pauses animations).
+    setTimeout(() => { setClosing(false); setOpen(false); }, 320);
+  };
   const [view, setView] = useState('chat'); // chat | history
   const [ctx, setCtx] = useState(null);
   const [chat, setChat] = useState({ id: null, title: null, messages: [] });
@@ -77,11 +94,20 @@ export default function HelperBubble({ ai }) {
     return () => { live = false; };
   }, [open, on, focusKey]);
 
+  // Another screen asked the helper something (like Inspiration's "Wondering what to work on today?").
+  useEffect(() => {
+    if (!helperAsk || !on) return;
+    setOpen(true); setClosing(false); setView('chat');
+    setChat({ id: null, title: null, messages: [] });
+    if (helperAsk.kind === 'today') setTimeout(() => runToday(true), 0);
+    if (helperAsk.kind === 'tips') setTimeout(() => showTips(true), 0);
+  }, [helperAsk?.at]);
+
   useEffect(() => { if (view === 'chat') list.current?.scrollTo({ top: list.current.scrollHeight }); }, [msgs, view]);
   useEffect(() => { if (open && view === 'chat') setTimeout(() => input.current?.focus(), 60); }, [open, view]);
   useEffect(() => {
     if (!open) return;
-    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') minimize(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
@@ -137,6 +163,40 @@ export default function HelperBubble({ ai }) {
     if (final) save([...start, final]);
   };
 
+  const runToday = async (fresh) => {
+    if (busy) return;
+    const base = fresh ? [] : msgs;
+    const start = [...base, { role: 'user', content: 'Wondering what to work on today?' }];
+    setMsgs(start); setBusy('today');
+    let reply;
+    try { const r = await api.post('/api/helper/today'); reply = { role: 'assistant', content: r.text, refs: r.refs || [], actions: r.actions || [] }; } catch (e) { reply = { role: 'assistant', content: e.message, error: true }; }
+    setBusy(null);
+    setMsgs([...start, reply]);
+    if (fresh) chatId.current = null;
+    save([...start, reply]);
+  };
+  const showTips = (fresh) => {
+    const base = fresh ? [] : msgs;
+    setMsgs([...base, { role: 'user', content: 'AI Helper tips' }, { role: 'assistant', content: '', tips: true }]);
+  };
+  const createImage = async (ip) => {
+    const prompt = ip.own ? draft.trim() : ip.prompt;
+    if (ip.own && !prompt) { input.current?.focus(); toast({ text: 'Type what you want to see in the box, then press Something of my own.' }); return; }
+    if (busy) return;
+    setBusy('image'); setAiWorking?.('design');
+    const start = [...msgs, { role: 'user', content: ip.source ? 'Restyle the selected picture with Image Playground' : `Image Playground: ${prompt}`, pass: true }];
+    setMsgs([...start, { role: 'note', content: 'Image Playground is open in its own window. Pick an image there.' }]);
+    if (ip.own) setDraft('');
+    let reply = null;
+    try {
+      const r = await api.post('/api/ai/image-playground', { prompt, sourceRel: ip.source || null });
+      if (r.rel) { apply('image', r.rel); reply = { role: 'assistant', content: '', options: [{ label: 'Added from Image Playground', value: r.rel, thumb: r.url, note: 'Saved in your Brand library under Graphics.' }], apply: 'image' }; }
+      else reply = { role: 'note', content: 'Image Playground closed without a picture.' };
+    } catch (e) { reply = { role: 'assistant', content: e.message, error: true }; }
+    setBusy(null); setAiWorking?.(null);
+    setMsgs([...start, reply]);
+  };
+
   const pass = async (p) => {
     if (busy) return;
     setBusy(p.id);
@@ -167,11 +227,10 @@ export default function HelperBubble({ ai }) {
 
   return (
     <>
-      <button className={`helper-fab ${open ? 'open' : ''}`} aria-label={open ? 'Close the helper' : 'Ask the helper'} title={`Helper · ${NAMES[ai.provider] || ''}`} onClick={() => setOpen(!open)}>
-        {open ? <X size={20} /> : <Sparkles size={20} />}
-      </button>
+      {!open && <button className="helper-fab" aria-label="Ask the helper" title={`Helper · ${NAMES[ai.provider] || ''}`} onClick={() => setOpen(true)}><Sparkles size={20} /></button>}
       {open && (
-        <section className="helper-panel glass floating" role="dialog" aria-label="Helper">
+        <section className={`helper-panel glass floating ${closing ? 'closing' : ''}`} role="dialog" aria-label="Helper"
+>
           <header className="helper-head">
             <div className="helper-titlebar">
               {view === 'history'
@@ -181,7 +240,10 @@ export default function HelperBubble({ ai }) {
                 <strong className="truncate">{view === 'history' ? 'Your chats' : chat.title || 'New chat'}</strong>
                 <span className="tiny muted truncate">{NAMES[ai.provider]}{ai.provider === 'apple' || ai.provider === 'cshelper' ? ' · on this Mac' : ' · online'}</span>
               </span>
-              <button className="btn sm ghost" title="Start a new chat" onClick={newChat}><Plus size={14} />New chat</button>
+              <span className="row" style={{ gap: 2 }}>
+                <button className="btn sm ghost" title="Start a new chat" onClick={newChat}><Plus size={14} />New chat</button>
+                <button className="btn icon sm ghost" aria-label="Minimize" title="Minimize" onClick={minimize}><Minus size={16} /></button>
+              </span>
             </div>
             {view === 'chat' && ctx?.chips?.length > 0 && <div className="helper-chips">{ctx.chips.map((c) => <span key={c} className="chip" title={c}>{c}</span>)}</div>}
           </header>
@@ -210,11 +272,29 @@ export default function HelperBubble({ ai }) {
               {!msgs.length && (
                 <div className="helper-empty">
                   <p className="muted small">Ask about what you're working on. I know your church's calendar, sermons, voice and brand from Church Studio.</p>
+                  <div className="helper-starters">
+                    {['home', 'inspiration', 'calendar', 'projects'].includes(route.name) && !helperFocus && <button className="helper-starter" onClick={() => runToday(false)}><Compass size={16} /><span><strong>Wondering what to work on today?</strong><span className="tiny muted">Ideas from your calendar, sermons and channel</span></span></button>}
+                    <button className="helper-starter" onClick={() => showTips(false)}><Lightbulb size={16} /><span><strong>AI Helper tips</strong><span className="tiny muted">What you can ask me to help with</span></span></button>
+                  </div>
                 </div>
               )}
               {msgs.map((m, i) => {
                 if (m.role === 'note') return <div key={i} className="helper-note tiny muted">{m.content}</div>;
                 if (m.role === 'user') return <div key={i} className={`helper-msg user ${m.pass ? 'pass' : ''}`}>{m.pass ? <span className="row" style={{ gap: 6 }}><Wand2 size={13} />{m.content}</span> : m.content}</div>;
+                if (m.tips) {
+                  return (
+                    <div key={i} className="helper-msg assistant helper-tips">
+                      <p className="small" style={{ margin: '0 0 8px' }}>Here are things you can ask. Tap one to try it.</p>
+                      {TIPS.map(([group, list2]) => (
+                        <div key={group} className="stack" style={{ gap: 4, marginBottom: 8 }}>
+                          <span className="eyebrow">{group}</span>
+                          <div className="helper-refrow">{list2.map((t) => <button key={t} className="chip-btn" onClick={() => { setDraft(t); input.current?.focus(); }}>{t}</button>)}</div>
+                        </div>
+                      ))}
+                      <p className="tiny muted" style={{ margin: 0 }}>Helper Passes, the buttons above the box, give quick ideas for whatever page you're on.</p>
+                    </div>
+                  );
+                }
                 if (m.options) {
                   return (
                     <div key={i} className="helper-msg assistant">
@@ -257,10 +337,16 @@ export default function HelperBubble({ ai }) {
                   </div>
                 );
               })}
-              {busy && busy !== 'chat' && <div className="helper-msg assistant"><span className="helper-dots"><i /><i /><i /></span></div>}
+              {busy && busy !== 'chat' && busy !== 'image' && <div className="helper-msg assistant"><span className="helper-dots"><i /><i /><i /></span></div>}
             </div>
           )}
 
+          {view === 'chat' && ctx?.imagePrompts?.length > 0 && (
+            <div className="helper-passes helper-images" aria-label="Create with Image Playground">
+              <span className="tiny muted row" style={{ gap: 4, width: '100%' }}><Apple size={11} />Create with Image Playground</span>
+              {ctx.imagePrompts.map((ip) => <button key={ip.label} className="chip-btn" disabled={Boolean(busy)} onClick={() => createImage(ip)} title={ip.prompt || ip.label}><ImageIcon size={12} />{ip.label}</button>)}
+            </div>
+          )}
           {view === 'chat' && ctx?.passes?.length > 0 && (
             <div className="helper-passes" aria-label="Helper passes">
               {ctx.passes.map((p) => <button key={p.id} className="chip-btn" disabled={Boolean(busy)} onClick={() => pass(p)}><Wand2 size={12} />{p.label}</button>)}

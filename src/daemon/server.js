@@ -2,7 +2,8 @@
 // All heavy work happens here (via the job queue); the UI stays thin.
 import http from 'node:http';
 import { createReadStream, existsSync, statSync } from 'node:fs';
-import { mkdir, readFile, rm } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, rm } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { ROOT, PROJECTS_DIR, toolStatus, repairTool, run, tool } from './tools.js';
@@ -39,8 +40,8 @@ import { contentPlan } from './hub.js';
 import * as insights from './insights.js';
 import * as churchCal from './calendar.js';
 import { aiStatus, resetAiStatus, testProvider } from './ai.js';
-import { appleStatus, csHelperStatus, deleteCsModel, downloadCsModel } from './localai.js';
-import { deleteChat, getChat, helperChat, helperContext, listChats, runPass, saveChat } from './helper.js';
+import { appleStatus, csHelperStatus, deleteCsModel, downloadCsModel, imagePlayground } from './localai.js';
+import { deleteChat, getChat, helperChat, helperContext, listChats, runPass, saveChat, whatToday } from './helper.js';
 import { binTranscript } from './sermon.js';
 import * as social from './social/hub.js';
 import * as socialStore from './social/store.js';
@@ -102,6 +103,20 @@ route('GET', '/api/ai/local', async () => ({ apple: await appleStatus(true), csh
 route('POST', '/api/ai/cshelper/download', () => ({ job: jobs.view(jobs.enqueue({ kind: 'cshelper', label: 'Download CS Helper', key: 'cshelper' }, (ctx) => downloadCsModel(ctx))) }));
 route('DELETE', '/api/ai/cshelper', async () => { await deleteCsModel(); return { ok: true }; });
 route('POST', '/api/helper/context', async (_p, b) => helperContext(b.focus || {}));
+route('POST', '/api/helper/today', async () => whatToday());
+// Make a picture with Apple's Image Playground, then keep it in the Brand library (Graphics).
+route('POST', '/api/ai/image-playground', async (_p, b) => {
+  const source = b.sourceRel ? await library.libraryFile(b.sourceRel).catch(() => null) : null;
+  const file = await imagePlayground({ prompt: String(b.prompt || '').slice(0, 300), source });
+  if (!file) return { cancelled: true };
+  const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ').replace(':', '.');
+  const tmp = path.join(os.tmpdir(), `Image Playground ${stamp}${path.extname(file) || '.png'}`);
+  await copyFile(file, tmp);
+  const [dest] = await library.importFiles([tmp], 'Graphics');
+  await rm(tmp, { force: true });
+  const rel = `Graphics/${path.basename(dest)}`;
+  return { rel, url: `/library/Graphics/${encodeURIComponent(path.basename(dest))}` };
+});
 route('GET', '/api/helper/chats', async () => ({ chats: await listChats() }));
 route('GET', '/api/helper/chats/:cid', async ({ cid }) => { const c = await getChat(cid); if (!c) throw new HttpError(404, 'That chat is gone.'); return { chat: c }; });
 route('PUT', '/api/helper/chats', async (_p, b) => ({ chat: await saveChat(b) }));

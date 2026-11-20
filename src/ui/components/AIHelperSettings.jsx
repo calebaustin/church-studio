@@ -49,7 +49,7 @@ export default function AIHelperSettings() {
   const external = EXTERNAL.some((x) => x.id === p);
   const load = () => api.get('/api/ai/local').then(setLocal).catch(() => setLocal({ apple: { available: false, reason: 'Could not check.' }, cshelper: {} }));
   useEffect(() => { load(); }, []);
-  useEffect(() => onJobFinished((j) => { if (j.kind === 'cshelper') { load(); if (j.status === 'done') { saveConfig({ llmProvider: 'cshelper' }); toast({ celebrate: true, text: 'CS Helper is ready and turned on.' }); } } }), [onJobFinished]);
+  useEffect(() => onJobFinished((j) => { if (j.kind === 'cshelper') { load(); if (j.status === 'done') { saveConfig({ llmProvider: 'cshelper' }); toast({ keep: true, celebrate: true, text: 'CS Helper is ready and turned on.' }); } } }), [onJobFinished]);
   const dl = jobs.find((j) => j.kind === 'cshelper' && (j.status === 'running' || j.status === 'queued'));
   const apple = local?.apple; const cs = local?.cshelper || {};
 

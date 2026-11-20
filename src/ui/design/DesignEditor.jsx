@@ -158,7 +158,7 @@ export default function DesignEditor({ id, onClose }) {
   const setItem = (p, opts) => update((d) => { const it = d.pages[pi].items.find((x) => x.id === sel); Object.assign(it, p); return d; }, opts);
   // The helper chat sees this design and what's selected. A picked headline replaces the selected text;
   // a picked photo fills the selected photo spot or picture, or is added to the page.
-  useHelperFocus(id ? { kind: 'design', id, selected: item ? { label: layerLabel(item), text: item.type === 'text' ? item.text : undefined } : undefined } : null, (field, value) => {
+  useHelperFocus(id ? { kind: 'design', id, selected: item ? { label: layerLabel(item), text: item.type === 'text' ? item.text : undefined, rel: item.type === 'image' ? item.rel : item.photo || undefined } : undefined } : null, (field, value) => {
     if (field === 'text') {
       if (item?.type !== 'text') return 'Click the text you want to replace, then press Use.';
       setItem({ text: value });

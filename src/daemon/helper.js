@@ -13,7 +13,8 @@ import { getDesign, listDesigns } from './designs.js';
 import { getProject, getTranscript, listProjects } from './projects.js';
 import { loadVoice } from './voice.js';
 import { listDrafts, loadDraft } from './writing.js';
-import { sermonIndex } from './insights.js';
+import { gapReport, sermonIndex } from './insights.js';
+import { listChannel } from './youtube.js';
 import { chat, complete, PROVIDER_NAMES } from './ai.js';
 import { appleAsk, llamaChat } from './localai.js';
 import { listLibrary } from './library.js';
@@ -76,6 +77,7 @@ export async function churchFacts(cfg, budget) {
   add('Recent sermons and videos', projects.map((p) => `${p.title} (${day(p.created)}), ${p.clips} clips`));
   const idx = await themes();
   if (idx?.themes?.length) add('Themes across their sermons', [idx.themes.slice(0, 10).map((t) => t.theme).join(', ')]);
+  if (idx?.scripture?.length) add('Bible books and verses their minister has preached', idx.scripture.slice(0, budget < 6000 ? 4 : 8).map((b) => `${b.book}: ${[...new Set(b.refs.map((r) => r.ref))].slice(0, 5).join(', ')}`));
   if (idx?.series?.length) add('Sermon series', idx.series.slice(0, 4).map((s) => `${s.name}: ${s.sermons.length} sermons`));
   const designs = (await listDesigns().catch(() => [])).slice(0, budget < 6000 ? 3 : 6);
   add('Recent designs', designs.map((d) => d.name));
@@ -168,7 +170,19 @@ Rules you always keep:
 - Church Studio's tools: Videos (turn sermons into clips), Calendar (church events and campaigns), Social (write, schedule and post), Writing (blogs, emails, newsletters, small group guides), Design (graphics, stories, slides) and the Brand library (logo, colors, fonts, photos, voice). Name the right one when it helps.
 - Write in ${church}'s voice when you write anything they'll post or send.
 - If they say "this" or "it", they mean what is selected (see below), or the whole piece if nothing is. If it's still unclear what they mean, ask one short question before you answer.
-- When you suggest a sermon, event, design or picture, use its exact name from the facts so they can open it.`;
+- When you suggest a sermon, event, design or picture, use its exact name from the facts so they can open it.
+- Don't give doctrinal opinions or tell anyone what to believe. If asked, say kindly that's a question for their minister, and offer writing help instead.
+- For writing, you may suggest Bible references that fit a topic (references only, like Psalm 23:1). Prefer verses their minister has preached (in the facts). Never quote verse wording from memory; tell them to check the wording in their own Bible.
+- When they ask how to do something or where a setting is, answer with the exact place from the guide below, like "Settings › Church info".
+
+HOW CHURCH STUDIO IS LAID OUT
+- Videos: bring in a sermon from YouTube or this Mac, transcribe it, find clips, edit (Words & trim, Title & hook, Captions, Framing, Pop-ups, Graphics, Sound) and export.
+- Calendar: church events, plus the Campaigns and Inspiration tabs. Church calendar links are added in Settings › Connections.
+- Social: connect accounts, write, schedule and post; read comments in Messages.
+- Writing: blog posts, emails, newsletters, small group guides and devotionals.
+- Design: graphics, stories, flyers and slides from templates; Plan a post from any design.
+- Brand library: Brand kit (logo, colors, fonts), Voice (mission, themes, writing samples) and Files (photos).
+- Settings: Your tools, Connections, YouTube channel, AI helper, Transcription & clips, Exports, App theme, Caption themes, Church info (name, minister, service times, address, website), Helper programs, Backups and sharing, Updates, Send feedback.`;
 }
 
 async function systemFor(cfg, focus) {
@@ -190,6 +204,7 @@ export async function helperChat({ focus, messages, onDelta, signal }) {
   // When it declines, small models sometimes invent a feature to point at. Finish the reply ourselves with
   // something real from this church's calendar or sermons.
   if (/^\W*I can only help with Church Studio/i.test(text)) text = `I can only help with Church Studio work. ${await realSuggestion()}`;
+  text = cleanVerses(text);
   const refs = findRefs(text, await catalog(), focus);
   return { text, refs, actions: followUps(refs, focus) };
 }
@@ -212,6 +227,31 @@ async function catalog() {
   catCache = { at: Date.now(), value: out };
   return out;
 }
+// Places in the app the helper can point to. Single words match only when capitalized like a tool name.
+const PLACES = [
+  ['Church info', { name: 'settings', section: 'church' }], ['Connections', { name: 'settings', section: 'connections' }],
+  ['YouTube channel', { name: 'settings', section: 'youtube' }], ['AI helper', { name: 'settings', section: 'ai' }],
+  ['Transcription & clips', { name: 'settings', section: 'clips' }], ['Exports', { name: 'settings', section: 'export' }],
+  ['App theme', { name: 'settings', section: 'app-theme' }], ['Caption themes', { name: 'settings', section: 'video-themes' }],
+  ['Helper programs', { name: 'settings', section: 'tools' }], ['Backups and sharing', { name: 'settings', section: 'backups' }],
+  ['Your tools', { name: 'settings', section: 'menu' }], ['Send feedback', { name: 'settings', section: 'feedback' }],
+  ['Brand kit', { name: 'assets', section: 'kit' }], ['Brand library', { name: 'assets' }], ['Voice', { name: 'assets', section: 'voice' }],
+  ['Campaigns', { name: 'calendar', tab: 'campaigns' }], ['Inspiration', { name: 'inspiration' }], ['Calendar', { name: 'calendar' }],
+  ['Videos', { name: 'library' }], ['Social', { name: 'social' }], ['Writing', { name: 'writing' }], ['Design', { name: 'graphics' }],
+  ['My App', { name: 'me' }],
+];
+function findPlaces(text) {
+  const out = [];
+  for (const [title, go] of PLACES) {
+    const re = new RegExp(`(^|[^A-Za-z])(${title.replace(/[.*+?^${}()|[\]\\&]/g, '\\$&')})(?![A-Za-z])`, title.includes(' ') ? 'i' : '');
+    const m = re.exec(text);
+    if (!m) continue;
+    // A single capitalized word at the very start of a sentence is just a word.
+    if (!title.includes(' ') && (m.index === 0 || /[.!?]\s*$/.test(text.slice(0, m.index + m[1].length)))) continue;
+    out.push({ type: 'place', id: title, title, go, at: m.index + m[1].length });
+  }
+  return out;
+}
 const norm = (t) => String(t).toLowerCase().replace(/[“”"‘’']/g, '').replace(/\s+/g, ' ');
 function findRefs(text, cat, focus) {
   const hay = norm(text);
@@ -227,7 +267,8 @@ function findRefs(text, cat, focus) {
   // Longest names first win when one name sits inside another.
   hits.sort((a, b) => b.title.length - a.title.length);
   const kept = hits.filter((h, i) => !hits.slice(0, i).some((o) => o.at <= h.at && o.at + o.title.length >= h.at + h.title.length));
-  return kept.sort((a, b) => a.at - b.at).slice(0, 8).map(({ at, ...r }) => ({ ...r, here: focus?.kind === 'design' && r.type === 'file' }));
+  const places = findPlaces(text).filter((p) => !kept.some((k) => p.at >= k.at && p.at < k.at + k.title.length));
+  return [...kept, ...places].sort((a, b) => a.at - b.at).slice(0, 10).map(({ at, ...r }) => ({ ...r, here: focus?.kind === 'design' && r.type === 'file' }));
 }
 /** A few next steps that connect what the answer talked about. */
 function followUps(refs, focus) {
@@ -256,7 +297,24 @@ async function realSuggestion() {
 export async function helperContext(focus) {
   const cfg = await loadConfig();
   const f = await focusOf(focus, budgetFor(cfg.llmProvider));
-  return { label: f.label, chips: f.chips, passes: f.passes.map(({ id, label, apply }) => ({ id, label, apply: Boolean(apply) })), provider: cfg.llmProvider, name: PROVIDER_NAMES[cfg.llmProvider] || null };
+  return { label: f.label, chips: f.chips, passes: f.passes.map(({ id, label, apply }) => ({ id, label, apply: Boolean(apply) })), provider: cfg.llmProvider, name: PROVIDER_NAMES[cfg.llmProvider] || null, imagePrompts: await imagePrompts(cfg, focus) };
+}
+
+/** With Apple Intelligence on, ready-made Image Playground prompts for the design that's open. */
+async function imagePrompts(cfg, focus) {
+  if (cfg.llmProvider !== 'apple' || focus?.kind !== 'design' || !focus.id) return [];
+  const d = await getDesign(focus.id).catch(() => null);
+  if (!d) return [];
+  const texts = (d.pages || []).flatMap((pg) => (pg.items || []).filter((i) => i.type === 'text' && i.text)).sort((a, b) => (b.size || 0) - (a.size || 0)).map((i) => i.text.replace(/\s+/g, ' ').trim());
+  // The headline: the biggest real words on the page (not a number, date, time, web address or "Join us").
+  const real = (t) => t.split(' ').length >= 2 && t.split(' ').length <= 8 && /[a-z]{3,}/i.test(t) && !/@|https?:|\.com|\b(am|pm)\b|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.? \d|^join us$/i.test(t);
+  const main = clip(texts.find(real) || String(d.name).split(' · ')[0], 60);
+  const out = [];
+  if (focus.selected?.rel) out.push({ label: 'Restyle the selected picture', prompt: '', source: focus.selected.rel });
+  out.push({ label: `An illustration of ${main}`, prompt: `An illustration of ${main}` });
+  out.push({ label: `A warm, welcoming scene for ${main}`, prompt: `A warm, welcoming scene for ${main}` });
+  out.push({ label: 'Something of my own…', prompt: '', own: true });
+  return out;
 }
 
 // ------------------------------------------------------------------ Helper Passes
@@ -368,4 +426,63 @@ export async function saveChat(chat) {
 export async function deleteChat(id) {
   const all = await readChats();
   await writeFile(CHATS(), JSON.stringify(all.filter((c) => c.id !== id), null, 1));
+}
+
+// ------------------------------------------------------------------ "Wondering what to work on today?"
+// Starting points come straight from this church's data, so they're always real. The helper (if on)
+// just writes a friendly line or two around them.
+export async function whatToday() {
+  const cfg = await loadConfig();
+  const now = Date.now();
+  const picks = [];
+  const { events } = await cachedEvents();
+  const camps = await listCampaigns().catch(() => []);
+  const planned = new Set(camps.map((c) => c.event?.id).filter(Boolean));
+  const soon = (events || []).filter((e) => Date.parse(e.start) > now && Date.parse(e.start) < now + 21 * 86400_000 && !planned.has(e.id)).sort((a, b) => a.start.localeCompare(b.start));
+  for (const e of soon.slice(0, 2)) picks.push({ why: `${e.title} is ${day(e.start)} and has no posts planned yet.`, label: `Start a campaign for ${e.title}`, go: { name: 'calendar', campaign: { event: e } } });
+  const projects = (await listProjects().catch(() => [])).filter((p) => p.status === 'transcribed');
+  const fresh = projects[0];
+  if (fresh && !fresh.clips) picks.push({ why: `"${fresh.title}" is transcribed but has no clips yet.`, label: `Find clips in ${fresh.title}`, go: { name: 'project', id: fresh.id, step: 'clips' } });
+  else if (fresh && fresh.clips > fresh.exported) picks.push({ why: `"${fresh.title}" has ${fresh.clips - fresh.exported} clips not exported yet.`, label: `Finish clips from ${fresh.title}`, go: { name: 'project', id: fresh.id, step: 'edit' } });
+  const gaps = (await gapReport().catch(() => ({ rows: [] }))).rows.filter((r) => r.missing?.length).slice(0, 1);
+  for (const g of gaps) picks.push({ why: `"${g.title}" could still become ${g.missing.slice(0, 2).join(' and ').toLowerCase()}.`, label: `Open the content plan for ${g.title}`, go: { name: 'project', id: g.id, step: 'plan' } });
+  if (cfg.youtubeChannel) {
+    try {
+      const items = await Promise.race([listChannel(cfg.youtubeChannel, { limit: 5 }), new Promise((_, r) => setTimeout(() => r(new Error('slow')), 6000))]);
+      const have = new Set(projects.map((p) => p.youtubeId).filter(Boolean));
+      const v = (items || []).find((x) => x.id && !have.has(x.id));
+      if (v) picks.push({ why: `Your channel has a new video, "${v.title}", that isn't in Church Studio yet.`, label: 'Bring in your latest service', go: { name: 'library', pick: true } });
+    } catch { /* offline or slow: skip */ }
+  }
+  if (!picks.length) picks.push({ why: 'Nothing is waiting on you right now.', label: 'Look at Inspiration for ideas', go: { name: 'inspiration' } });
+  const top = picks.slice(0, 4);
+  let text = `Here's where I'd start today:\n\n${top.map((p) => `- ${p.why}`).join('\n')}`;
+  if (cfg.llmProvider && cfg.llmProvider !== 'none') {
+    try {
+      const sys = `${rules(cfg.llmProvider, cfg)}\nWrite one or two warm, short sentences that introduce these starting points for today. Don't list them again and don't add new ones.`;
+      const intro = cfg.llmProvider === 'apple' ? await appleAsk({ system: sys, prompt: top.map((p) => p.why).join('\n'), temperature: 0.6 })
+        : cfg.llmProvider === 'cshelper' ? await llamaChat({ system: sys, messages: [{ role: 'user', content: top.map((p) => p.why).join('\n') }], temperature: 0.6, maxTokens: 120 })
+          : await complete(cfg, sys, top.map((p) => p.why).join('\n'));
+      const short = (String(intro || '').replace(/\s+/g, ' ').match(/[^.!?]+[.!?]+/g) || []).slice(0, 2).join(' ').trim();
+      if (short && !/^\W*I can only help/i.test(short)) text = `${short}\n\n${top.map((p) => `- ${p.why}`).join('\n')}`;
+    } catch { /* the plain version is fine */ }
+  }
+  const refs = findRefs(text, await catalog(), {});
+  return { text, refs, actions: top.map(({ label, go }) => ({ label, go })) };
+}
+
+// ------------------------------------------------------------------ Bible references
+// Small models remember references well but misquote the wording. Keep the references, drop any wording
+// quoted next to them, and remind people to check their own Bible.
+const BOOK_RE = '(?:[1-3]\\s?)?(?:Genesis|Exodus|Leviticus|Numbers|Deuteronomy|Joshua|Judges|Ruth|Samuel|Kings|Chronicles|Ezra|Nehemiah|Esther|Job|Psalms?|Proverbs|Ecclesiastes|Song of (?:Solomon|Songs)|Isaiah|Jeremiah|Lamentations|Ezekiel|Daniel|Hosea|Joel|Amos|Obadiah|Jonah|Micah|Nahum|Habakkuk|Zephaniah|Haggai|Zechariah|Malachi|Matthew|Mark|Luke|John|Acts|Romans|Corinthians|Galatians|Ephesians|Philippians|Colossians|Thessalonians|Timothy|Titus|Philemon|Hebrews|James|Peter|Jude|Revelation)';
+const REF_RE = new RegExp(`\\b${BOOK_RE}\\s+\\d+(?::\\d+(?:[-–]\\d+)?)?`);
+export function cleanVerses(text) {
+  let found = false;
+  const out = String(text).split('\n').map((line) => {
+    if (!REF_RE.test(line)) return line;
+    found = true;
+    return line.replace(/\s*[-–—:]?\s*["“][^"”]{6,}["”]\s*/g, ' ').replace(/\s+([.,;])/g, '$1').replace(/\s{2,}/g, ' ').trimEnd();
+  }).join('\n');
+  if (!found || /check (the )?wording/i.test(out)) return out;
+  return `${out}\n\nCheck the wording in your church's Bible translation before you use these.`;
 }

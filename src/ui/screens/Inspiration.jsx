@@ -1,7 +1,7 @@
 // Inspiration: what your church has been saying, what it hasn't said in a while, what's coming up,
 // and ideas for the blog. All worked out on this Mac.
 import { useEffect, useState } from 'react';
-import { BookOpen, CalendarDays, ExternalLink, Lightbulb, PenLine, RefreshCw, Rss, Send, Shapes, Sparkles, X } from 'lucide-react';
+import { BookOpen, CalendarDays, Compass, ExternalLink, Lightbulb, PenLine, RefreshCw, Rss, Send, Shapes, Sparkles, X } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { api, openLink } from '../api.js';
 import { yearReviewDoc } from '../design/yearReview.js';
@@ -13,7 +13,7 @@ const KIND = { sermon: 'sermon', writing: 'writing', post: 'post', blog: 'blog p
 const day = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: new Date(d).getFullYear() === new Date().getFullYear() ? undefined : 'numeric' });
 
 export default function Inspiration({ embedded = false }) {
-  const { go, toast, config, saveConfig } = useApp();
+  const { go, toast, config, saveConfig, ai, askHelper } = useApp();
   const [seasonMenu, setSeasonMenu] = useState(false);
   const [period, setPeriod] = useState('quarter');
   const [data, setData] = useState(null);
@@ -50,6 +50,16 @@ export default function Inspiration({ embedded = false }) {
   const empty = data && !c.total;
   return (
     <div className={embedded ? 'stack' : 'page'} style={embedded ? { gap: 18 } : undefined}>
+      <section className="glass panel today-card">
+        <span className="cn-icon tone tone-1" style={{ width: 40, height: 40, borderRadius: 12 }}><Compass size={20} /></span>
+        <div className="stack" style={{ gap: 2, minWidth: 0 }}>
+          <strong style={{ color: 'var(--ink)' }}>Wondering what to work on today?</strong>
+          <span className="muted small">{ai?.ready ? 'Your helper looks at your calendar, sermons and channel, and gives you a few places to start.' : 'Turn on an AI helper and it will look at your calendar, sermons and channel for places to start.'}</span>
+        </div>
+        {ai?.ready
+          ? <button className="btn primary" onClick={() => askHelper('today')}><Sparkles size={15} />Ask the helper</button>
+          : <button className="btn" onClick={() => go({ name: 'settings', section: 'ai' })}>Turn on a helper</button>}
+      </section>
       <div className="row between wrap" style={{ gap: 12 }}>
         <div className="stack" style={{ gap: 2 }}>
           {!embedded && <h1>Inspiration</h1>}

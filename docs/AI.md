@@ -62,5 +62,17 @@ and `SHA` (from the release asset's digest), run the script, and test a chat and
 - Once downloaded: a "Downloaded · using 2.0 GB on this Mac" strip with **Delete from this Mac**, which asks first,
   frees the space, and turns the helper off if it was on.
 
+## Image Playground (Apple Intelligence)
+Apple only creates images for an app that's on screen (`ImageCreator` from a helper process fails with
+`backgroundCreationForbidden`). So `native/apple-ai/playground.swift` builds `bin/cs-image-playground`, a small app that
+opens Apple's Image Playground window with a prompt (and the selected picture as a starting point), and prints the
+chosen file. `POST /api/ai/image-playground` copies it into the Brand library (Graphics) and returns its path.
+Prompts come from `imagePrompts()` in `helper.js` (only when Apple Intelligence is the helper and a design is open).
+
+## Scripture
+There's no Bible text in the app. The helper may suggest references for writing (it remembers references well),
+preferring ones the minister has preached (from the sermon index). `cleanVerses()` strips any verse wording quoted
+next to a reference and adds a reminder to check the wording. The rules forbid doctrinal opinions.
+
 ## Not done yet
 - Picture descriptions with a local model.
