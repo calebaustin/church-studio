@@ -2,7 +2,7 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
-## Unreleased
+## 0.11.0 · November 19, 2026
 
 ### New
 - **Six new template packs.** Meadow, Pulse, Grove, Ember, Dusk and Collage, each with an event post, event story, welcome, announcement, sermon quote, verse and series title slide. Built to be plug and play: your church's name, minister, website and service times fill in, and most need just one photo.
