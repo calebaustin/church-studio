@@ -1343,3 +1343,5 @@ div.cn-card { cursor: default; }
 .other-social > summary::-webkit-details-marker { display: none; }
 .other-social[open] > summary svg { transform: rotate(180deg); }
 .brand-tabs { justify-self: start; }
+.editor.wide { grid-template-columns: 580px minmax(0, 1fr); } @media (max-width: 1180px) { .editor.wide { grid-template-columns: minmax(0, 1fr); } .editor.wide .sticky-col { position: static; } }
+.look-blur { position: absolute; inset: 0; pointer-events: none; -webkit-mask-image: radial-gradient(ellipse 36% 40% at 50% 44%, transparent 55%, #000 100%); mask-image: radial-gradient(ellipse 36% 40% at 50% 44%, transparent 55%, #000 100%); }

@@ -95,11 +95,13 @@ export async function buildJob(project, clip, { preview = false, trackOnly = fal
     .map(({ w, start, end }) => ({ w, start, end }));
   const theme = await getVideoTheme(clip.videoTheme || project.videoTheme || (await loadConfig()).videoTheme);
   const font = await fontFile(theme.font);
-  const out = exportSettings(options);
+  // Wide clips render wide, quick renders included, unless an export picks another shape.
+  const out = exportSettings({ ...options, preset: options.preset || (clip.format === 'wide' ? 'landscape' : undefined) });
   return {
     source: file(project.id, project.sourceFile),
     start: clip.start, end: clip.end, preview, ...out,
     crop: clip.crop || { mode: 'auto', smooth: 0 },
+    look: clip.look || null, // studio look: color preset, strength, lighting lift, background blur
     speakerPrior: (await speakerPrior()).x != null ? { x: (await speakerPrior()).x } : null,
     hookY: clip.hookY ?? null,
     overlay: clip.overlay?.rel ? { ...clip.overlay, file: await libraryFile(clip.overlay.rel) } : null,

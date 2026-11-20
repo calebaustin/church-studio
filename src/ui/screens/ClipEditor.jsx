@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Undo2, Redo2, Download, Zap, Plus, Trash2, Crosshair, Play, Pause, Send, FolderOpen, Save, MousePointerClick, Bookmark, X, ScissorsLineDashed, CalendarDays } from 'lucide-react';
+import { Undo2, Redo2, Download, Zap, Plus, Trash2, Crosshair, Play, Pause, Send, FolderOpen, Save, MousePointerClick, Bookmark, X, ScissorsLineDashed, CalendarDays, ChevronDown } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { api, fmt, media } from '../api.js';
 import CaptionOverlay, { findFont } from '../components/CaptionOverlay.jsx';
@@ -14,6 +14,7 @@ import ColorField from '../components/ColorField.jsx';
 import AudioCleanup from '../components/AudioCleanup.jsx';
 import Popover from '../components/Popover.jsx';
 import { useChurchEvents } from '../components/ChurchEvents.jsx';
+import { LOOKS, hasLook, lookFilter } from '../studioLook.js';
 
 const FILLERS = new Set(['um', 'uh', 'uhm', 'umm', 'er', 'erm', 'ah']);
 const FRAME_W = 340;
@@ -30,7 +31,7 @@ function useHistory(initial) {
 }
 
 /** Whole-frame and three-stack previews: draw the video into a canvas over a blurred or solid background. */
-function CanvasFrame({ video, mode, bg, gap, width, height, colors, split }) {
+function CanvasFrame({ video, mode, bg, gap, width, height, colors, split, filter }) {
   const ref = useRef(null);
   useEffect(() => {
     let raf;
@@ -94,7 +95,7 @@ function CanvasFrame({ video, mode, bg, gap, width, height, colors, split }) {
     draw();
     return () => cancelAnimationFrame(raf);
   }, [mode, bg?.type, bg?.color, bg?.blur, gap, width, height, colors?.join(), split?.join()]);
-  return <canvas ref={ref} className="preview-canvas" width={width} height={height} />;
+  return <canvas ref={ref} className="preview-canvas" width={width} height={height} style={filter ? { filter } : undefined} />;
 }
 
 /** "Help find the speaker": click the preacher's face in a few frames. Saved for future clips too. */
@@ -264,13 +265,16 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
   const set = (p) => h.set((c) => ({ ...c, ...p }));
 
   // ---- framing
+  // Wide (16:9) clips preview in a wide frame showing the whole shot, just like the export.
+  const wide = clip.format === 'wide';
+  const FW = wide ? 560 : FRAME_W;
   const A = (project.media?.width || 16) / (project.media?.height || 9);
-  const FH = FRAME_W * 16 / 9;
+  const FH = wide ? FW * 9 / 16 : FW * 16 / 9;
   const VW = FH * A;
   const crop = clip.crop || { mode: 'auto', smooth: 0 };
   const mode = crop.mode || 'auto';
   const smooth = crop.smooth ?? (crop.motion === 'glide' ? 1 : 0);
-  const frac = Math.min(1, FRAME_W / VW);
+  const frac = Math.min(1, FW / VW);
   const cues = crop.cues || [];
   let x = 0.5;
   if (mode === 'manual') x = crop.x ?? 0.5;
@@ -281,7 +285,7 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
     x = f * (1 - smooth) + g * smooth;
   }
   x = clampX(x, frac);
-  const left = Math.min(0, Math.max(-(VW - FRAME_W), -(x * VW - FRAME_W / 2)));
+  const left = Math.min(0, Math.max(-(VW - FW), -(x * VW - FW / 2)));
   const canvasMode = mode === 'fit' || mode === 'stack3' || mode === 'split' || mode === 'lyric' || !project.media?.width;
   const setCrop = (p) => set({ crop: { ...crop, ...p } });
   const addCue = () => {
@@ -292,7 +296,7 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
   };
   const updateCue = (i, p) => setCrop({ cues: cues.map((c, k) => (k === i ? { ...c, ...p } : c)) });
   const removeCue = (i) => { setCrop({ cues: cues.filter((_, k) => k !== i) }); setSelCue(null); };
-  const canDrag = mode === 'manual' || (mode === 'cues' && selCue != null && cues[selCue]);
+  const canDrag = !wide && (mode === 'manual' || (mode === 'cues' && selCue != null && cues[selCue]));
   const onPointerDown = (e) => { drag.current = { x0: e.clientX, start: x, moved: false }; e.currentTarget.setPointerCapture(e.pointerId); };
   const onPointerMove = (e) => {
     const d = drag.current;
@@ -424,16 +428,17 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
         </div>
       )}
 
-      <div className="editor">
+      <div className={`editor ${wide ? 'wide' : ''}`}>
         <div className="stack sticky-col">
-          <div className={`vframe ${canDrag ? 'draggable' : ''}`} style={{ width: FRAME_W }} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
+          <div className={`vframe ${canDrag ? 'draggable' : ''}`} style={{ width: FW, aspectRatio: wide ? '16 / 9' : undefined }} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
             title={canDrag ? 'Drag sideways to aim the frame. Click to play or pause.' : 'Click to play or pause'}>
             <video ref={video} src={media(project.id, project.sourceFile)} preload="auto" playsInline
-              style={canvasMode ? { opacity: 0, width: 2, height: 2 } : { height: FH, width: VW, left }} />
-            {canvasMode && <CanvasFrame video={video} mode={project.media?.width ? mode : 'lyric'} colors={config.brandColors} bg={crop.bg} gap={crop.gap} split={crop.split} width={FRAME_W} height={Math.round(FH)} />}
-            {(clip.popups || []).map((p) => <PopupPreview key={p.id} p={p} t={outTime} still={!playing} frameWidth={FRAME_W} accent={config.brandColors?.[1]} />)}
+              style={canvasMode && !(wide && project.media?.width) ? { opacity: 0, width: 2, height: 2 } : { ...(wide ? { height: FH, width: FW, left: 0, objectFit: 'contain' } : { height: FH, width: VW, left }), filter: lookFilter(clip.look) }} />
+            {canvasMode && !(wide && project.media?.width) && <CanvasFrame video={video} mode={project.media?.width ? mode : 'lyric'} colors={config.brandColors} bg={crop.bg} gap={crop.gap} split={crop.split} width={FW} height={Math.round(FH)} filter={lookFilter(clip.look)} />}
+            {clip.look?.blur > 0 && project.media?.width > 0 && (wide || ['auto', 'manual', 'cues'].includes(mode)) && <div className="look-blur" style={{ backdropFilter: `blur(${(2 + clip.look.blur * 8).toFixed(1)}px)`, WebkitBackdropFilter: `blur(${(2 + clip.look.blur * 8).toFixed(1)}px)` }} aria-hidden="true" />}
+            {(clip.popups || []).map((p) => <PopupPreview key={p.id} p={p} t={outTime} still={!playing} frameWidth={FW} accent={config.brandColors?.[1]} />)}
             {themeDraft && (
-              <CaptionOverlay theme={themeDraft} font={font} words={clip.captions !== false ? capWords : []} t={rel} frameWidth={FRAME_W}
+              <CaptionOverlay theme={themeDraft} font={font} words={clip.captions !== false ? capWords : []} t={rel} frameWidth={FW}
                 hook={clip.hook} showHook={outTime < (themeDraft.hookDuration ?? 3.5) || tab === 'text'} hookY={clip.hookY} onHookDrag={(y) => set({ hookY: +y.toFixed(3) })} />
             )}
             {clip.overlay?.rel && (
@@ -452,14 +457,14 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
             )}
             {!playing && <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#fff', fontSize: 46, textShadow: '0 4px 20px rgba(0,0,0,.4)', pointerEvents: 'none' }}>▶︎</div>}
           </div>
-          <div className="transport" style={{ width: FRAME_W }}>
+          <div className="transport" style={{ width: FW }}>
             <button className="btn icon sm" onClick={toggle} aria-label={playing ? 'Pause' : 'Play'}>{playing ? <Pause size={14} /> : <Play size={14} />}</button>
             <Scrubber value={Math.min(rel, len)} max={len} onChange={seekRel} words={capWords} marks={mode === 'cues' ? cues.map((c, i) => ({ t: c.t, on: i === selCue })) : []} label="Clip position" />
             <span className="mono num" style={{ flex: 'none' }}>{fmt(outTime)}/{fmt(outLen)}</span>
           </div>
-          {mode === 'auto' && !track && !busyKind('track') && <p className="muted small" style={{ width: FRAME_W }}>Showing the center until the speaker is found.</p>}
+          {mode === 'auto' && !track && !busyKind('track') && <p className="muted small" style={{ width: FW }}>Showing the center until the speaker is found.</p>}
           {current?.export && (
-            <div className="banner info" style={{ width: FRAME_W, flexWrap: 'wrap' }}>
+            <div className="banner info" style={{ width: FW, flexWrap: 'wrap' }}>
               <span>Exported {new Date(current.export.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
               <button className="btn sm" onClick={() => api.post('/api/reveal', { path: current.export.file })}><FolderOpen size={13} />Show</button>
               <button className="btn sm" onClick={() => go({ name: 'social', compose: { projectId: project.id, clipId: clip.id } })}><Send size={13} />Post</button>
@@ -589,6 +594,8 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
 
           {tab === 'crop' && (
             <div className="stack" style={{ gap: 14 }}>
+              {wide && project.media?.width > 0 && <div className="keycard small muted">Wide clips keep the whole shot, just like the export.</div>}
+              {!(wide && project.media?.width > 0) && (<>
               <div className="choices">
                 {[['auto', 'Follow speaker', 'Moves with the preacher.'],
                   ['cues', 'By timestamp', 'Cut or glide where you choose.'],
@@ -688,6 +695,8 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
                   {mode === 'stack3' && <label className="field">Space between · {crop.gap ?? 18}px<input type="range" min="0" max="60" value={crop.gap ?? 18} onChange={(e) => setCrop({ gap: Number(e.target.value) })} /></label>}
                 </div>
               )}
+              </>)}
+              {project.media?.width > 0 && mode !== 'lyric' && <StudioLook look={clip.look} blurOk={wide || ['auto', 'manual', 'cues'].includes(mode)} onChange={(look) => set({ look })} />}
             </div>
           )}
         </section>
@@ -754,6 +763,33 @@ function WordsTab({ words, clip, set, cut, rel, outLen, seek }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- studio look
+/** A quick lighting pass, tucked in one card so the Framing tab stays simple. */
+function StudioLook({ look, blurOk, onChange }) {
+  const [open, setOpen] = useState(hasLook(look));
+  const l = { preset: 'none', strength: 1, light: 0, blur: 0, ...(look || {}) };
+  const set = (p) => { const n = { ...l, ...p }; onChange(hasLook(n) ? n : null); };
+  const summary = [LOOKS.find(([k]) => k === l.preset)?.[1], l.light > 0 && 'lighting lift', l.blur > 0 && 'background blur'].filter((x) => x && x !== 'Original').join(' · ');
+  return (
+    <div className="keycard stack" style={{ gap: 10 }}>
+      <button className="row between photo-edits-head" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <span className="stack" style={{ gap: 0, textAlign: 'left' }}><strong className="small">Studio look</strong><span className="muted" style={{ fontSize: 12 }}>{summary || 'Color, lighting and a soft background'}</span></span>
+        <ChevronDown size={14} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform var(--fast) var(--ease)' }} />
+      </button>
+      {open && (
+        <>
+          <div className="look-grid">{LOOKS.map(([k, label]) => <button key={k} className={`pill-choice ${l.preset === k ? 'on' : ''}`} onClick={() => set({ preset: k })}>{label}</button>)}</div>
+          {l.preset !== 'none' && <label className="field small">Look strength · {Math.round(l.strength * 100)}%<input type="range" min="0.1" max="1" step="0.05" value={l.strength} onChange={(e) => set({ strength: Number(e.target.value) })} /></label>}
+          <label className="field small">Lighting lift · {Math.round(l.light * 100)}%<input type="range" min="0" max="1" step="0.05" value={l.light} onChange={(e) => set({ light: Number(e.target.value) })} /><span className="hint">Brightens faces and shadows without blowing out bright spots.</span></label>
+          {blurOk && <label className="field small">Background blur · {Math.round(l.blur * 100)}%<input type="range" min="0" max="1" step="0.05" value={l.blur} onChange={(e) => set({ blur: Number(e.target.value) })} /><span className="hint">Softens the edges of the frame and keeps the middle sharp, where the speaker is.</span></label>}
+          {hasLook(l) && <button className="btn ghost sm" style={{ justifySelf: 'start' }} onClick={() => onChange(null)}>Back to original</button>}
+          <span className="hint">The preview is close. The export applies it exactly, under your captions and graphics.</span>
+        </>
+      )}
     </div>
   );
 }

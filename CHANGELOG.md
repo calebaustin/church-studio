@@ -2,6 +2,14 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## Unreleased
+
+### New
+- **Studio look for clips.** In the clip editor's Framing tab, a small Studio look card gives a quick lighting pass: eight looks (Clean, Warm, Cool, Bright, Punchy, Film, Soft, Black and white) with a strength slider, a lighting lift that brightens faces and shadows without blowing out bright spots, and a background blur that softens the edges and keeps the speaker sharp. Captions and graphics stay crisp. The preview is close; the export is exact.
+
+### Better
+- **Wide clips preview wide.** A wide clip now shows in a 16:9 frame in the editor, the whole shot, just like the export. Quick renders of wide clips come out wide too.
+
 ## 0.11.0 · November 19, 2026
 
 ### New

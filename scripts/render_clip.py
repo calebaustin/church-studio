@@ -628,6 +628,71 @@ def split_frame(frame, src_w, src_h, W, H, split, gap, interp):
         out[y:y + ph] = part
     return out
 
+
+# ---------------------------------------------------------------- studio look
+# Quick lighting passes, matched by the clip editor's preview (src/ui/studioLook.js).
+LOOKS = {
+    "none": {},
+    "clean": {"contrast": 1.06, "sat": 1.06},
+    "warm": {"warm": 0.05, "sat": 1.06, "contrast": 1.04},
+    "cool": {"warm": -0.045, "contrast": 1.04},
+    "bright": {"gamma": 0.86, "lift": 0.03},
+    "punchy": {"contrast": 1.16, "sat": 1.18},
+    "film": {"contrast": 0.92, "lift": 0.06, "gain": 0.96, "warm": 0.025, "sat": 0.88},
+    "soft": {"contrast": 0.9, "lift": 0.05, "sat": 0.94},
+    "mono": {"sat": 0.0, "contrast": 1.1},
+}
+
+
+def look_tables(look):
+    """Per-channel 256-step tables (B, G, R) and a saturation amount for a look, a strength and a lighting lift."""
+    if not look:
+        return None
+    spec = LOOKS.get(look.get("preset") or "none", {})
+    k = max(0.0, min(1.0, float(look.get("strength", 1.0))))
+    lift_amt = max(0.0, min(1.0, float(look.get("light", 0.0))))
+    if not spec and lift_amt <= 0:
+        return None
+    x = np.linspace(0, 1, 256, dtype=np.float32)
+    y = spec.get("lift", 0.0) + (spec.get("gain", 1.0) - spec.get("lift", 0.0)) * x
+    y = np.clip(y, 0, 1) ** spec.get("gamma", 1.0)
+    y = (y - 0.5) * spec.get("contrast", 1.0) + 0.5
+    if lift_amt > 0:  # lighting lift: brighten shadows and midtones, keep highlights from clipping
+        y = 1 - (1 - np.clip(y, 0, 1)) ** (1 + lift_amt * 0.9)
+    warm = spec.get("warm", 0.0)
+    chans = []
+    for c, w in (("b", -warm), ("g", warm * 0.25), ("r", warm)):
+        t = np.clip(y + w * (1 - np.abs(2 * y - 1)) * 1.6, 0, 1)
+        t = x + (t - x) * (k if spec else 1.0)  # strength mixes toward the original
+        chans.append(np.clip(t * 255 + 0.5, 0, 255).astype(np.uint8))
+    sat = 1.0 + (spec.get("sat", 1.0) - 1.0) * k
+    return np.dstack(chans).reshape(1, 256, 3), sat
+
+
+def apply_look(img, tables):
+    lut, sat = tables
+    out = cv2.LUT(img, lut)
+    if abs(sat - 1.0) > 0.01:
+        gray = cv2.cvtColor(cv2.cvtColor(out, cv2.COLOR_BGR2GRAY), cv2.COLOR_GRAY2BGR)
+        out = cv2.addWeighted(out, sat, gray, 1.0 - sat, 0)
+    return out
+
+
+def blur_weights(W, H):
+    """Where the speaker usually is in the frame stays sharp; the edges soften. 1 = sharp, 0 = blurred."""
+    m = np.zeros((H, W), np.float32)
+    cv2.ellipse(m, (W // 2, int(H * 0.44)), (int(W * 0.36), int(H * 0.4)), 0, 0, 360, 1.0, -1)
+    m = cv2.GaussianBlur(m, (0, 0), max(W, H) * 0.08)
+    return m
+
+
+def apply_blur(img, weights, amount):
+    h, w = img.shape[:2]
+    small = cv2.resize(img, (max(2, w // 6), max(2, h // 6)), interpolation=cv2.INTER_AREA)
+    small = cv2.GaussianBlur(small, (0, 0), 1.0 + 4.0 * amount)
+    soft = cv2.resize(small, (w, h), interpolation=cv2.INTER_LINEAR)
+    return cv2.blendLinear(img, soft, weights, 1.0 - weights)
+
 # ---------------------------------------------------------------- render
 
 def encoder_args(preview: bool, codec: str = "h264", mbps: float = 12.0) -> list[str]:
@@ -782,6 +847,10 @@ def main() -> None:
         stdin=subprocess.PIPE, stderr=subprocess.PIPE,
     )
     lyric = Lyric((job.get("lyric") or {}).get("colors"), W, H) if mode == "lyric" else None
+    look = job.get("look") or None
+    look_t = look_tables(look) if mode != "lyric" else None
+    blur_amt_bg = max(0.0, min(1.0, float((look or {}).get("blur", 0) or 0)))
+    blur_w = blur_weights(W, H) if blur_amt_bg > 0.01 and mode in ("auto", "manual", "cues") else None
     pops = Popups(job.get("popups"), W, H, theme, (job.get("lyric") or {}).get("colors", ["#D9A441"])[1] if len((job.get("lyric") or {}).get("colors", [])) > 1 else "#D9A441")
     dec = None if lyric else subprocess.Popen(
         [FFMPEG, "-loglevel", "error", "-ss", f"{start:.3f}", "-t", f"{dur:.3f}", "-i", src, "-an",
@@ -854,6 +923,11 @@ def main() -> None:
                 x0 = int(round(cx - crop_w / 2))
                 x0 = max(0, min(src_w - crop_w, x0))
                 img = cv2.resize(frame[:, x0:x0 + crop_w], (W, H), interpolation=interp)
+            # Studio look: lighting and color on the picture itself, before captions and graphics.
+            if look_t is not None:
+                img = apply_look(img, look_t)
+            if blur_w is not None:
+                img = apply_blur(img, blur_w, blur_amt_bg)
             t_out = written / fps
             if caps:
                 for arr, x, y, op in caps.at(t_out):
