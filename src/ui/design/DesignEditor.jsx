@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical,
-  ArrowLeft, BringToFront, Check, ChevronDown, ChevronLeft, ChevronRight, Circle, Copy, Download, Grid3x3, Image as ImageIcon,
+  ArrowLeft, ArrowRight, BringToFront, Check, ChevronDown, ChevronLeft, ChevronRight, Circle, Copy, Download, Grid3x3, Image as ImageIcon,
   Magnet, Minus, MonitorUp, Hexagon, Scaling, Smartphone, Laptop, Eraser, ImageOff, Play, RefreshCw, Plus, QrCode, Redo2, SendToBack, Shapes, Square, Trash2, Type, Undo2, Shuffle, X,
   Send,
 } from 'lucide-react';
@@ -41,6 +41,22 @@ function PageThumb({ doc, pg, width = 132 }) {
 PageThumb.cache = {};
 
 // ---------------------------------------------------------------- editor
+// ---- change a color or font everywhere: every page, every text, shape, outline and background
+const sameVal = (a, b) => String(a).replace(/'/g, '').trim().toLowerCase() === String(b).replace(/'/g, '').trim().toLowerCase();
+function eachUse(doc, kind, from, fn) {
+  const eq = (v) => typeof v === 'string' && sameVal(v, from);
+  for (const pg of doc?.pages || []) {
+    if (kind === 'font') { for (const it of pg.items) if (it.type === 'text' && eq(it.font)) fn(it, 'font'); continue; }
+    for (const it of pg.items) for (const k of ['color', 'fill', 'stroke']) if (eq(it[k])) fn(it, k);
+    if (pg.bg) {
+      for (const k of ['color', 'color2', 'from', 'to']) if (eq(pg.bg[k])) fn(pg.bg, k);
+      if (Array.isArray(pg.bg.colors)) pg.bg.colors.forEach((c, i) => { if (eq(c)) fn(pg.bg.colors, i); });
+    }
+  }
+}
+function countUses(doc, kind, from) { let n = 0; eachUse(doc, kind, from, () => { n++; }); return n; }
+function replaceUses(doc, kind, from, to) { eachUse(doc, kind, from, (o, k) => { o[k] = to; }); }
+
 /** Font pairings that work offline (built into macOS), with the church's brand fonts first. */
 const PAIRINGS = (config) => [
   { id: 'brand', label: `Your brand: ${config.brandFonts?.heading || 'Montserrat'} + ${config.brandFonts?.body || 'Montserrat'}`, h: config.brandFonts?.heading || 'Montserrat', b: config.brandFonts?.body || 'Montserrat' },
@@ -66,6 +82,11 @@ export default function DesignEditor({ id, onClose }) {
   const [picker, setPicker] = useState(null);
   const [erasing, setErasing] = useState(null); // library path of the picture being cleared
   const [saved, setSaved] = useState(true);
+  // "Change X to Y everywhere?": offered after a color or font change settles, when the old value is used elsewhere.
+  const [swap, setSwap] = useState(null); // { kind: 'color' | 'font', from, to, count, at }
+  const pendingSwap = useRef(null);
+  const swapTimer = useRef(null);
+  const swapDocRef = useRef(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [busy, setBusy] = useState(null);
   const [presenting, setPresenting] = useState(null);
@@ -168,6 +189,25 @@ export default function DesignEditor({ id, onClose }) {
   }, []);
 
   const item = pg?.items.find((x) => x.id === sel) || null;
+  swapDocRef.current = doc;
+  /** Note a color or font change. A drag of the color picker is one change: from where it started to where it ends. */
+  function noteChange(kind, from, to) {
+    if (!from || !to || sameVal(from, to)) return;
+    const p = pendingSwap.current;
+    if (p && p.kind === kind && sameVal(p.to, from)) p.to = to; else pendingSwap.current = { kind, from, to };
+    clearTimeout(swapTimer.current);
+    swapTimer.current = setTimeout(() => {
+      const q = pendingSwap.current; pendingSwap.current = null;
+      if (!q || sameVal(q.from, q.to)) return;
+      const count = countUses(swapDocRef.current, q.kind, q.from);
+      if (count > 0) setSwap({ ...q, count, at: Date.now() });
+    }, 700);
+  }
+  const changeEverywhere = (sw) => {
+    update((d) => { replaceUses(d, sw.kind, sw.from, sw.to); return d; });
+    setSwap(null);
+    toast({ text: `Changed in ${sw.count} more place${sw.count === 1 ? '' : 's'}. Undo puts them back.` });
+  };
   // One pick restyles the whole design: big text gets the heading font, smaller text the body font.
   const applyPairing = (pr) => {
     update((d) => {
@@ -181,7 +221,13 @@ export default function DesignEditor({ id, onClose }) {
     });
     toast({ text: `Fonts set to ${pr.label}. Undo puts them back.` });
   };
-  const setItem = (p, opts) => update((d) => { const it = d.pages[pi].items.find((x) => x.id === sel); Object.assign(it, p); return d; }, opts);
+  const setItem = (p, opts) => {
+    if (item) {
+      for (const k of ['color', 'fill', 'stroke']) if (k in p && typeof item[k] === 'string' && typeof p[k] === 'string') noteChange('color', item[k], p[k]);
+      if ('font' in p && item.font) noteChange('font', item.font, p.font);
+    }
+    update((d) => { const it = d.pages[pi].items.find((x) => x.id === sel); Object.assign(it, p); return d; }, opts);
+  };
   // The helper chat sees this design and what's selected. A picked headline replaces the selected text;
   // a picked photo fills the selected photo spot or picture, or is added to the page.
   useHelperFocus(id ? { kind: 'design', id, selected: item ? { label: layerLabel(item), text: item.type === 'text' ? item.text : undefined, rel: item.type === 'image' ? item.rel : item.photo || undefined } : undefined } : null, (field, value) => {
@@ -198,7 +244,10 @@ export default function DesignEditor({ id, onClose }) {
     }
     return false;
   });
-  const setPage = (p, opts) => update((d) => { Object.assign(d.pages[pi], p); return d; }, opts);
+  const setPage = (p, opts) => {
+    if (p.bg && pg?.bg) for (const k of ['color', 'color2', 'from', 'to']) if (typeof pg.bg[k] === 'string' && typeof p.bg[k] === 'string') noteChange('color', pg.bg[k], p.bg[k]);
+    update((d) => { Object.assign(d.pages[pi], p); return d; }, opts);
+  };
   const addItem = (it) => { update((d) => { d.pages[pi].items.push(it); return d; }); setSel(it.id); };
   const removeItem = () => { if (!sel) return; update((d) => { d.pages[pi].items = d.pages[pi].items.filter((x) => x.id !== sel); return d; }); setSel(null); };
   const duplicateItem = () => { if (!item) return; const c = { ...clone(item), id: uid(), x: Math.min(0.95, item.x + 0.03), y: Math.min(0.95, item.y + 0.03) }; addItem(c); };
@@ -510,6 +559,19 @@ export default function DesignEditor({ id, onClose }) {
 
         {/* canvas */}
         <div className="dz-center" onPointerDown={(e) => { if (e.target === e.currentTarget && !editing) setSel(null); }}>
+          {swap && (
+            <div className="dz-swap" role="status" key={swap.at}>
+              <span className="dz-swap-what">
+                {swap.kind === 'color'
+                  ? <><i style={{ background: swap.from }} /><ArrowRight size={13} /><i style={{ background: swap.to }} /></>
+                  : <><span style={{ fontFamily: `'${String(swap.from).replace(/'/g, '')}'` }}>{String(swap.from).replace(/'/g, '')}</span><ArrowRight size={13} /><span style={{ fontFamily: `'${String(swap.to).replace(/'/g, '')}'` }}>{String(swap.to).replace(/'/g, '')}</span></>}
+              </span>
+              <span className="small">Change it everywhere? <span className="muted">{swap.count} more place{swap.count === 1 ? '' : 's'}</span></span>
+              <button className="btn sm primary" onClick={() => changeEverywhere(swap)}>Change all</button>
+              <button className="dz-swap-x" aria-label="No thanks" title="No thanks" onClick={() => setSwap(null)}><X size={14} /></button>
+              <i className="dz-swap-timer" onAnimationEnd={() => setSwap(null)} />
+            </div>
+          )}
           {doc.source?.campaignId && <CampaignHeader campaignId={doc.source.campaignId} compact />}
           <div ref={stageRef} className={`dz-stage ${aiWorking === 'design' ? 'ai-wave' : ''}`} onPointerDown={(e) => { if (e.target === e.currentTarget && !editing) setSel(null); }}>
             <div className="dz-canvas" style={{ width: dispW, height: dispH }}>
@@ -716,7 +778,7 @@ export default function DesignEditor({ id, onClose }) {
               </label>
               <span className="eyebrow">Design colors</span>
               <div className="row wrap" style={{ gap: 8 }}>
-                {doc.palette.map((c, i) => <ColorField key={i} value={c} onChange={(v) => update((d) => { d.palette[i] = v; return d; }, { record: false })} />)}
+                {doc.palette.map((c, i) => <ColorField key={i} value={c} onChange={(v) => { noteChange('color', c, v); update((d) => { d.palette[i] = v; return d; }, { record: false }); }} />)}
               </div>
               <div className="row" style={{ gap: 10 }}>
                 <ColorField value={doc.tint?.color || '#FF9A62'} onChange={(c) => update((d) => { d.tint = { ...(d.tint || {}), color: c }; return d; }, { record: false })} />
