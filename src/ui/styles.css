@@ -434,6 +434,10 @@ input[type='color'] { width: 34px; height: 30px; border: 1px solid var(--line-st
   background: color-mix(in srgb, var(--ink) 86%, transparent); color: var(--sidebar-text);
 }
 :root[data-mode='dark'] .sidebar { background: rgba(var(--glass-rgb), 0.78); color: var(--ink); }
+/* A short window: the menu scrolls instead of hiding buttons, and the idea card steps aside first. */
+.sidebar { overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(var(--sheen-rgb), 0.25) transparent; }
+.sidebar > * { flex-shrink: 0; }
+@media (max-height: 680px) { .sidebar .side-card, .sidebar .side-card.in { display: none; } }
 .sidebar .side-drag { -webkit-app-region: drag; height: 30px; margin: -14px -12px 0; flex: none; }
 .sidebar .brand { display: flex; align-items: center; gap: 10px; font-family: 'Caveat', cursive; font-weight: 700; font-size: 25px; line-height: 1; padding: 4px 8px 14px; color: inherit; }
 .side-nav { display: grid; gap: 2px; }
