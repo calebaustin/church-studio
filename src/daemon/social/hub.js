@@ -115,7 +115,7 @@ export async function createPost(body) {
   const post = {
     id: store.newId(), title: (body.title || '').slice(0, 200), caption: body.caption || '', hashtags: body.hashtags || [],
     media, destinations: dests, options: body.options || {},
-    campaignId: body.campaignId || null, plannedAt: body.plannedAt || null, step: body.step || null,
+    campaignId: body.campaignId || null, plannedAt: body.plannedAt || null, step: body.step || null, sermonId: body.sermonId || null,
     status: body.mode === 'draft' ? 'draft' : body.mode === 'schedule' ? 'scheduled' : 'publishing',
     scheduledAt: when ? when.toISOString() : null, created: new Date().toISOString(), publishedAt: null,
   };
@@ -130,7 +130,7 @@ export async function editPost(id, body) {
   return store.updatePost(id, (p) => {
     if (p.status === 'publishing') throw new Error('This post is being published right now.');
     if (media !== undefined) p.media = media;
-    for (const k of ['title', 'caption', 'hashtags', 'options', 'plannedAt']) if (k in body) p[k] = body[k];
+    for (const k of ['title', 'caption', 'hashtags', 'options', 'plannedAt', 'sermonId']) if (k in body) p[k] = body[k];
     if (body.accountIds) {
       p.destinations = body.accountIds.map((aid) => p.destinations.find((d) => d.accountId === aid)
         || { accountId: aid, platform: accounts.find((a) => a.id === aid)?.platform, status: 'pending', caption: null }).filter((d) => d.platform);

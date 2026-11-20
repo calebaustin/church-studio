@@ -1,14 +1,21 @@
 import { useEffect, useState } from 'react';
-import { Check, ChevronDown, Clapperboard, FileText, Headphones, Layers, Minus, PenLine, Plus, Send, Shapes } from 'lucide-react';
-import { api } from '../api.js';
+import { BookOpen, CalendarDays, Check, ChevronDown, Clapperboard, ExternalLink, FileText, Headphones, Layers, Link2, Megaphone, Minus, PenLine, Plus, Search, Send, Shapes, Sparkles, X } from 'lucide-react';
+import { api, fmt, media, openLink } from '../api.js';
 import { useApp } from '../App.jsx';
 import Modal, { ModalHead } from './Modal.jsx';
 
 const GROUPS = [['Video', Clapperboard], ['Words', PenLine], ['Design', Shapes], ['Audio', Headphones], ['Share', Send]];
 
-/** One sermon, many pieces: what's made, what's next, one click to make each. */
+const KIND_ICON = { design: Shapes, writing: PenLine, post: Send, campaign: Megaphone };
+const day = (d) => (d ? new Date(d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '');
+
+/**
+ * The Sermon page: the sermon at a glance, its plan (what's made, what's next, one click to make each), and
+ * everything tied to it, with a way to tie more. The sermon is the hub that holds it all together.
+ */
 export default function ContentPlan({ project, setStep, onChange }) {
-  const { go, toast, trackJob, onJobFinished, config, saveConfig } = useApp();
+  const { go, toast, trackJob, onJobFinished, config, saveConfig, ai } = useApp();
+  const [linking, setLinking] = useState(false);
   const [plan, setPlan] = useState(null);
   const [showIdeas, setShowIdeas] = useState(false);
   const [podcast, setPodcast] = useState(false);
@@ -35,19 +42,52 @@ export default function ContentPlan({ project, setStep, onChange }) {
   const done = shown.filter((p) => p.done).length;
   const setAside = (p, off) => saveConfig({ planHidden: off ? [...hidden, p.id] : [...hidden].filter((x) => x !== p.id) });
   const pct = done / Math.max(1, total);
+  const sm = plan.sermon || {};
+  const L = plan.links || { designs: [], writing: [], posts: [], campaigns: [] };
+  const clips = project.clips.filter((c) => c.status === 'kept' || c.status === 'exported' || c.export);
+  const unlink = async (kind, id) => { await api.put('/api/links', { kind, id, projectId: null }); load(); toast({ text: 'No longer tied to this sermon.' }); };
+  const openItem = (kind, it) => {
+    if (kind === 'design') return go({ name: 'graphics', design: it.id });
+    if (kind === 'writing') return go({ name: 'writing', project: it.id });
+    if (kind === 'post') return go({ name: 'social' });
+    return go({ name: 'calendar', tab: 'campaigns' });
+  };
+  const tied = [['design', 'Designs', L.designs], ['writing', 'Writing', L.writing], ['post', 'Posts', L.posts], ['campaign', 'Campaigns', L.campaigns]];
+  const count = clips.length + L.designs.length + L.writing.length + L.posts.length + L.campaigns.length;
   return (
     <div className="stack" style={{ gap: 16 }}>
-      <section className="glass strong panel plan-head">
-        <span className="plan-ring" style={{ '--p': pct }} aria-hidden="true"><strong className="num">{done}</strong><span>of {total}</span></span>
-        <div className="stack grow" style={{ gap: 4, minWidth: 0 }}>
-          <span className="eyebrow">Content plan</span>
-          <h2 style={{ margin: 0 }}>One sermon, {total} ways to share it</h2>
-          <span className="muted small">{done === 0 ? 'Start anywhere. Every piece links back to this sermon. Set aside any that don\'t fit your church.' : done >= total ? 'Everything is made. Well done.' : `${total - done} more pieces you could make from this message.`}</span>
+      <section className="glass strong panel sermon-hero">
+        <div className="stack" style={{ gap: 10, minWidth: 0 }}>
+          <span className="eyebrow row" style={{ gap: 6 }}><BookOpen size={13} />Sermon</span>
+          {sm.bigIdea ? <p className="sermon-idea">“{sm.bigIdea.replace(/^[“"]|[”"]$/g, '')}”</p> : <h2 style={{ margin: 0 }}>{project.title}</h2>}
+          <span className="muted small row wrap" style={{ gap: 6 }}>
+            {day(sm.date)}{sm.duration ? ` · ${fmt(sm.duration)}` : ''}{project.series ? ` · ${project.series} series` : ''}{sm.stories ? ` · ${sm.stories} stor${sm.stories === 1 ? 'y' : 'ies'}` : ''}
+          </span>
+          {sm.refs?.length > 0 && (
+            <div className="row wrap" style={{ gap: 6 }}>
+              {sm.refs.map((r) => <button key={r.ref} className="chip-btn" title="Open the transcript where this is read" onClick={() => go({ name: 'project', id: project.id, step: 'text', t: r.start })}><BookOpen size={12} />{r.ref}</button>)}
+            </div>
+          )}
+          {sm.points?.length > 0 && <ol className="sermon-points">{sm.points.map((p) => <li key={p}>{p}</li>)}</ol>}
+          {sm.themes?.length > 0 && <div className="row wrap" style={{ gap: 6 }}>{sm.themes.map((t) => <span key={t} className="chip">{t}</span>)}</div>}
+          <div className="row wrap" style={{ gap: 8 }}>
+            <button className="btn sm" onClick={() => setStep(project.status === 'transcribed' ? 'text' : 'transcribe')}><FileText size={13} />Transcript</button>
+            {sm.watch && <button className="btn sm ghost" onClick={() => openLink(sm.watch)}><ExternalLink size={13} />Watch</button>}
+          </div>
         </div>
-        <label className="field small" style={{ width: 220 }}><span className="row" style={{ gap: 6 }}><Layers size={13} />Series</span>
+        <label className="field small sermon-series"><span className="row" style={{ gap: 6 }}><Layers size={13} />Series</span>
           <input className="input" value={series} placeholder="Like Rooted" onChange={(e) => setSeries(e.target.value)}
             onBlur={async () => { if (series !== (project.series || '')) { await api.patch(`/api/projects/${project.id}`, { series }); onChange?.(); toast({ text: series ? `Added to the “${series}” series.` : 'Removed from its series.' }); } }} />
         </label>
+      </section>
+      <section className="glass strong panel plan-head">
+        <span className="plan-ring" style={{ '--p': pct }} aria-hidden="true"><strong className="num">{done}</strong><span>of {total}</span></span>
+        <div className="stack grow" style={{ gap: 4, minWidth: 0 }}>
+          <span className="eyebrow">Sermon plan</span>
+          <h2 style={{ margin: 0 }}>One sermon, {total} ways to share it</h2>
+          <span className="muted small">{done === 0 ? 'Start anywhere. Every piece links back to this sermon. Set aside any that don\'t fit your church.' : done >= total ? 'Everything is made. Well done.' : `${total - done} more pieces you could make from this message.`}</span>
+        </div>
+
       </section>
       <div className="plan-grid">
         {GROUPS.map(([g, Icon]) => {
@@ -87,12 +127,46 @@ export default function ContentPlan({ project, setStep, onChange }) {
           ))}
         </section>
       )}
-      {plan.project.refs?.length > 0 && (
-        <section className="glass panel row wrap" style={{ gap: 8 }}>
-          <span className="eyebrow row" style={{ gap: 6 }}><FileText size={13} />Scripture in this message</span>
-          {plan.project.refs.map((r) => <span key={r} className="chip">{r}</span>)}
-        </section>
-      )}
+      <section className="glass panel stack" style={{ gap: 12 }}>
+        <div className="row between wrap" style={{ gap: 8 }}>
+          <span className="stack" style={{ gap: 0 }}>
+            <span className="eyebrow row" style={{ gap: 6 }}><Link2 size={13} />Tied to this sermon · {count}</span>
+            <span className="muted small">Everything made from this sermon, in one place. Tie anything else here too.</span>
+          </span>
+          <button className="btn sm" onClick={() => setLinking(true)}><Plus size={13} />Link something</button>
+        </div>
+        {clips.length > 0 && (
+          <div className="stack" style={{ gap: 6 }}>
+            <span className="small muted row" style={{ gap: 6 }}><Clapperboard size={13} />Clips</span>
+            <div className="tied-grid">
+              {clips.map((c) => (
+                <button key={c.id} className="tied-card" onClick={() => go({ name: 'project', id: project.id, clip: c.id })}>
+                  {c.export?.thumb ? <img src={media(project.id, c.export.thumb)} alt="" /> : <span className="tied-ico"><Clapperboard size={16} /></span>}
+                  <span className="stack" style={{ gap: 0, minWidth: 0 }}><strong className="small truncate">{c.title}</strong><span className="tiny muted">{c.export ? 'Exported' : 'Kept'} · {Math.round(c.end - c.start)}s</span></span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {tied.map(([kind, label, list]) => list.length > 0 && (
+          <div key={kind} className="stack" style={{ gap: 6 }}>
+            <span className="small muted row" style={{ gap: 6 }}>{(() => { const I = KIND_ICON[kind]; return <I size={13} />; })()}{label}</span>
+            <div className="tied-grid">
+              {list.map((it) => (
+                <div key={it.id} className="tied-card-wrap">
+                  <button className="tied-card" onClick={() => openItem(kind, it)}>
+                    {it.thumb ? <img src={it.thumb} alt="" /> : <span className="tied-ico">{(() => { const I = KIND_ICON[kind]; return <I size={16} />; })()}</span>}
+                    <span className="stack" style={{ gap: 0, minWidth: 0 }}><strong className="small truncate">{it.title}</strong><span className="tiny muted truncate">{it.sub}{it.when ? ` · ${day(it.when)}` : ''}</span></span>
+                  </button>
+                  {!it.own && <button className="rt-btn tied-x" aria-label={`Untie ${it.title}`} title="Untie from this sermon" onClick={() => unlink(kind, it.id)}><X size={12} /></button>}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+        {count === 0 && <p className="muted small" style={{ margin: 0 }}>Nothing yet. Make something from the plan above, or link a design, a piece of writing, a post or a campaign you've already made.</p>}
+      </section>
+      {linking && <LinkPicker projectId={project.id} title={project.title} onClose={() => setLinking(false)} onDone={() => { setLinking(false); load(); }} />}
       {podcast && <PodcastDialog project={project} onClose={() => setPodcast(false)} onStart={(job) => { trackJob(job); setPodcast(false); toast({ text: 'Making your episode. It goes to Downloads with show notes.' }); }} />}
     </div>
   );
@@ -131,6 +205,43 @@ function PodcastDialog({ project, onClose, onStart }) {
         <span className="hint">Saved to Downloads with a show notes file.</span>
         <button className="btn primary" onClick={start}><Headphones size={14} />Make episode</button>
       </div>
+    </Modal>
+  );
+}
+
+/** Tie something you've already made to this sermon. */
+function LinkPicker({ projectId, title, onClose, onDone }) {
+  const { toast } = useApp();
+  const [items, setItems] = useState(null);
+  const [q, setQ] = useState('');
+  useEffect(() => { api.get('/api/links/candidates').then((r) => setItems(r.items)).catch(() => setItems([])); }, []);
+  const shown = (items || []).filter((i) => !q || `${i.title} ${i.sub}`.toLowerCase().includes(q.toLowerCase()));
+  const link = async (i) => {
+    await api.put('/api/links', { kind: i.kind, id: i.id, projectId });
+    setItems((list) => list.filter((x) => !(x.kind === i.kind && x.id === i.id)));
+    toast({ text: `${i.title} is tied to ${title}.` });
+  };
+  return (
+    <Modal label="Link to this sermon" width={560} onClose={onDone}>
+      <ModalHead title="Link something to this sermon" sub="Designs, writing, posts and campaigns that aren't tied to a sermon yet." />
+      <label className="field" style={{ marginTop: 12 }}><span className="row" style={{ gap: 6 }}><Search size={13} />Find</span>
+        <input className="input" autoFocus value={q} placeholder="Search by name" onChange={(e) => setQ(e.target.value)} />
+      </label>
+      <div className="stack link-list" style={{ gap: 4, marginTop: 8 }}>
+        {!items && <span className="muted small">Loading…</span>}
+        {items && !shown.length && <span className="muted small">Nothing left to link{q ? ' with that name' : ''}.</span>}
+        {shown.map((i) => {
+          const I = KIND_ICON[i.kind] || FileText;
+          return (
+            <div key={`${i.kind}${i.id}`} className="link-row">
+              {i.thumb ? <img src={i.thumb} alt="" /> : <span className="tied-ico"><I size={15} /></span>}
+              <span className="stack" style={{ gap: 0, minWidth: 0 }}><strong className="small truncate">{i.title}</strong><span className="tiny muted">{i.sub}</span></span>
+              <button className="btn sm" onClick={() => link(i)}><Link2 size={13} />Link</button>
+            </div>
+          );
+        })}
+      </div>
+      <div className="row" style={{ justifyContent: 'flex-end', marginTop: 14 }}><button className="btn primary" onClick={onDone}>Done</button></div>
     </Modal>
   );
 }

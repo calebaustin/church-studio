@@ -16,6 +16,7 @@ import { DEVICE_ASPECT, KINDS, PATTERNS, RESIZE_TARGETS, SHAPES, resizeDesign, b
 import { snapMove } from './snap.js';
 import PhotoEdits from './PhotoEdits.jsx';
 import Layers, { label as layerLabel } from './Layers.jsx';
+import SermonPicker from '../components/SermonPicker.jsx';
 import CampaignHeader from '../components/CampaignHeader.jsx';
 import { exportDesign } from './exporters.js';
 import { BLACK_KEYS, NEXT_KEYS, PREV_KEYS, PresentHere, PresenterConsole, openChannel } from './Presenter.jsx';
@@ -650,6 +651,8 @@ export default function DesignEditor({ id, onClose }) {
             </>
           ) : (
             <>
+              <SermonPicker compact value={doc.source?.projectId || null} onChange={(v) => update((d) => { d.source = { ...(d.source || {}), projectId: v }; return d; })} />
+              <hr className="hairline" />
               <span className="eyebrow">Page {pi + 1}</span>
               <div className="seg sm seg-full">
                 {[['mesh', 'Gradient'], ['solid', 'Solid'], ['gradient', 'Blend'], ['pattern', 'Pattern'], ['image', 'Photo']].map(([k, l]) => (

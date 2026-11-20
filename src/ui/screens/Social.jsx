@@ -8,6 +8,7 @@ import { exportDesign } from '../design/exporters.js';
 import { checkCaption } from '../captionCheck.js';
 import Modal from '../components/Modal.jsx';
 import CampaignHeader from '../components/CampaignHeader.jsx';
+import SermonPicker from '../components/SermonPicker.jsx';
 import { EventCard, RefreshEvents, eventTime, useChurchEvents } from '../components/ChurchEvents.jsx';
 
 const STATUS = {
@@ -423,6 +424,8 @@ export function Composer({ s, plat, init, onClose, onConnect }) {
   const initialMedia = editing?.media || (init.media && s.media.find((m) => m.clipId === init.media.clipId)) || init.media || null;
   const [media, setMedia] = useState(initialMedia);
   const [title, setTitle] = useState(editing?.title ?? init.title ?? initialMedia?.title ?? '');
+  // Which sermon this post belongs to (shown on that Sermon page). A clip or design attached brings its own.
+  const [sermonId, setSermonId] = useState(editing?.sermonId ?? init.projectId ?? initialMedia?.projectId ?? null);
   const [caption, setCaption] = useState(editing?.caption ?? init.caption ?? initialMedia?.summary ?? '');
   const [tags, setTags] = useState((editing?.hashtags ?? init.hashtags ?? initialMedia?.hashtags ?? []).join(', '));
   const [picked, setPicked] = useState(new Set(editing?.destinations.map((d) => d.accountId) || []));
@@ -487,7 +490,7 @@ export function Composer({ s, plat, init, onClose, onConnect }) {
     setBusy(true);
     setError(null);
     const body = {
-      mode: m, title, caption, hashtags, accountIds: [...picked], captions: overrides,
+      mode: m, title, caption, hashtags, accountIds: [...picked], captions: overrides, sermonId: sermonId || media?.projectId || null,
       scheduledAt: m === 'schedule' ? new Date(when).toISOString() : null,
       media: media ? (media.kind === 'image' ? { kind: 'image', file: media.file, designId: media.designId, projectId: media.projectId, pages: media.pages, thumb: media.thumb } : { file: media.file, projectId: media.projectId, clipId: media.clipId }) : null,
       options: { youtubePrivacy: privacy },
@@ -551,6 +554,7 @@ export function Composer({ s, plat, init, onClose, onConnect }) {
               </div>
             )}
             <label className="field">Title <span className="hint">Used for YouTube and for your own list</span><input className="input" value={title} maxLength={100} onChange={(e) => setTitle(e.target.value)} /></label>
+            <SermonPicker value={sermonId || media?.projectId || null} onChange={setSermonId} />
             <label className="field">Caption<textarea className="input" rows={4} spellCheck value={caption} onChange={(e) => setCaption(e.target.value)} /></label>
             <CaptionNotes text={fullText} platforms={[...picked].map((id) => plat(s.accounts.find((x) => x.id === id)?.platform)).filter(Boolean)} />
             <label className="field">Hashtags <span className="hint">Comma separated</span><input className="input" value={tags} onChange={(e) => setTags(e.target.value)} /></label>

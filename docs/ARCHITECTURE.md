@@ -33,3 +33,22 @@ data/  projects/  config.local.json   (local only, never in git)
 2. Pick the speaker with a continuity bias and the user's saved "click the speaker" hints.
 3. Turn positions into a smooth camera path (Follow closely to Smooth glide), or follow timestamp cues.
 4. Crop each frame to 9:16 (or draw whole frame / three stack layouts) and pipe to ffmpeg.
+
+## The sermon as the hub
+A transcribed sermon (a project) is the hub that everything made from it points back to. `src/daemon/links.js` reads
+and writes those links, reusing fields the app already stored, so older work keeps its links without a migration:
+
+| Item | Tied by |
+|---|---|
+| Clips, transcript, podcast | live inside the project |
+| Writing from the sermon | saved under the sermon's own id |
+| Standalone writing | `draft.source.projectId` |
+| Designs | `design.source.projectId` |
+| Posts | `post.sermonId`, or the sermon of the attached clip or design (`media.projectId`) |
+| Campaigns | `campaign.projectId` |
+
+The project's last step is the **Sermon page** (`components/ContentPlan.jsx`, data from `GET /api/projects/:id/plan`):
+the sermon at a glance (main idea, passages that open the transcript at that spot, points, themes, series), the
+sermon plan, and everything tied to it, with "Link something" (`GET /api/links/candidates`, `PUT /api/links`).
+`components/SermonPicker.jsx` ("From sermon") sits in the design editor, standalone writing and the post composer.
+Search adds the sermon's name to tied items, and the helper's sermon links open the Sermon page.

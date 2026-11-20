@@ -86,7 +86,7 @@ export default function SermonIndex() {
               ))}
             </section>
           ))}
-          {!data.series.length && <span className="muted">No series yet. Set a series on a sermon's Content plan, or name sermons like "Rooted, Part 2" and they'll be grouped here.</span>}
+          {!data.series.length && <span className="muted">No series yet. Set a series on a sermon's Sermon page, or name sermons like "Rooted, Part 2" and they'll be grouped here.</span>}
         </div>
       )}
 

@@ -163,3 +163,13 @@ export async function deleteCampaign(id, { removeDrafts = true } = {}) {
   await save(all.filter((x) => x.id !== id));
   return { ok: true };
 }
+
+/** Tie a campaign to a sermon (or untie it with null). */
+export async function setCampaignSermon(id, projectId) {
+  const all = await load();
+  const c = all.find((x) => x.id === id);
+  if (!c) throw new Error('Campaign not found');
+  c.projectId = projectId || null;
+  await save(all);
+  return c;
+}

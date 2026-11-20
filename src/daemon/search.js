@@ -112,6 +112,9 @@ async function buildIndex() {
   const docs = [];
   const tags = await loadTags().catch(() => ({}));
   const T = (key) => tags[key] || [];
+  // Items tied to a sermon also carry its name, so "grace blog" finds the blog from the grace sermon.
+  const sermonNames = new Map((await listProjects().catch(() => [])).map((x) => [x.id, x.title]));
+  const from = (pid) => (pid && sermonNames.get(pid) ? ` From the sermon ${sermonNames.get(pid)}.` : '');
   for (const s of await listProjects()) {
     const p = await getProject(s.id).catch(() => null);
     if (!p) continue;
@@ -123,22 +126,22 @@ async function buildIndex() {
   }
   for (const d of await listDrafts().catch(() => [])) {
     const full = await loadDraft(d.id).catch(() => null);
-    docs.push({ key: `writing:${d.id}`, type: 'writing', title: d.title, text: ['blog', 'email', 'newsletter', 'group', 'devotional', 'social'].map((k) => full?.[k] || '').join('\n'), date: d.updated, sub: d.source === 'newsletter' ? 'Newsletter' : d.sermon ? `From ${d.sermon}` : 'Writing', go: { name: 'writing', project: d.id }, tags: T(`writing:${d.id}`) });
+    docs.push({ key: `writing:${d.id}`, type: 'writing', title: d.title, text: ['blog', 'email', 'newsletter', 'group', 'devotional', 'social'].map((k) => full?.[k] || '').join('\n') + from(full?.source?.projectId || (sermonNames.has(d.id) ? d.id : null)), date: d.updated, sub: d.source === 'newsletter' ? 'Newsletter' : d.sermon ? `From ${d.sermon}` : 'Writing', go: { name: 'writing', project: d.id }, tags: T(`writing:${d.id}`) });
   }
   for (const d of await listDesigns().catch(() => [])) {
     let c = designCache.get(d.id);
     if (!c || c.updated !== d.updated) {
       const full = await getDesign(d.id).catch(() => null);
-      c = { updated: d.updated, text: (full?.pages || []).flatMap((pg) => pg.items.filter((i) => i.type === 'text').map((i) => i.text)).join(' ') };
+      c = { updated: d.updated, text: (full?.pages || []).flatMap((pg) => pg.items.filter((i) => i.type === 'text').map((i) => i.text)).join(' '), projectId: full?.source?.projectId || null };
       designCache.set(d.id, c);
     }
-    docs.push({ key: `design:${d.id}`, type: 'design', title: d.name, text: c.text, date: d.updated, thumb: d.thumb, sub: d.kind, go: { name: 'graphics', design: d.id }, tags: T(`design:${d.id}`) });
+    docs.push({ key: `design:${d.id}`, type: 'design', title: d.name, text: c.text + from(c.projectId), date: d.updated, thumb: d.thumb, sub: d.kind, go: { name: 'graphics', design: d.id }, tags: T(`design:${d.id}`) });
   }
   for (const p of await socialStore.listPosts().catch(() => [])) {
-    docs.push({ key: `post:${p.id}`, type: 'post', title: p.title || p.caption?.slice(0, 60) || 'Post', text: `${p.caption || ''} ${(p.hashtags || []).join(' ')}`, date: p.publishedAt || p.scheduledAt || p.plannedAt || p.created, sub: p.status, go: { name: 'social' } });
+    docs.push({ key: `post:${p.id}`, type: 'post', title: p.title || p.caption?.slice(0, 60) || 'Post', text: `${p.caption || ''} ${(p.hashtags || []).join(' ')}${from(p.sermonId || p.media?.projectId)}`, date: p.publishedAt || p.scheduledAt || p.plannedAt || p.created, sub: p.status, go: { name: 'social' } });
   }
   for (const c of await listCampaigns().catch(() => [])) {
-    docs.push({ key: `campaign:${c.id}`, type: 'campaign', title: c.name, text: c.steps.map((s) => `${s.label} ${s.post?.caption || ''}`).join(' '), date: c.date, go: { name: 'calendar', tab: 'campaigns' } });
+    docs.push({ key: `campaign:${c.id}`, type: 'campaign', title: c.name, text: c.steps.map((s) => `${s.label} ${s.post?.caption || ''}`).join(' ') + from(c.projectId), date: c.date, go: { name: 'calendar', tab: 'campaigns' } });
   }
   const notes = await loadNotes().catch(() => ({}));
   const lib = await listLibrary().catch(() => ({ items: [] }));

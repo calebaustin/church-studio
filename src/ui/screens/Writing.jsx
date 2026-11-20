@@ -13,6 +13,7 @@ import { seoChecks } from '../seo.js';
 import { mdToHtml } from '../markdown.js';
 import { emailHtml } from '../emailHtml.js';
 import RichEditor from '../components/RichEditor.jsx';
+import SermonPicker from '../components/SermonPicker.jsx';
 import Popover, { PopList } from '../components/Popover.jsx';
 
 const ANGLES = [
@@ -241,6 +242,9 @@ function WritingEditor({ pid, onBack, startKind }) {
               <button className={`btn sm ${dirty ? 'accent' : ''}`} disabled={!dirty} onClick={save}><Check size={13} />{dirty ? 'Save' : 'Saved'}</button>
             </div>
           </div>
+          {standalone && (
+            <div className="writing-sermon"><SermonPicker compact value={draft.source?.projectId || null} onChange={(v) => set({ source: { ...(draft.source || {}), projectId: v } })} /></div>
+          )}
           <div className="editor" style={{ gridTemplateColumns: kind === 'blog' ? 'minmax(0, 1fr) 320px' : '1fr' }}>
             <div className="stack" style={{ gap: 16, minWidth: 0 }}>
               {kind === 'blog' && (

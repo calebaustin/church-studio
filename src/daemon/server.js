@@ -24,6 +24,7 @@ import * as backup from './backup.js';
 import * as blog from './blog.js';
 import * as photos from './photos.js';
 import * as library from './library.js';
+import * as links from './links.js';
 import * as writing from './writing.js';
 import * as voice from './voice.js';
 import * as designs from './designs.js';
@@ -334,6 +335,11 @@ route('POST', '/api/gaps/save', async () => {
   await wf(out, md);
   return { file: out };
 });
+// ---- the sermon as the hub: tie designs, writing, posts and campaigns to a sermon
+route('GET', '/api/links/sermons', async () => ({ sermons: await links.sermonChoices() }));
+route('GET', '/api/links/candidates', async () => ({ items: await links.linkCandidates() }));
+route('GET', '/api/links/of', async (_p, _b, url) => ({ projectId: await links.linkOf(url.searchParams.get('kind'), url.searchParams.get('id')) }));
+route('PUT', '/api/links', async (_p, b) => { const r = await links.setLink(b.kind, b.id, b.projectId || null); search.invalidateSearch(); return r; });
 route('GET', '/api/projects/:id/plan', async ({ id }) => { await requireProject(id); return contentPlan(id); });
 route('POST', '/api/projects/:id/podcast', async ({ id }, b) => {
   const project = await requireProject(id);

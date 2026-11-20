@@ -1607,3 +1607,27 @@ input[type='range']:active::-webkit-slider-thumb { transform: scale(1.22); trans
 .today-card { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 14px 16px; }
 @media (max-width: 760px) { .today-card { grid-template-columns: auto minmax(0, 1fr); } .today-card .btn { grid-column: 2; } }
 .helper-moments { display: grid; gap: 4px; max-width: 100%; }
+
+/* ---------- Sermon page ---------- */
+.sermon-hero { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 18px; align-items: start; }
+@media (max-width: 900px) { .sermon-hero { grid-template-columns: minmax(0, 1fr); } }
+.sermon-idea { margin: 0; font-family: var(--font-display); font-size: 22px; line-height: 1.3; font-weight: 650; color: var(--ink); }
+.sermon-points { margin: 0; padding-left: 20px; display: grid; gap: 2px; color: var(--text); font-size: 14px; }
+.sermon-series { width: 100%; }
+.tied-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.tied-card-wrap { position: relative; min-width: 0; }
+.tied-card {
+  display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 10px; align-items: center; width: 100%; padding: 8px 10px 8px 8px; text-align: left;
+  border-radius: 12px; border: 1px solid var(--line); background: var(--surface-solid); color: var(--text); cursor: pointer; font: inherit;
+  transition: border-color 150ms, transform var(--d-snappy) var(--spring-snappy);
+}
+.tied-card:hover { border-color: var(--accent); }
+.tied-card:active { transform: scale(0.985); transition-duration: 150ms, 90ms; }
+.tied-card img, .link-row img { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; background: var(--hover); }
+.tied-ico { width: 44px; height: 44px; border-radius: 8px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-text); }
+.tied-x { position: absolute; top: 6px; right: 6px; opacity: 0; transition: opacity 150ms; }
+.tied-card-wrap:hover .tied-x, .tied-x:focus-visible { opacity: 1; }
+.link-list { max-height: 360px; overflow: auto; }
+.link-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px; border-radius: 10px; }
+.link-row:hover { background: var(--hover); }
+.writing-sermon { max-width: 320px; }

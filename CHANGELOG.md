@@ -2,6 +2,16 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## Unreleased
+
+### New
+- **The Sermon page.** Each sermon's last step is now its own page, the hub for everything made from it:
+  - **The sermon at a glance:** its main idea, date and length, series, the Bible passages read (tap one to open the transcript right there), its main points and themes, and links to the transcript and the video.
+  - **The sermon plan:** every way to share it, what's made, and one tap to make the rest.
+  - **Tied to this sermon:** clips, writing, designs, posts and campaigns made from it, each one tap to open. **Link something** ties in anything you've already made, and the × unties it.
+- **"From sermon" everywhere you make things.** The design editor, your own writing, and new posts each have a **From sermon** picker, so they show up on that Sermon page. A post with a clip or design brings its sermon along.
+- **Connected search and helper.** Search finds items by the sermon they came from (like "grace blog"). The helper knows what's been made from a sermon, shows a design's sermon at the top of the chat, and its sermon links open the Sermon page.
+
 ## 0.15.0 · November 20, 2026
 
 ### New

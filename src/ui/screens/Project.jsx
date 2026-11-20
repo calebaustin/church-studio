@@ -118,7 +118,7 @@ export default function Project({ id, initialStep, initialClip, initialTime }) {
   const src = project.sourceFile ? media(id, project.sourceFile) : null;
   const transcribed = project.status === 'transcribed';
   const audioOnly = Boolean(project.media && !project.media.width);
-  const plan = ['plan', 'Content plan', false];
+  const plan = ['plan', 'Sermon page', false];
   const stepsBase = audioOnly && project.kind === 'lyric' ? [
     ['transcribe', 'Transcribe', transcribed],
     ['edit', 'Edit & export', project.clips.some((c) => c.export)],

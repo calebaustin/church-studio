@@ -16,6 +16,7 @@ import { listDrafts, loadDraft } from './writing.js';
 import { gapReport, sermonIndex } from './insights.js';
 import { listChannel } from './youtube.js';
 import { lookup, refsIn, topicWords, TRANSLATION, versesAbout } from './bible.js';
+import { sermonLinks } from './links.js';
 import { toSentences } from './text.js';
 import { stat } from 'node:fs/promises';
 import { file as projectFile } from './projects.js';
@@ -114,7 +115,9 @@ export async function focusOf(focus = {}, budget = 8000) {
         sel ? `Selected right now: ${sel.label}${sel.text ? ` reading "${clip(sel.text, 120)}"` : ''}. When they say "this" or "it", they mean this.` : 'Nothing is selected, so "this" means the whole design.',
         pics.length && `Pictures in their Brand library (when you suggest one, use its exact name): ${pics.map((im) => `"${im.name}"${im.alt ? ` (${clip(im.alt, 70)})` : ''}`).join('; ')}`,
         camp && `Part of the campaign "${camp.name}" for ${day(camp.date)}${camp.event ? `: ${camp.event.title}${camp.event.location ? ` at ${camp.event.location}` : ''}` : ''}.`];
-      return { label: d.name, chips: [`Design: ${d.name}`, camp && `Campaign: ${camp.name}`].filter(Boolean), text: lines.filter(Boolean).join('\n'), passes: PASS_LIST.design };
+      const from = d.source?.projectId ? await getProject(d.source.projectId).catch(() => null) : null;
+      if (from) lines.push(`Made from the sermon "${from.title}".`);
+      return { label: d.name, chips: [`Design: ${d.name}`, from && `Sermon: ${from.title}`, camp && `Campaign: ${camp.name}`].filter(Boolean), text: lines.filter(Boolean).join('\n'), passes: PASS_LIST.design };
     }
     if ((k === 'clip' || k === 'project') && focus.id) {
       const p = await getProject(focus.id);
@@ -131,8 +134,11 @@ export async function focusOf(focus = {}, budget = 8000) {
       }
       const r = p.sermon?.range || t?.range;
       const body = t ? wordsBetween(t, r?.start ?? 0, r?.end ?? 1e9) : '';
+      const L = await sermonLinks(focus.id).catch(() => null);
+      const tied = L ? [L.designs.length && `designs: ${L.designs.slice(0, 5).map((d) => `"${d.title}"`).join(', ')}`, L.writing.length && `writing: ${L.writing.slice(0, 5).map((d) => `"${d.title}"`).join(', ')}`, L.posts.length && `${L.posts.length} posts`, L.campaigns.length && `campaigns: ${L.campaigns.map((c) => `"${c.title}"`).join(', ')}`].filter(Boolean) : [];
       const lines = [`Sermon/video "${p.title}"${p.series ? ` in the series "${p.series}"` : ''}.`,
         p.clips?.length && `Clips so far: ${p.clips.slice(0, 8).map((c) => `"${c.title}"`).join(', ')}`,
+        tied.length ? `Made from this sermon so far: ${tied.join('; ')}.` : 'Nothing else has been made from this sermon yet.',
         body && `From the transcript: "${clip(body, deep ? 3800 : 1500)}"`];
       return { label: p.title, chips: [`Sermon: ${p.title}`], text: lines.filter(Boolean).join('\n'), passes: PASS_LIST.project };
     }
@@ -301,6 +307,7 @@ function followUps(refs, focus) {
   if (ev) out.push({ label: ser ? `Start a campaign for ${ev.title} with this sermon` : `Start a campaign for ${ev.title}`, go: { name: 'calendar', campaign: { event: ev.event, ...(ser ? { projectId: ser.id } : {}) } } });
   if (ev) out.push({ label: `Make a graphic for ${ev.title}`, go: { name: 'graphics', event: ev.event, eventMode: 'pick' } });
   const sermon = refs.find((r) => r.type === 'sermon');
+  if (sermon) out.push({ label: `Open the Sermon page for ${sermon.title}`, go: { name: 'project', id: sermon.id, step: 'plan' } });
   if (sermon) out.push({ label: 'Open the transcript', go: { name: 'project', id: sermon.id, step: 'text' } });
   const pic = refs.find((r) => r.type === 'file');
   if (pic && focus?.kind === 'design') out.push({ label: `Add ${pic.title} to this design`, apply: { field: 'image', value: pic.id } });
@@ -468,7 +475,7 @@ export async function whatToday() {
   if (fresh && !fresh.clips) picks.push({ why: `"${fresh.title}" is transcribed but has no clips yet.`, label: `Find clips in ${fresh.title}`, go: { name: 'project', id: fresh.id, step: 'clips' } });
   else if (fresh && fresh.clips > fresh.exported) picks.push({ why: `"${fresh.title}" has ${fresh.clips - fresh.exported} clips not exported yet.`, label: `Finish clips from ${fresh.title}`, go: { name: 'project', id: fresh.id, step: 'edit' } });
   const gaps = (await gapReport().catch(() => ({ rows: [] }))).rows.filter((r) => r.missing?.length).slice(0, 1);
-  for (const g of gaps) picks.push({ why: `"${g.title}" could still become ${g.missing.slice(0, 2).join(' and ').toLowerCase()}.`, label: `Open the content plan for ${g.title}`, go: { name: 'project', id: g.id, step: 'plan' } });
+  for (const g of gaps) picks.push({ why: `"${g.title}" could still become ${g.missing.slice(0, 2).join(' and ').toLowerCase()}.`, label: `Open the Sermon page for ${g.title}`, go: { name: 'project', id: g.id, step: 'plan' } });
   if (cfg.youtubeChannel) {
     try {
       const items = await Promise.race([listChannel(cfg.youtubeChannel, { limit: 5 }), new Promise((_, r) => setTimeout(() => r(new Error('slow')), 6000))]);

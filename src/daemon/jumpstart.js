@@ -28,7 +28,7 @@ export const PARTS = {
   church: { label: 'Church info', about: 'Name, address, phone, email and service times', keys: ['churchInfo'] },
   links: { label: 'Links and connections', about: 'YouTube channel, calendar links and social links. No passwords or keys.', keys: ['youtubeChannel', 'calendarFeeds', 'socialLinks'] },
   themes: { label: 'Themes', about: 'Your app and caption themes and which ones are picked', keys: ['appTheme', 'appThemeDark', 'appearance', 'videoTheme', 'refraction'] },
-  prefs: { label: 'Preferences', about: 'Export settings, file names, goals, tools and content plan', keys: ['exportOptions', 'exportPattern', 'weeklyGoal', 'clipCount', 'clipMin', 'clipMax', 'toolOrder', 'toolsOff', 'planHidden', 'whisperModel'] },
+  prefs: { label: 'Preferences', about: 'Export settings, file names, goals, tools and sermon plan', keys: ['exportOptions', 'exportPattern', 'weeklyGoal', 'clipCount', 'clipMin', 'clipMax', 'toolOrder', 'toolsOff', 'planHidden', 'whisperModel'] },
 };
 
 // ------------------------------------------------------------------ reading any workspace's files

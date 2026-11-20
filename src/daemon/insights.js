@@ -11,7 +11,7 @@ import { contentPlan } from './hub.js';
 
 const VERSION = 2;
 
-async function forProject(id) {
+export async function forProject(id) {
   const tf = file(id, 'transcript.json');
   if (!existsSync(tf)) return null;
   const cache = file(id, 'insights.json');

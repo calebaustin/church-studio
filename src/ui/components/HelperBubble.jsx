@@ -28,7 +28,7 @@ const ago = (iso) => {
 /** Where a pill goes. */
 function routeFor(r) {
   if (r.type === 'event') return { name: 'calendar' };
-  if (r.type === 'sermon') return { name: 'project', id: r.id, step: 'text' };
+  if (r.type === 'sermon') return { name: 'project', id: r.id, step: 'plan' }; // the Sermon page
   if (r.type === 'design') return { name: 'graphics', design: r.id };
   if (r.type === 'writing') return { name: 'writing', project: r.id };
   if (r.type === 'campaign') return { name: 'calendar', tab: 'campaigns' };
