@@ -372,16 +372,6 @@ route('GET', '/api/social/messages', async () => {
   }
   return { messages: out.sort((x, y) => String(y.at).localeCompare(String(x.at))).slice(0, 150), problems, sources: [...new Set(sources)] };
 });
-    const channelId = (a.url || '').match(/channel\/([\w-]+)/)?.[1];
-    if (!channelId) continue;
-    try {
-      const r = await youtubeComments(full.credentials, channelId);
-      if (r.credentials) await socialStore.saveAccount({ id: a.id, credentials: r.credentials });
-      out.push(...r.items.map((m) => ({ ...m, account: a.label })));
-    } catch (e) { throw new HttpError(502, e.message); }
-  }
-  return { messages: out.sort((x, y) => String(y.at).localeCompare(String(x.at))) };
-});
 route('POST', '/api/social/posts', async (_p, b) => {
   try { return { post: await social.createPost(b) }; } catch (e) { throw new HttpError(400, e.message); }
 });
