@@ -46,6 +46,15 @@ fi
 chmod +x build/bin/* 2>/dev/null || true
 file build/bin/ffmpeg build/sc-media/sc-media | sed 's/^/   /'
 
+echo "==> Removing iCloud duplicate copies"
+# This folder syncs with iCloud Drive, which leaves "name 2" copies when it syncs a file that's being rewritten.
+# Remove any such copy whose original sits right next to it, so the app never ships duplicates.
+for d in build node_modules; do
+  find "$d" -depth -name "* [0-9]" -print0 2>/dev/null | while IFS= read -r -d '' f; do
+    base="${f% [0-9]}"; [ -e "$base" ] && rm -rf "$f"
+  done
+done
+
 echo "==> Building the app"
 npx vite build
 npx electron-builder --mac dir "--$ARCH" "$@"
