@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
 import { PresentOut } from './design/Presenter.jsx';
+import TrayPanel from './TrayPanel.jsx';
 import './styles.css';
 import { startMotion } from './motion.js';
 
@@ -41,5 +42,7 @@ document.addEventListener('pointerup', (e) => {
 }, true);
 document.addEventListener('click', (e) => { if (swallowClick) { e.preventDefault(); e.stopPropagation(); swallowClick = false; } }, true);
 
-startMotion();
-createRoot(document.getElementById('root')).render(location.hash === '#present-out' ? <PresentOut /> : <App />);
+// The menu bar panel is its own small page too.
+const page = location.hash === '#present-out' ? <PresentOut /> : location.hash === '#tray' ? <TrayPanel /> : <App />;
+if (location.hash !== '#tray') startMotion();
+createRoot(document.getElementById('root')).render(page);

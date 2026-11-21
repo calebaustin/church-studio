@@ -31,6 +31,7 @@ export const DEFAULTS = {
   appTheme: 'olive',
   appThemeDark: 'olive-night',
   refraction: true, // liquid-glass displacement on panels
+  menuBar: true, // the small Church Studio panel in the Mac menu bar
   videoTheme: 'soft-pill',
   exportOptions: { preset: 'vertical', resolution: '1080', quality: 'high', fps: 30, codec: 'h264', captions: true, hook: true, after: 'reveal' },
   trackOnKeep: true,

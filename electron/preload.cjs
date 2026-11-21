@@ -13,4 +13,10 @@ contextBridge.exposeInMainWorld('desktop', {
   presentOpen: (opts) => ipcRenderer.invoke('present-open', opts),
   presentClose: () => ipcRenderer.invoke('present-close'),
   quitApp: () => ipcRenderer.invoke('quit-app'),
+  // Menu bar panel
+  setMenuBar: (on) => ipcRenderer.invoke('set-menu-bar', on),
+  openRoute: (route) => ipcRenderer.invoke('open-route', route),
+  trayHide: () => ipcRenderer.invoke('tray-hide'),
+  onTrayShown: (cb) => { const f = () => cb(); ipcRenderer.on('tray-shown', f); return () => ipcRenderer.removeListener('tray-shown', f); },
+  onGo: (cb) => { const f = (_e, route) => cb(route); ipcRenderer.on('go', f); return () => ipcRenderer.removeListener('go', f); },
 });

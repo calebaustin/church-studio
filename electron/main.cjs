@@ -1,5 +1,5 @@
 // Electron shell: own window, starts the local daemon, loads the UI from it.
-const { app, BrowserWindow, dialog, ipcMain, Notification, screen, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, Notification, screen, shell, Tray } = require('electron');
 const { fork } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -9,6 +9,9 @@ const PORT = Number(process.env.SC_PORT || 4317);
 let daemon = null;
 let mainWindow = null;
 let presentWindow = null;
+let tray = null;
+let trayWindow = null;
+let quitting = false;
 
 function startDaemon() {
   if (process.env.SC_EXTERNAL_DAEMON) return Promise.resolve();
@@ -50,7 +53,12 @@ async function createWindow() {
     return { action: 'deny' };
   });
   mainWindow = win;
-  win.on('closed', () => { if (presentWindow && !presentWindow.isDestroyed()) presentWindow.destroy(); });
+  win.on('closed', () => {
+    mainWindow = null;
+    if (presentWindow && !presentWindow.isDestroyed()) presentWindow.destroy();
+    // The menu bar panel is a hidden window; closing the main window still quits the app.
+    if (!quitting) app.quit();
+  });
   await win.loadURL(process.env.SC_UI_URL || `http://127.0.0.1:${PORT}/`);
 }
 
@@ -129,6 +137,68 @@ ipcMain.handle('notify', (_e, { title, body } = {}) => {
 // Web links, and mailto: so feedback can open the person's Mail app filled in.
 ipcMain.handle('open-external', (_e, url) => { if (/^https:\/\//.test(url) || /^mailto:[^\s@]+@[^\s@]+/.test(url)) shell.openExternal(url); });
 
+// ---- Menu bar: a small icon that opens a Control Center style panel (week, checklist, stats, jump back in).
+const TRAY_W = 380;
+const TRAY_H = 452;
+function showMain(route) {
+  if (!mainWindow || mainWindow.isDestroyed()) { createWindow().then(() => route && mainWindow.webContents.send('go', route)); return; }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show(); mainWindow.focus(); app.focus({ steal: true });
+  if (route) mainWindow.webContents.send('go', route);
+}
+function placeTrayWindow() {
+  const b = tray.getBounds();
+  const area = screen.getDisplayNearestPoint({ x: b.x, y: b.y }).workArea;
+  const x = Math.round(Math.min(Math.max(b.x + b.width / 2 - TRAY_W / 2, area.x + 8), area.x + area.width - TRAY_W - 8));
+  trayWindow.setPosition(x, Math.round(area.y + 6), false);
+}
+function toggleTrayWindow() {
+  if (!trayWindow || trayWindow.isDestroyed()) {
+    trayWindow = new BrowserWindow({
+      width: TRAY_W, height: TRAY_H, show: false, frame: false, transparent: true, hasShadow: false, resizable: false,
+      movable: false, minimizable: false, maximizable: false, fullscreenable: false, skipTaskbar: true, alwaysOnTop: true,
+      backgroundColor: '#00000000',
+      webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true },
+    });
+    trayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    trayWindow.on('blur', () => { if (!trayWindow.webContents.isDevToolsOpened()) trayWindow.hide(); });
+    trayWindow.loadURL(`${uiBase()}#tray`).then(() => { placeTrayWindow(); trayWindow.show(); });
+    return;
+  }
+  if (trayWindow.isVisible()) { trayWindow.hide(); return; }
+  placeTrayWindow();
+  trayWindow.show();
+  trayWindow.webContents.send('tray-shown');
+}
+function setMenuBar(on) {
+  if (on && !tray) {
+    const img = nativeImage.createFromPath(path.join(app.isPackaged ? process.resourcesPath : ROOT, 'assets', 'build', 'trayTemplate.png'));
+    img.setTemplateImage(true);
+    tray = new Tray(img);
+    tray.setToolTip('Church Studio');
+    tray.on('click', toggleTrayWindow);
+    tray.on('right-click', () => tray.popUpContextMenu(Menu.buildFromTemplate([
+      { label: 'Open Church Studio', click: () => showMain() },
+      { type: 'separator' },
+      { label: 'Quit Church Studio', click: () => app.quit() },
+    ])));
+  } else if (!on && tray) {
+    tray.destroy(); tray = null;
+    if (trayWindow && !trayWindow.isDestroyed()) trayWindow.destroy();
+    trayWindow = null;
+  }
+}
+ipcMain.handle('set-menu-bar', (_e, on) => setMenuBar(!!on));
+// From the panel: open the main window on a screen, then tuck the panel away.
+ipcMain.handle('open-route', (_e, route) => {
+  if (trayWindow && !trayWindow.isDestroyed()) trayWindow.hide();
+  showMain(route && typeof route === 'object' ? route : null);
+});
+ipcMain.handle('tray-hide', () => { if (trayWindow && !trayWindow.isDestroyed()) trayWindow.hide(); });
+async function menuBarWanted() {
+  try { const r = await fetch(`http://127.0.0.1:${PORT}/api/config`); const j = await r.json(); return j.config?.menuBar !== false; } catch { return true; }
+}
+
 /** The app used to be called Sermon Clips. Move its data to the new folder once, keeping workspace paths valid. */
 function migrateOldData() {
   if (!app.isPackaged) return;
@@ -158,8 +228,10 @@ app.whenReady().then(async () => {
     return;
   }
   await createWindow();
-  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+  if (process.platform === 'darwin' && await menuBarWanted()) setMenuBar(true);
+  if (tray && process.env.SC_TRAY_OPEN) toggleTrayWindow(); // development: open the panel at launch
+  app.on('activate', () => { if (!mainWindow || mainWindow.isDestroyed()) createWindow(); });
 });
 app.on('window-all-closed', () => app.quit());
-app.on('before-quit', () => { if (presentWindow && !presentWindow.isDestroyed()) presentWindow.destroy(); });
+app.on('before-quit', () => { quitting = true; if (presentWindow && !presentWindow.isDestroyed()) presentWindow.destroy(); });
 app.on('quit', () => daemon?.kill());

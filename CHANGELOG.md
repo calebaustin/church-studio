@@ -2,6 +2,11 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## Unreleased
+
+### New
+- **Church Studio in the menu bar.** Click the small icon at the top of your screen for a quick look without opening the full app: jump back into what you were last working on, see the week ahead with events and planned posts, check off what's left for this Sunday's sermon, and see how many posts and clips you've made this week. Tap anything to open it in Church Studio. Turn it off in Settings > App theme.
+
 ## 0.17.0 · November 20, 2026
 
 ### New

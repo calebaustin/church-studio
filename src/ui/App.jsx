@@ -109,6 +109,8 @@ export default function App() {
   }), []);
   const go = useCallback(async (r) => { if (await confirmLeave()) setRoute(r); }, [confirmLeave]);
   const lastStatus = useRef(new Map());
+  // The menu bar panel asks for a screen here.
+  useEffect(() => window.desktop?.onGo?.((r) => { if (r?.name) go(r); }), [go]);
 
   const reloadConfig = useCallback(async () => {
     const r = await api.get('/api/config');

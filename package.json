@@ -86,6 +86,7 @@
         "filter": [
           "fonts/**",
           "build/icon.png",
+          "build/trayTemplate*.png",
           "bible/**"
         ]
       }

@@ -25,6 +25,7 @@ import * as blog from './blog.js';
 import * as photos from './photos.js';
 import * as library from './library.js';
 import * as links from './links.js';
+import { traySummary } from './tray.js';
 import * as writing from './writing.js';
 import * as voice from './voice.js';
 import * as designs from './designs.js';
@@ -637,6 +638,8 @@ route('GET', '/api/ideas', async () => {
 
 // ---------------------------------------------------------------- dashboard
 /** Everything the home dashboard needs in one call: exports, posts, sermons, work in progress. */
+// The menu bar panel's summary (only built when the panel opens).
+route('GET', '/api/tray', async () => traySummary());
 route('GET', '/api/stats', async () => {
   const projects = [];
   const exports = [];

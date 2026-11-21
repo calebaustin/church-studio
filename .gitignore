@@ -17,6 +17,10 @@ dist/
 # OS
 .DS_Store
 build/
+# the menu bar icon is kept in git; the rest of assets/build is made locally
+!assets/build/
+assets/build/*
+!assets/build/trayTemplate*.png
 backups/
 version.json
 

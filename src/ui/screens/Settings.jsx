@@ -331,6 +331,7 @@ function AppTheme() {
         <div className="row wrap">
           <button className="btn sm" onClick={() => start(activeAppTheme(config, themes), false)}>Edit the current theme</button>
           <label className="row small"><input type="checkbox" checked={config.refraction !== false} onChange={(e) => saveConfig({ refraction: e.target.checked })} /> Liquid refraction on glass panels</label>
+          {window.desktop?.setMenuBar && <label className="row small"><input type="checkbox" checked={config.menuBar !== false} onChange={(e) => { saveConfig({ menuBar: e.target.checked }); window.desktop.setMenuBar(e.target.checked); }} /> Show in the menu bar</label>}
         </div>
       </section>
       {editing && (
