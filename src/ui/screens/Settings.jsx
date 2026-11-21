@@ -1,7 +1,8 @@
 import Backups from '../components/Backups.jsx';
+import Toggle from '../components/Toggle.jsx';
 import AIHelperSettings from '../components/AIHelperSettings.jsx';
 import { useEffect, useRef, useState } from 'react';
-import { Plus, AlertTriangle } from 'lucide-react';
+import { Plus, AlertTriangle, Droplets, PanelTop } from 'lucide-react';
 import { useApp, applyAppTheme, activeAppTheme } from '../App.jsx';
 import { api, desktop, openLink, fmt } from '../api.js';
 import VideoThemeEditor from '../components/VideoThemeEditor.jsx';
@@ -330,8 +331,8 @@ function AppTheme() {
         </div>
         <div className="row wrap">
           <button className="btn sm" onClick={() => start(activeAppTheme(config, themes), false)}>Edit the current theme</button>
-          <label className="row small"><input type="checkbox" checked={config.refraction !== false} onChange={(e) => saveConfig({ refraction: e.target.checked })} /> Liquid refraction on glass panels</label>
-          {window.desktop?.setMenuBar && <label className="row small"><input type="checkbox" checked={config.menuBar !== false} onChange={(e) => { saveConfig({ menuBar: e.target.checked }); window.desktop.setMenuBar(e.target.checked); }} /> Show in the menu bar</label>}
+          <Toggle checked={config.refraction !== false} onChange={(e) => saveConfig({ refraction: e.target.checked })} icon={Droplets} label="Liquid refraction on glass" small />
+          {window.desktop?.setMenuBar && <Toggle checked={config.menuBar !== false} onChange={(e) => { saveConfig({ menuBar: e.target.checked }); window.desktop.setMenuBar(e.target.checked); }} icon={PanelTop} label="Show in the menu bar" small />}
         </div>
       </section>
       {editing && (
@@ -461,7 +462,7 @@ function Updates() {
             ))}
           </div>
         )}
-        <label className="switch"><input type="checkbox" checked={config.autoUpdateCheck !== false} onChange={(e) => saveConfig({ autoUpdateCheck: e.target.checked })} />Check once a day when the app opens</label>
+        <Toggle checked={config.autoUpdateCheck !== false} onChange={(e) => saveConfig({ autoUpdateCheck: e.target.checked })} icon={RefreshCw} label="Check once a day when the app opens" />
         {ver?.upgrade?.upgraded && <span className="muted small"><Sparkles size={12} /> Updated from {ver.upgrade.from}. Your settings were backed up first.</span>}
       </section>
       <section className="glass panel stack" style={{ gap: 14 }}>

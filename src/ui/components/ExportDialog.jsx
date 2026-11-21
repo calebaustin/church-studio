@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Download, FolderOpen, Smartphone, Square, RectangleHorizontal, RectangleVertical } from 'lucide-react';
+import Toggle from './Toggle.jsx';
+import { Download, FolderOpen, Smartphone, Square, RectangleHorizontal, RectangleVertical, Bookmark, Captions, Merge, Type } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { api, desktop, fmt, sizeLabel } from '../api.js';
 import Modal from './Modal.jsx';
@@ -62,8 +63,8 @@ export default function ExportDialog({ project, clips, onClose, beforeExport }) 
   const footer = (
     <>
       <div className="stack" style={{ gap: 4 }}>
-        {clips.length > 1 && <label className="row small"><input type="checkbox" checked={join} onChange={(e) => setJoin(e.target.checked)} />Join into one video, in this order</label>}
-        <label className="row small"><input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />Remember these settings</label>
+        {clips.length > 1 && <Toggle checked={join} onChange={(e) => setJoin(e.target.checked)} icon={Merge} label="Join into one video, in this order" small />}
+        <Toggle checked={remember} onChange={(e) => setRemember(e.target.checked)} icon={Bookmark} label="Remember these settings" small />
       </div>
       <div className="row">
         <button className="btn ghost" onClick={onClose}>Cancel</button>
@@ -125,8 +126,8 @@ export default function ExportDialog({ project, clips, onClose, beforeExport }) 
       </div>
 
       <div className="row wrap" style={{ gap: 18 }}>
-        <label className="row small"><input type="checkbox" checked={o.captions} onChange={(e) => set({ captions: e.target.checked })} />Burn in captions</label>
-        <label className="row small"><input type="checkbox" checked={o.hook} onChange={(e) => set({ hook: e.target.checked })} />Show the on-screen hook</label>
+        <Toggle checked={o.captions} onChange={(e) => set({ captions: e.target.checked })} icon={Captions} label="Burn in captions" small />
+        <Toggle checked={o.hook} onChange={(e) => set({ hook: e.target.checked })} icon={Type} label="Show the on-screen hook" small />
       </div>
 
       <div className="grid2">

@@ -295,6 +295,12 @@ Primary color, hover to primary-hover. Inline text links are underlined (offset 
 - Ask only for what you need. (M to M's checkout dropped street address, apartment, city and company because downloads don't ship.)
 - Required legal checkboxes (agreements, "I have the right to sell this") are unticked by default, store who agreed and when, and say plainly what they mean.
 
+### 6.3a Toggles
+- An on/off setting is a toggle (`components/Toggle.jsx`), never a bare checkbox. Give it an icon on its knob that says what it controls (a droplet for refraction, an eraser for the eraser), with a short label to its right.
+- Keep the label short and name the thing, not the state: "Captions", not "Captions on". The switch already shows on or off.
+- Checkboxes are only for picking items from a list (which accounts, which sizes, which steps).
+- A toggle can share a line with the control it changes (Fill and Eraser sit on one line).
+
 ### 6.4 Chips and segmented controls
 - **Chips:** pill, 4–6px × 12–14px padding, 0.8–0.88rem / 600, primary-soft fill, ink text. Hover keeps the fill and adds a 1px inset primary ring. Selected: solid primary fill, white text. In a scrolling row they don't shrink (`flex: none`) and the scrollbar is hidden.
 - **Segmented control** (e.g. New / Popular): a pill track in `alt` with a 1px border and 3px padding; buttons are transparent and muted; the selected one turns surface-colored with a tiny shadow and ink text.

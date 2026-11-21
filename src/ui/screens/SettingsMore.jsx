@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { CalendarDays, Check, Coffee, ExternalLink, Heart, MessageSquareHeart, RefreshCw, Send, Star } from 'lucide-react';
+import Toggle from '../components/Toggle.jsx';
+import { CalendarDays, Check, Coffee, ExternalLink, Heart, MessageSquareHeart, RefreshCw, Send, Star, AlarmClock, BellRing } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { api, openLink } from '../api.js';
 import ToolPicker from '../components/ToolPicker.jsx';
@@ -23,8 +24,8 @@ export function YourTools() {
     <section className="glass panel stack" style={{ gap: 10 }}>
       <h3>Notifications</h3>
       <p className="muted small" style={{ margin: 0 }}>A Mac notification, only while Church Studio is in the background.</p>
-      <label className="switch"><input type="checkbox" checked={config.notify?.jobs !== false} onChange={(e) => saveConfig({ notify: { ...config.notify, jobs: e.target.checked } })} />When a transcript, download or export finishes</label>
-      <label className="switch"><input type="checkbox" checked={config.notify?.reminders !== false} onChange={(e) => saveConfig({ notify: { ...config.notify, reminders: e.target.checked } })} />When a post you share by hand is due</label>
+      <Toggle checked={config.notify?.jobs !== false} onChange={(e) => saveConfig({ notify: { ...config.notify, jobs: e.target.checked } })} icon={BellRing} label="When a transcript, download or export finishes" />
+      <Toggle checked={config.notify?.reminders !== false} onChange={(e) => saveConfig({ notify: { ...config.notify, reminders: e.target.checked } })} icon={AlarmClock} label="When a post you share by hand is due" />
     </section>
     </>
   );

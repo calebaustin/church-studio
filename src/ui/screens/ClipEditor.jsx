@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Undo2, Redo2, Download, Zap, Plus, Trash2, Crosshair, Play, Pause, Send, FolderOpen, Save, MousePointerClick, Bookmark, X, ScissorsLineDashed, CalendarDays, ChevronDown } from 'lucide-react';
+import Toggle from '../components/Toggle.jsx';
+import { Undo2, Redo2, Download, Zap, Plus, Trash2, Crosshair, Play, Pause, Send, FolderOpen, Save, MousePointerClick, Bookmark, X, ScissorsLineDashed, CalendarDays, ChevronDown, AudioWaveform, Captions, CaseUpper } from 'lucide-react';
 import { useApp, useHelperFocus } from '../App.jsx';
 import { api, fmt, media } from '../api.js';
 import CaptionOverlay, { findFont } from '../components/CaptionOverlay.jsx';
@@ -511,7 +512,7 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
           {tab === 'look' && (
             <div className="stack" style={{ gap: 14 }}>
               <div className="row between wrap">
-                <label className="switch"><input type="checkbox" checked={clip.captions !== false} onChange={(e) => set({ captions: e.target.checked })} />Captions {clip.captions !== false ? 'on' : 'off'}</label>
+                <Toggle checked={clip.captions !== false} onChange={(e) => set({ captions: e.target.checked })} icon={Captions} label="Captions" />
                 <select className="input" style={{ width: 'auto' }} value={clip.videoTheme || ''} onChange={(e) => { set({ videoTheme: e.target.value || null }); setThemeDirty(false); }}>
                   <option value="">Default theme ({themes.video.find((t) => t.id === (project.videoTheme || config.videoTheme))?.name})</option>
                   {themes.video.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -745,7 +746,7 @@ function WordsTab({ words, clip, set, cut, rel, outLen, seek }) {
         <div className="row"><span className="small" style={{ fontWeight: 600 }}>End</span><button className="btn sm" onClick={() => nudge('end', -1)}>◀ Earlier</button><button className="btn sm" onClick={() => nudge('end', 1)}>Later ▶</button></div>
       </div>
       <div className="row wrap">
-        <label className="row small"><input type="checkbox" checked={Boolean(clip.tightenPauses)} onChange={(e) => set({ tightenPauses: e.target.checked })} />Trim pauses</label>
+        <Toggle checked={Boolean(clip.tightenPauses)} onChange={(e) => set({ tightenPauses: e.target.checked })} icon={AudioWaveform} label="Trim pauses" small />
         {clip.tightenPauses && (
           <label className="row small muted">longer than <strong className="num" style={{ color: 'var(--ink)', width: 40 }}>{pauseMax.toFixed(2)}s</strong>
             <input type="range" min="0.2" max="1.5" step="0.05" value={pauseMax} onChange={(e) => set({ pauseMax: Number(e.target.value) })} style={{ width: 120 }} aria-label="Shortest pause to trim" />
@@ -908,7 +909,7 @@ function PopupsTab({ clip, set, now, len }) {
                     {(p.style || 'pill') !== 'plain' && <ColorRow label="Background" color={p.bg || base.bg} opacity={p.bgOpacity ?? base.bgOpacity} onColor={(v) => up(p.id, { bg: v })} onOpacity={(v) => up(p.id, { bgOpacity: v })} />}
                     {p.style === 'lower' && <ColorRow label="Accent bar" color={p.accent || brand[1] || '#D9A441'} onColor={(v) => up(p.id, { accent: v })} />}
                     <label className="field">Size · {p.size || base.size}<input type="range" min="28" max="110" value={p.size || base.size} onChange={(e) => up(p.id, { size: Number(e.target.value) })} /></label>
-                    <label className="row small" style={{ alignSelf: 'end' }}><input type="checkbox" checked={Boolean(p.uppercase)} onChange={(e) => up(p.id, { uppercase: e.target.checked })} />ALL CAPS</label>
+                    <Toggle checked={Boolean(p.uppercase)} onChange={(e) => up(p.id, { uppercase: e.target.checked })} icon={CaseUpper} label="ALL CAPS" small style={{alignSelf: 'end'}} />
                   </div>
                   {(p.color || p.bg || p.size || p.uppercase || p.accent) && <button className="btn ghost sm" onClick={() => up(p.id, { color: null, bg: null, bgOpacity: null, size: null, uppercase: false, accent: null })}>Reset look</button>}
                 </div>

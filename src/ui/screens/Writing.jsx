@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Toggle from '../components/Toggle.jsx';
 import ToolIntro from '../components/ToolIntro.jsx';
 import { ArrowLeft, CalendarDays, Copy, FileDown, FileText, Heart, PenLine, Plus, Sparkles, Wand2, Check, RefreshCw, Undo2, Link2, Info, Printer, Mail, Users, ChevronDown } from 'lucide-react';
 import Modal, { ModalHead } from '../components/Modal.jsx';
@@ -275,7 +276,7 @@ function WritingEditor({ pid, onBack, startKind }) {
                     <div className="row wrap">
                       <button className="btn primary" disabled={busy} onClick={rewrite}><RefreshCw size={15} />Rewrite post</button>
                       {config.llmProvider !== 'none' && (
-                        <label className="switch small"><input type="checkbox" checked={useAi} onChange={(e) => setUseAi(e.target.checked)} />Use AI helper</label>
+                        <Toggle checked={useAi} onChange={(e) => setUseAi(e.target.checked)} icon={Sparkles} label="AI helper" small />
                       )}
                       {undoBlog && <button className="btn ghost sm" onClick={() => { set({ blog: undoBlog }); setUndoBlog(null); }}><Undo2 size={13} />Undo rewrite</button>}
                     </div>

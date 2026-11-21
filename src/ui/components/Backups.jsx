@@ -1,7 +1,8 @@
 // Settings › Backups and sharing: backups, a team folder in Google Drive, Dropbox, OneDrive or iCloud,
 // and sharing one project with a teammate.
 import { useEffect, useState } from 'react';
-import { Cloud, Download, FolderOpen, HardDriveDownload, RotateCcw, Share2, Users } from 'lucide-react';
+import Toggle from './Toggle.jsx';
+import { Cloud, Download, FolderOpen, HardDriveDownload, RotateCcw, Share2, Users, CalendarClock, Images, Film } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { api, desktop, sizeLabel } from '../api.js';
 import Modal, { ModalHead } from './Modal.jsx';
@@ -38,8 +39,8 @@ export default function Backups() {
         </div>
         <div className="row wrap" style={{ gap: 10 }}>
           <button className="btn primary" disabled={busy} onClick={backup}><HardDriveDownload size={15} />{busy ? 'Backing up…' : 'Back up now'}</button>
-          <label className="row small"><input type="checkbox" checked={lib} onChange={(e) => { setLib(e.target.checked); saveConfig({ backupLibrary: e.target.checked }); }} />Include the brand library</label>
-          <label className="switch small"><input type="checkbox" checked={Boolean(config.backupAuto)} onChange={(e) => saveConfig({ backupAuto: e.target.checked })} />Back up every week</label>
+          <Toggle checked={lib} onChange={(e) => { setLib(e.target.checked); saveConfig({ backupLibrary: e.target.checked }); }} icon={Images} label="Include the brand library" small />
+          <Toggle checked={Boolean(config.backupAuto)} onChange={(e) => saveConfig({ backupAuto: e.target.checked })} icon={CalendarClock} label="Back up every week" small />
           {config.lastBackup && <span className="muted small">Last backup {when(config.lastBackup)}</span>}
         </div>
         <div className="stack" style={{ gap: 6 }}>
@@ -112,7 +113,7 @@ export function ShareProject({ project, onClose }) {
         {config.teamFolder && <button className="btn primary" disabled={Boolean(busy)} onClick={() => share(true)}><Users size={14} />{busy === 'team' ? 'Sharing…' : 'Share to team folder'}</button>}
       </>}>
       <ModalHead title="Share project" sub={`“${project.title}” with its transcript, clips, writing and designs.`} />
-      <label className="row small"><input type="checkbox" checked={media} onChange={(e) => setMedia(e.target.checked)} />Include the video{project.media?.duration ? ` (larger file)` : ''}</label>
+      <Toggle checked={media} onChange={(e) => setMedia(e.target.checked)} icon={Film} label={`Include the video${project.media?.duration ? ' (larger file)' : ''}`} small />
       {!config.teamFolder && <span className="hint">Set a team folder in Settings › Backups and sharing to share through Google Drive, Dropbox, OneDrive or iCloud.</span>}
     </Modal>
   );

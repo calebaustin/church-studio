@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Eraser } from 'lucide-react';
+import Toggle from './Toggle.jsx';
+import { Eraser, Crop } from 'lucide-react';
 import { api } from '../api.js';
 import { erase, loadImage } from '../eraseBackground.js';
 import Modal, { ModalHead } from './Modal.jsx';
@@ -70,7 +71,7 @@ export default function BackgroundEraser({ rel, onClose, onSaved }) {
             <button className={o.mode === 'edges' ? 'on' : ''} onClick={() => setO({ ...o, mode: 'edges' })}>Around the outside</button>
             <button className={o.mode === 'everywhere' ? 'on' : ''} onClick={() => setO({ ...o, mode: 'everywhere' })}>Inside letters too</button>
           </div>
-          <label className="row small"><input type="checkbox" checked={o.trim} onChange={(e) => setO({ ...o, trim: e.target.checked })} />Trim the empty edges</label>
+          <Toggle checked={o.trim} onChange={(e) => setO({ ...o, trim: e.target.checked })} icon={Crop} label="Trim the empty edges" small />
         </div>
       </div>
       <div className="row wrap" style={{ gap: 8 }}>

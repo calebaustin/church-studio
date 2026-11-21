@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Toggle from '../components/Toggle.jsx';
 import PreviewTile from '../components/PreviewTile.jsx';
 import ToolIntro from '../components/ToolIntro.jsx';
 import {
   Clapperboard, Copy, GalleryHorizontalEnd, Heart, LayoutGrid, MonitorPlay, NotebookPen, Presentation, Printer,
-  Scaling, Search, Smartphone, Sparkles, Trash2, Home as HomeIcon, Wand2, X, BookOpen, Plus, PenTool, Film, Laptop, CalendarClock,
-} from 'lucide-react';
+  Scaling, Search, Smartphone, Sparkles, Trash2, Home as HomeIcon, Wand2, X, BookOpen, Plus, PenTool, Film, Laptop, CalendarClock, MessageCircleQuestion, Palette} from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { Masonry } from '../components/Masonry.jsx';
 import { api } from '../api.js';
@@ -255,7 +255,7 @@ export default function Graphics({ image, design, event, eventMode, quote, make,
           {kind && <span className="muted small">{KINDS[kind].hint} · {KINDS[kind].w}×{KINDS[kind].h}</span>}
         </div>
         <div className="row wrap" style={{ gap: 6 }} role="radiogroup" aria-label="Template pack">
-          <label className="switch small" style={{ marginRight: 8 }}><input type="checkbox" checked={inBrand} onChange={(e) => setInBrand(e.target.checked)} />My brand colors</label>
+          <Toggle checked={inBrand} onChange={(e) => setInBrand(e.target.checked)} icon={Palette} label="My brand colors" small style={{marginRight: 8}} />
           <button className={`pill-choice ${!pack ? 'on' : ''}`} onClick={() => setPack(null)}>All styles</button>
           {Object.entries(PACKS).map(([id, P]) => (
             <button key={id} className={`pill-choice pack-chip ${pack === id ? 'on' : ''}`} title={P.about} onClick={() => { setPack(pack === id ? null : id); setTab('templates'); }}>
@@ -456,7 +456,7 @@ function EventTemplates({ event, ctx, onClose, onPick }) {
   const list = TEMPLATES.filter((t) => t.event && (kind === 'all' || t.kind === kind));
   return (
     <Modal label="Make from template" onClose={onClose} width={980}
-      footer={<><span className="hint">Pick one, add a photo, and it’s ready. You can change anything after.</span><label className="switch small"><input type="checkbox" checked={brand} onChange={(e) => setBrand(e.target.checked)} />Use my brand colors</label></>}>
+      footer={<><span className="hint">Pick one, add a photo, and it’s ready. You can change anything after.</span><Toggle checked={brand} onChange={(e) => setBrand(e.target.checked)} icon={Palette} label="Use my brand colors" small /></>}>
       <ModalHead title={`A design for ${event.title}`} sub={ev.when + (ev.place ? ` · ${ev.place}` : '')} />
       <div className="seg" style={{ justifySelf: 'start' }}>
         {[['post', 'Posts'], ['story', 'Stories'], ['flyer', 'Flyers'], ['all', 'All']].map(([k, l]) => <button key={k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>{l}</button>)}
@@ -560,7 +560,7 @@ function DeckMaker({ ctx, onClose, onCreate }) {
             <button key={k} className={`choice ${a.format === k ? 'on' : ''}`} onClick={() => set({ format: k })}><span className="t"><span className="radio" />{t}</span><span className="d">{d}</span></button>
           ))}
         </div>
-        <label className="switch small"><input type="checkbox" checked={a.questions} onChange={(e) => set({ questions: e.target.checked })} />Include discussion questions on screen</label>
+        <Toggle checked={a.questions} onChange={(e) => set({ questions: e.target.checked })} icon={MessageCircleQuestion} label="Discussion questions on screen" small />
       </div>
       <div className="stack" style={{ gap: 6 }}>
         <span className="field-label">Build it from</span>

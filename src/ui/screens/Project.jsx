@@ -1,8 +1,9 @@
 import { ShareProject } from '../components/Backups.jsx';
+import Toggle from '../components/Toggle.jsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp, useHelperFocus } from '../App.jsx';
 import { api, fmt, fmtEta, media } from '../api.js';
-import { ArrowLeft, ArrowRight, Check, Square, Wand2, Download, Trash2, Plus, Send, FolderOpen, Copy, ScissorsLineDashed, AudioLines, ChevronDown, FileText, PenLine, Quote, Share2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Square, Wand2, Download, Trash2, Plus, Send, FolderOpen, Copy, ScissorsLineDashed, AudioLines, ChevronDown, FileText, PenLine, Quote, Share2, Clock } from 'lucide-react';
 import AudioCleanup from '../components/AudioCleanup.jsx';
 import ContentPlan from '../components/ContentPlan.jsx';
 import ClipEditor from './ClipEditor.jsx';
@@ -534,7 +535,7 @@ function TranscriptStep({ project, at }) {
         <div className="row between wrap" style={{ gap: 10 }}>
           <h2>Transcript</h2>
           <div className="row wrap" style={{ gap: 12 }}>
-            <label className="switch small"><input type="checkbox" checked={times} onChange={toggleTimes} />Times</label>
+            <Toggle checked={times} onChange={toggleTimes} icon={Clock} label="Times" small />
             {project.sermon?.confirmed && (
               <div className="seg sm">
                 <button className={!whole ? 'on' : ''} onClick={() => setWhole(false)}>{project.media?.width ? 'Sermon only' : 'Trimmed'}</button>

@@ -16,6 +16,7 @@ import { ACCENTS, ARROWS, DEVICE_ASPECT, KINDS, PATTERNS, RESIZE_TARGETS, SHAPES
 import { snapMove } from './snap.js';
 import PhotoEdits from './PhotoEdits.jsx';
 import Layers, { label as layerLabel } from './Layers.jsx';
+import Toggle from '../components/Toggle.jsx';
 import SermonPicker from '../components/SermonPicker.jsx';
 import CampaignHeader from '../components/CampaignHeader.jsx';
 import { exportDesign } from './exporters.js';
@@ -755,11 +756,7 @@ export default function DesignEditor({ id, onClose }) {
                     <div className="row between" style={{ gap: 10 }}>
                       {!item.photo && !item.erase ? <ColorField label={DEVICE_ASPECT[item.shape] ? 'Screen color' : STROKED.has(item.shape) ? 'Color' : 'Fill'} value={item.fill} onChange={(c) => setItem({ fill: c }, { record: false })} swatches={colors} /> : <span />}
                       {!DEVICE_ASPECT[item.shape] && (
-                        <label className="switch icon-switch" title={item.erase ? 'Eraser is on' : 'Use as an eraser'}>
-                          <input type="checkbox" checked={Boolean(item.erase)} onChange={(e) => setItem({ erase: e.target.checked })} />
-                          <Eraser size={11} strokeWidth={2.4} className="switch-knob-icon" aria-hidden="true" />
-                          <span className="small">Eraser</span>
-                        </label>
+                        <Toggle checked={Boolean(item.erase)} onChange={(e) => setItem({ erase: e.target.checked })} icon={Eraser} label="Eraser" small title="Use as an eraser" />
                       )}
                     </div>
                   )}

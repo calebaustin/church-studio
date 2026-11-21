@@ -6,6 +6,7 @@ Every update keeps your sermons, designs, drafts and settings. Before a new vers
 
 ### Changed
 - **Fill and the eraser share one line.** The eraser switch now sits next to Fill, with a small eraser on its knob and the word Eraser beside it, so shape settings take less room.
+- **Clearer switches everywhere.** Every on/off setting is now a switch with a small icon on its knob that shows what it does: a bell for notifications, captions for captions, a palette for brand colors, a droplet for liquid glass and so on. Labels are shorter too ("Captions" instead of "Captions on"), and a few settings that were plain checkboxes, like burning in captions or remembering export settings, are now switches. Lists you pick from keep their checkboxes.
 
 ## 0.19.0 · November 21, 2026
 

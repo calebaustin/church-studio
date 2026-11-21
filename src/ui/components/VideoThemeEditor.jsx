@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, RefreshCw, Trash2, Check, Heart, MessageCircle, Send, Bookmark, Music2, ThumbsUp, Repeat2 } from 'lucide-react';
+import Toggle from './Toggle.jsx';
+import { Plus, RefreshCw, Trash2, Check, Heart, MessageCircle, Send, Bookmark, Music2, ThumbsUp, Repeat2, CaseUpper, Highlighter } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { api } from '../api.js';
 import CaptionOverlay, { findFont } from './CaptionOverlay.jsx';
@@ -109,10 +110,7 @@ export function CaptionStyleFields({ draft, set }) {
         <ColorRow label="Spoken words" color={draft.color} opacity={draft.colorOpacity} onColor={(v) => set({ color: v })} onOpacity={(v) => set({ colorOpacity: v })} />
         <ColorRow label="Word being said" color={draft.active} opacity={draft.activeOpacity} onColor={(v) => set({ active: v })} onOpacity={(v) => set({ activeOpacity: v })} />
         <div className="stack" style={{ gap: 4 }}>
-          <label className="row small" style={{ fontWeight: 600, color: 'var(--ink)' }}>
-            <input type="checkbox" checked={draft.future != null} onChange={(e) => set({ future: e.target.checked ? draft.color : null, futureOpacity: e.target.checked ? 0.45 : 1 })} />
-            Different look for upcoming words
-          </label>
+          <Toggle checked={draft.future != null} onChange={(e) => set({ future: e.target.checked ? draft.color : null, futureOpacity: e.target.checked ? 0.45 : 1 })} icon={Highlighter} label="Different look for upcoming words" small />
           {draft.future != null && <ColorRow label="Upcoming words" color={draft.future} opacity={draft.futureOpacity} onColor={(v) => set({ future: v })} onOpacity={(v) => set({ futureOpacity: v })} />}
         </div>
         {draft.highlight !== 'color'
@@ -134,7 +132,7 @@ export function CaptionStyleFields({ draft, set }) {
             <button className={draft.align === 'left' ? 'on' : ''} onClick={() => set({ align: 'left' })}>Left</button>
           </div>
         </div>
-        <label className="row small" style={{ alignSelf: 'end' }}><input type="checkbox" checked={draft.uppercase} onChange={(e) => set({ uppercase: e.target.checked })} />ALL CAPS</label>
+        <Toggle checked={draft.uppercase} onChange={(e) => set({ uppercase: e.target.checked })} icon={CaseUpper} label="ALL CAPS" small style={{alignSelf: 'end'}} />
       </div>
     </div>
   );
@@ -156,7 +154,7 @@ export function HookStyleFields({ draft, set }) {
         <label className="field">Hook size · {draft.hookSize ?? 58}<input type="range" min="30" max="110" value={draft.hookSize ?? 58} onChange={(e) => set({ hookSize: Number(e.target.value) })} /></label>
         <label className="field">Shows for · {(draft.hookDuration ?? 3.5).toFixed(1)}s<input type="range" min="1" max="10" step="0.5" value={draft.hookDuration ?? 3.5} onChange={(e) => set({ hookDuration: Number(e.target.value) })} /></label>
         <label className="field">Default position · {Math.round((draft.hookY ?? 0.13) * 100)}% down<input type="range" min="0.05" max="0.9" step="0.01" value={draft.hookY ?? 0.13} onChange={(e) => set({ hookY: Number(e.target.value) })} /></label>
-        <label className="row small" style={{ alignSelf: 'end' }}><input type="checkbox" checked={Boolean(draft.hookUppercase)} onChange={(e) => set({ hookUppercase: e.target.checked })} />ALL CAPS</label>
+        <Toggle checked={Boolean(draft.hookUppercase)} onChange={(e) => set({ hookUppercase: e.target.checked })} icon={CaseUpper} label="ALL CAPS" small style={{alignSelf: 'end'}} />
       </div>
     </div>
   );

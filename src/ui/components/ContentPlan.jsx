@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { BookOpen, CalendarDays, Check, ChevronDown, Clapperboard, ExternalLink, FileText, Headphones, Layers, Link2, Megaphone, Minus, PenLine, Plus, Search, Send, Shapes, Sparkles, X } from 'lucide-react';
+import Toggle from './Toggle.jsx';
+import { BookOpen, CalendarDays, Check, ChevronDown, Clapperboard, ExternalLink, FileText, Headphones, Layers, Link2, Megaphone, Minus, PenLine, Plus, Search, Send, Shapes, Sparkles, X, Mic } from 'lucide-react';
 import { api, fmt, media, openLink } from '../api.js';
 import { useApp } from '../App.jsx';
 import Modal, { ModalHead } from './Modal.jsx';
@@ -209,7 +210,7 @@ function PodcastDialog({ project, onClose, onStart }) {
       )}
       <div className="row wrap" style={{ gap: 12 }}>
         <div className="seg sm">{[['mp3', 'MP3'], ['m4a', 'M4A']].map(([k, l]) => <button key={k} className={o.format === k ? 'on' : ''} onClick={() => setO({ ...o, format: k })}>{l}</button>)}</div>
-        {project.sermon?.confirmed && <label className="switch small"><input type="checkbox" checked={!o.whole} onChange={(e) => setO({ ...o, whole: !e.target.checked })} />Sermon only</label>}
+        {project.sermon?.confirmed && <Toggle checked={!o.whole} onChange={(e) => setO({ ...o, whole: !e.target.checked })} icon={Mic} label="Sermon only" small />}
       </div>
       <div className="row between" style={{ marginTop: 6 }}>
         <span className="hint">Saved to Downloads with a show notes file.</span>
