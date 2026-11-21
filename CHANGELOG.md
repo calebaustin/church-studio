@@ -2,6 +2,20 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## Unreleased
+
+### New
+- **Swipeable carousels in every template pack.** Seventeen new carousels, one in each pack's look, built to swipe like one long picture: ribbons, winding paths, blobs, circles and color blocks run across the edges between slides so each swipe slides along the same scene. Each is a sermon recap (filled in from your sermon), a first Sunday guide for visitors, or a Bible basics list, and you can change every word.
+- **Accent shapes.** A new Accents tab next to the basic shapes: soft blobs, a pebble, a drop, a ribbon wave, a wave edge, a swoosh, a quarter circle, a ring, a leaf, a sparkle, a dot grid, squiggles, a zigzag, wave lines and an underline. Swipe between tabs or tap one. Filled accents can hold a photo too.
+- **Arrows.** An Arrows tab with block, straight, curved, wavy, loop, bent and two-way arrows, chevrons, triangles and a swipe arrow. Every shape can now be turned and flipped, and line shapes have a thickness setting.
+- **Extend onto the next page.** Drag a shape or picture past the edge of a page and Church Studio asks, "Extend to the next page?" Say yes and the rest of it appears on the next page, linked: move, resize or recolor either piece and the other follows, so they always meet at the edge. Right-click a piece's layer to unlink it. The carousels' shared shapes are linked the same way.
+
+### Changed
+- **The menu bar icon is now just our handwritten CS**, with nothing behind it, so it sits in with your other menu bar icons.
+
+### Fixed
+- The shape grid no longer disappears in a narrow window.
+
 ## 0.18.0 · November 21, 2026
 
 ### New

@@ -3,7 +3,7 @@ import {
   AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical,
   ArrowLeft, ArrowRight, BringToFront, Check, ChevronDown, ChevronLeft, ChevronRight, Circle, Copy, Download, Grid3x3, Image as ImageIcon,
   Magnet, Minus, MonitorUp, Hexagon, Scaling, Smartphone, Laptop, Eraser, ImageOff, Play, RefreshCw, Plus, QrCode, Redo2, SendToBack, Shapes, Square, Trash2, Type, Undo2, Shuffle, X,
-  Send,
+  Send, FlipHorizontal2, FlipVertical2, Link2,
 } from 'lucide-react';
 import { useApp, useHelperFocus } from '../App.jsx';
 import { api } from '../api.js';
@@ -12,7 +12,7 @@ import FontMenu, { useFamilies } from '../components/FontMenu.jsx';
 import BackgroundEraser from '../components/BackgroundEraser.jsx';
 import LibraryPicker from '../components/LibraryPicker.jsx';
 import Popover, { PopList } from '../components/Popover.jsx';
-import { DEVICE_ASPECT, KINDS, PATTERNS, RESIZE_TARGETS, SHAPES, resizeDesign, blankPage, cohesive, loadAssets, onColor, page as newPage, renderPage, shape as newShape, svgColors, text as newText, uid } from './model.js';
+import { ACCENTS, ARROWS, DEVICE_ASPECT, KINDS, PATTERNS, RESIZE_TARGETS, SHAPES, STROKED, shapeIcon, resizeDesign, blankPage, cohesive, loadAssets, onColor, page as newPage, renderPage, shape as newShape, svgColors, text as newText, uid } from './model.js';
 import { snapMove } from './snap.js';
 import PhotoEdits from './PhotoEdits.jsx';
 import Layers, { label as layerLabel } from './Layers.jsx';
@@ -83,7 +83,13 @@ export default function DesignEditor({ id, onClose }) {
   const [erasing, setErasing] = useState(null); // library path of the picture being cleared
   const [saved, setSaved] = useState(true);
   // "Change X to Y everywhere?": offered after a color or font change settles, when the old value is used elsewhere.
-  const [swap, setSwap] = useState(null); // { kind: 'color' | 'font', from, to, count, at }
+  // The shape panel: Basic, Accents and Arrows, side by side. Swipe between them or pick a tab.
+  const [shapeTab, setShapeTabState] = useState(0);
+  const shapeTrack = useRef(null);
+  const setShapeTab = (i) => { setShapeTabState(i); const el = shapeTrack.current; if (el) el.scrollTo({ left: i * el.clientWidth, behavior: 'smooth' }); };
+  const onShapeScroll = (e) => { const el = e.currentTarget; const i = Math.round(el.scrollLeft / Math.max(1, el.clientWidth)); if (i !== shapeTab) setShapeTabState(i); };
+  const [swap, setSwap] = useState(null);
+  const [extend, setExtend] = useState(null); // { id, dir: 'next' | 'prev', fresh: true when it needs a new page, at } // { kind: 'color' | 'font', from, to, count, at }
   const pendingSwap = useRef(null);
   const swapTimer = useRef(null);
   const swapDocRef = useRef(null);
@@ -125,6 +131,7 @@ export default function DesignEditor({ id, onClose }) {
     setDoc((d) => {
       if (record) { past.current.push(d); if (past.current.length > 80) past.current.shift(); future.current = []; }
       const next = fn(clone(d));
+      syncLinks(d, next);
       return next;
     });
     setSaved(false);
@@ -264,7 +271,7 @@ export default function DesignEditor({ id, onClose }) {
 
   // Pages
   const addPage = () => { update((d) => { d.pages.splice(pi + 1, 0, blankPage(d.kind)); return d; }); setPi(pi + 1); setSel(null); };
-  const dupPage = (k = pi) => { update((d) => { const c = clone(d.pages[k]); c.id = uid(); c.items.forEach((x) => { x.id = uid(); }); d.pages.splice(k + 1, 0, c); return d; }); setPi(k + 1); };
+  const dupPage = (k = pi) => { update((d) => { const c = clone(d.pages[k]); c.id = uid(); c.items.forEach((x) => { x.id = uid(); delete x.link; }); d.pages.splice(k + 1, 0, c); return d; }); setPi(k + 1); };
   const delPage = (k = pi) => { if (doc.pages.length < 2) return; update((d) => { d.pages.splice(k, 1); return d; }); setPi(Math.max(0, Math.min(k, doc.pages.length - 2))); setSel(null); };
   const movePage = (k, dir) => { const t = k + dir; if (t < 0 || t >= doc.pages.length) return; update((d) => { const [x] = d.pages.splice(k, 1); d.pages.splice(t, 0, x); return d; }); setPi(t); };
 
@@ -329,7 +336,34 @@ export default function DesignEditor({ id, onClose }) {
       return dd;
     }, { record: false });
   };
-  const onUp = () => { drag.current = null; setGuides([]); };
+  const onUp = () => { const d = drag.current; drag.current = null; setGuides([]); if (d && !d.pending) offerExtend(d.id); };
+  // A shape or picture hanging off the page's edge can carry on onto the next page, linked so it lines up.
+  function offerExtend(itemId) {
+    const it = pg?.items.find((x) => x.id === itemId); const box = boxes.current[itemId];
+    if (!it || !box || (it.type !== 'shape' && it.type !== 'image') || it.erase) return;
+    const linkedOn = (k) => it.link && doc.pages[k]?.items.some((x) => x.link === it.link);
+    if (box.x1 > 1.01 && !linkedOn(pi + 1)) setExtend({ id: itemId, dir: 'next', fresh: pi === doc.pages.length - 1, at: Date.now() });
+    else if (box.x0 < -0.01 && pi > 0 && !linkedOn(pi - 1)) setExtend({ id: itemId, dir: 'prev', fresh: false, at: Date.now() });
+  }
+  const extendItem = (ex) => {
+    update((d) => {
+      const src = d.pages[pi].items.find((x) => x.id === ex.id); if (!src) return d;
+      src.link = src.link || uid();
+      let t = ex.dir === 'next' ? pi + 1 : pi - 1;
+      if (t >= d.pages.length) { const np = blankPage(d.kind); np.bg = clone(d.pages[pi].bg); d.pages.push(np); t = d.pages.length - 1; }
+      d.pages[t].items.push({ ...clone(src), id: uid(), x: +(src.x + (ex.dir === 'next' ? -1 : 1)).toFixed(4) });
+      return d;
+    });
+    setExtend(null);
+    toast({ text: 'Linked across both pages. Move or change either one and they stay lined up. Right-click its layer to unlink.' });
+  };
+  const unlinkItem = (itemId) => update((d) => {
+    const it = d.pages[pi].items.find((x) => x.id === itemId); if (!it?.link) return d;
+    const group = it.link; delete it.link;
+    const rest = d.pages.flatMap((p2) => p2.items.filter((x) => x.link === group));
+    if (rest.length === 1) delete rest[0].link; // a link of one is no link
+    return d;
+  });
 
   // Keyboard
   useEffect(() => {
@@ -528,7 +562,8 @@ export default function DesignEditor({ id, onClose }) {
             <LinePicker lines={lines} onPick={(t) => addItem(newText({ text: /:\d/.test(t) && t.length < 30 ? t : `“${t.replace(/^“|”$/g, '')}”`, font: brand.heading, size: Math.round(doc.size.w * 0.05), weight: 700, w: 0.8, lh: 1.2, color: onColor(fill) }))} />
           )}
           <hr className="hairline" />
-          <span className="eyebrow">Shapes</span>
+          <ShapeTabs onTab={setShapeTab} tab={shapeTab} />
+          <div className="dz-shape-track" ref={shapeTrack} onScroll={onShapeScroll}>
           <div className="dz-shapes">
             <button aria-label="Square" title="Square" onClick={() => addItem(newShape({ w: 0.3, h: 0.3 * (doc.size.w / doc.size.h), fill: colors[1] }))}><Square size={22} /></button>
             <button aria-label="Rounded box" title="Rounded box" onClick={() => addItem(newShape({ w: 0.5, h: 0.12, radius: 40, fill: '#FFFFFF', opacity: 0.85 }))}><span className="dz-rounded" /></button>
@@ -540,6 +575,16 @@ export default function DesignEditor({ id, onClose }) {
             <button aria-label="Starburst" title="Starburst" onClick={() => addItem(newShape({ shape: 'burst', w: 0.16, h: 0.16 * (doc.size.w / doc.size.h), fill: colors[1] }))}><span className="dz-ico">✺</span></button>
             <button aria-label="Window card" title="Window card" onClick={() => addItem(newShape({ shape: 'window', w: 0.56, h: 0.3 * (doc.size.w / doc.size.h), fill: '#FFFFFF' }))}><span className="dz-ico">▭</span></button>
             <button aria-label="Line" title="Line" onClick={() => addItem(newShape({ w: 0.5, h: 3 / doc.size.h, fill: onColor(fill) }))}><Minus size={22} /></button>
+          </div>
+          {[ACCENTS, ARROWS].map((set, n) => (
+            <div key={n} className="dz-shapes">
+              {set.map(([k, label]) => (
+                <button key={k} aria-label={label} title={label} onClick={() => addItem(newShape(addShapeProps(k, doc, colors, fill)))}>
+                  <span className="dz-shape-ico" style={{ '--ico': `url(${shapeIcon(k)})` }} />
+                </button>
+              ))}
+            </div>
+          ))}
           </div>
           <span className="eyebrow">Frames</span>
           <div className="row wrap" style={{ gap: 6 }}>
@@ -570,6 +615,15 @@ export default function DesignEditor({ id, onClose }) {
               <button className="btn sm primary" onClick={() => changeEverywhere(swap)}>Change all</button>
               <button className="dz-swap-x" aria-label="No thanks" title="No thanks" onClick={() => setSwap(null)}><X size={14} /></button>
               <i className="dz-swap-timer" onAnimationEnd={() => setSwap(null)} />
+            </div>
+          )}
+          {extend && !swap && (
+            <div className="dz-swap" role="status" key={extend.at}>
+              <span className="dz-swap-what"><Link2 size={15} /></span>
+              <span className="small">{extend.fresh ? 'Extend onto a new page?' : extend.dir === 'next' ? 'Extend to the next page?' : 'Extend to the page before?'}</span>
+              <button className="btn sm primary" onClick={() => extendItem(extend)}>Extend</button>
+              <button className="dz-swap-x" aria-label="No thanks" title="No thanks" onClick={() => setExtend(null)}><X size={14} /></button>
+              <i className="dz-swap-timer" style={{ animationDuration: '7s' }} onAnimationEnd={() => setExtend(null)} />
             </div>
           )}
           {doc.source?.campaignId && <CampaignHeader campaignId={doc.source.campaignId} compact />}
@@ -663,11 +717,23 @@ export default function DesignEditor({ id, onClose }) {
                   {!DEVICE_ASPECT[item.shape] && !item.erase && (
                     <label className="field">Shape
                       <select className="input" value={item.shape || 'rect'} onChange={(e) => setItem({ shape: e.target.value })}>
-                        {SHAPES.filter(([k]) => !DEVICE_ASPECT[k]).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                        <optgroup label="Basic">{SHAPES.filter(([k]) => !DEVICE_ASPECT[k]).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</optgroup>
+                        <optgroup label="Accents">{ACCENTS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</optgroup>
+                        <optgroup label="Arrows">{ARROWS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</optgroup>
                       </select>
                     </label>
                   )}
-                  {!item.erase && (
+                  {!DEVICE_ASPECT[item.shape] && (
+                    <div className="stack" style={{ gap: 6 }}>
+                      <label className="field">Turn · {item.rot || 0}°<input type="range" min="-180" max="180" step="5" value={item.rot || 0} onChange={(e) => setItem({ rot: Number(e.target.value) }, { record: false })} /></label>
+                      <div className="row wrap" style={{ gap: 6 }}>
+                        <button className={`btn sm${item.flipX ? ' primary' : ''}`} onClick={() => setItem({ flipX: !item.flipX })}><FlipHorizontal2 size={13} />Flip across</button>
+                        <button className={`btn sm${item.flipY ? ' primary' : ''}`} onClick={() => setItem({ flipY: !item.flipY })}><FlipVertical2 size={13} />Flip up and down</button>
+                      </div>
+                    </div>
+                  )}
+                  {STROKED.has(item.shape) && <label className="field">Thickness · {Math.round((item.thick ?? 0.1) * 100)}<input type="range" min="0.02" max="0.4" step="0.01" value={item.thick ?? 0.1} onChange={(e) => setItem({ thick: Number(e.target.value) }, { record: false })} /></label>}
+                  {!item.erase && !STROKED.has(item.shape) && (
                     <div className="keycard stack" style={{ gap: 8 }}>
                       <strong className="small">{DEVICE_ASPECT[item.shape] ? 'Screen' : 'Photo'}</strong>
                       {item.photo ? (
@@ -685,7 +751,7 @@ export default function DesignEditor({ id, onClose }) {
                     </div>
                   )}
                   {item.photo && !item.erase && <PhotoEdits value={item.adjust} colors={colors} onChange={(adjust) => setItem({ adjust }, { record: false })} />}
-                  {!item.photo && !item.erase && <div className="row" style={{ gap: 10 }}><ColorField label={DEVICE_ASPECT[item.shape] ? 'Screen color' : 'Fill'} value={item.fill} onChange={(c) => setItem({ fill: c }, { record: false })} swatches={colors} /></div>}
+                  {!item.photo && !item.erase && <div className="row" style={{ gap: 10 }}><ColorField label={DEVICE_ASPECT[item.shape] ? 'Screen color' : STROKED.has(item.shape) ? 'Color' : 'Fill'} value={item.fill} onChange={(c) => setItem({ fill: c }, { record: false })} swatches={colors} /></div>}
                   {(item.shape || 'rect') === 'rect' && <label className="field">Corners · {item.radius || 0}<input type="range" min="0" max="200" value={item.radius || 0} onChange={(e) => setItem({ radius: Number(e.target.value) }, { record: false })} /></label>}
                   {!DEVICE_ASPECT[item.shape] && (
                     <label className="switch"><input type="checkbox" checked={Boolean(item.erase)} onChange={(e) => setItem({ erase: e.target.checked })} /><Eraser size={14} />Use as an eraser</label>
@@ -734,7 +800,7 @@ export default function DesignEditor({ id, onClose }) {
                 <button className="btn sm ghost danger" onClick={removeItem}><Trash2 size={13} />Delete</button>
               </div>
               <hr className="hairline" />
-              <Layers items={pg.items} sel={sel} onSelect={setSel} onMove={(from, to) => update((d) => { const list = d.pages[pi].items; const [x] = list.splice(from, 1); list.splice(to, 0, x); return d; })} onDelete={(id) => { update((d) => { d.pages[pi].items = d.pages[pi].items.filter((x) => x.id !== id); return d; }); if (id === sel) setSel(null); }} />
+              <Layers items={pg.items} sel={sel} onSelect={setSel} onUnlink={(lid) => { unlinkItem(lid); toast({ text: 'Unlinked. This piece now moves on its own.' }); }} onMove={(from, to) => update((d) => { const list = d.pages[pi].items; const [x] = list.splice(from, 1); list.splice(to, 0, x); return d; })} onDelete={(id) => { update((d) => { d.pages[pi].items = d.pages[pi].items.filter((x) => x.id !== id); return d; }); if (id === sel) setSel(null); }} />
             </>
           ) : (
             <>
@@ -794,7 +860,7 @@ export default function DesignEditor({ id, onClose }) {
                 </>
               )}
               <hr className="hairline" />
-              <Layers items={pg.items} sel={sel} onSelect={setSel} onMove={(from, to) => update((d) => { const list = d.pages[pi].items; const [x] = list.splice(from, 1); list.splice(to, 0, x); return d; })} onDelete={(id) => update((d) => { d.pages[pi].items = d.pages[pi].items.filter((x) => x.id !== id); return d; })} />
+              <Layers items={pg.items} sel={sel} onSelect={setSel} onUnlink={(lid) => { unlinkItem(lid); toast({ text: 'Unlinked. This piece now moves on its own.' }); }} onMove={(from, to) => update((d) => { const list = d.pages[pi].items; const [x] = list.splice(from, 1); list.splice(to, 0, x); return d; })} onDelete={(id) => update((d) => { d.pages[pi].items = d.pages[pi].items.filter((x) => x.id !== id); return d; })} />
               <span className="hint">Click an item to edit it. Double-click text to type on the page. Drag to move; guides show when things line up.</span>
             </>
           )}
@@ -854,4 +920,53 @@ function SvgColors({ item, cache, swatches, onChange }) {
       </div>
     </div>
   );
+}
+
+/** Where a new accent or arrow lands, and how big. Wide ones stretch across; the rest keep their proportions. */
+function addShapeProps(k, doc, colors, fill) {
+  const r = doc.size.w / doc.size.h;
+  const SIZE = {
+    ribbon: [1, 0.36], hill: [1, 0.26], squiggle: [0.36, 0.07], zigzag: [0.32, 0.07], wavelines: [0.3, 0.12], scribble: [0.4, 0.07],
+    arrow: [0.26, 0.14], arrowLine: [0.34, 0.06], arrowWavy: [0.34, 0.1], arrowDouble: [0.34, 0.06], chevrons: [0.2, 0.09], tri3: [0.18, 0.08], swipe: [0.26, 0.05],
+    arrowCurve: [0.2, 0.16], arrowLoop: [0.26, 0.18], arrowBend: [0.2, 0.16],
+  };
+  const [w, h] = SIZE[k] || [0.3, 0.3];
+  const tall = SIZE[k] ? h * r : h * r;
+  const line = STROKED.has(k) || ['arrow', 'chevrons', 'tri3', 'dots', 'sparkle'].includes(k);
+  return { shape: k, w, h: tall, y: k === 'hill' ? 1 - tall / 2 : 0.5, fill: line ? onColor(fill) : colors[1] };
+}
+
+function ShapeTabs({ tab, onTab }) {
+  return (
+    <div className="row between" style={{ gap: 8 }}>
+      <span className="eyebrow">Shapes</span>
+      <div className="seg sm dz-shape-tabs" role="tablist">
+        {['Basic', 'Accents', 'Arrows'].map((t, i) => <button key={t} role="tab" aria-selected={tab === i} className={tab === i ? 'on' : ''} onClick={() => onTab(i)}>{t}</button>)}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Keep linked pieces in step. Pieces share a link when one shape or picture runs across pages. When one changes,
+ * the others take on the change; their position across moves by the same amount, so they stay joined at the seam.
+ */
+function syncLinks(prev, next) {
+  const before = new Map();
+  for (const p of prev.pages) for (const it of p.items) if (it.link) before.set(it.id, it);
+  if (!before.size && !next.pages.some((p) => p.items.some((it) => it.link))) return;
+  const done = new Set();
+  for (const p of next.pages) for (const it of p.items) {
+    if (!it.link || done.has(it.link)) continue;
+    const was = before.get(it.id);
+    if (!was || JSON.stringify(was) === JSON.stringify(it)) continue;
+    done.add(it.link);
+    const dx = it.x - was.x;
+    for (const q of next.pages) for (const other of q.items) {
+      if (other === it || other.link !== it.link) continue;
+      const keepX = other.x; const keepId = other.id;
+      for (const k of Object.keys(other)) if (!(k in it)) delete other[k];
+      Object.assign(other, it, { id: keepId, x: +(keepX + dx).toFixed(4) });
+    }
+  }
 }

@@ -304,9 +304,92 @@ export const SHAPES = [
   ['rect', 'Square'], ['ellipse', 'Circle'], ['hexagon', 'Hexagon'], ['arch', 'Arch'], ['blob', 'Blob'], ['wave', 'Wavy frame'], ['scallop', 'Badge'],
   ['burst', 'Starburst'], ['window', 'Window card'], ['iphone', 'iPhone'], ['macbook', 'MacBook'],
 ];
+// Accent shapes: blobs, waves and little marks that dress up a design. Filled ones can hold a photo too.
+export const ACCENTS = [
+  ['blob2', 'Soft blob'], ['blob3', 'Long blob'], ['pebble', 'Pebble'], ['drop', 'Drop'], ['ribbon', 'Ribbon wave'], ['hill', 'Wave edge'],
+  ['swoosh', 'Swoosh'], ['quarter', 'Quarter circle'], ['ring', 'Ring'], ['leaf', 'Leaf'], ['sparkle', 'Sparkle'], ['dots', 'Dot grid'],
+  ['squiggle', 'Squiggle'], ['zigzag', 'Zigzag'], ['wavelines', 'Wave lines'], ['scribble', 'Underline'],
+];
+// Arrows and direction marks. Turn and flip them in the shape settings to point any way.
+export const ARROWS = [
+  ['arrow', 'Block arrow'], ['arrowLine', 'Arrow'], ['arrowCurve', 'Curved arrow'], ['arrowWavy', 'Wavy arrow'], ['arrowLoop', 'Loop arrow'],
+  ['arrowBend', 'Bent arrow'], ['arrowDouble', 'Two-way arrow'], ['chevrons', 'Chevrons'], ['tri3', 'Triangles'], ['swipe', 'Swipe'],
+];
+/** Shapes drawn as a line (in the fill color) instead of filled. They can't hold a photo. */
+export const STROKED = new Set(['squiggle', 'zigzag', 'wavelines', 'scribble', 'arrowLine', 'arrowCurve', 'arrowWavy', 'arrowLoop', 'arrowBend', 'arrowDouble', 'swipe']);
+const THICK = { squiggle: 0.14, zigzag: 0.12, wavelines: 0.07, scribble: 0.16, swipe: 0.09 };
+export const shapeLabel = (k) => ([...SHAPES, ...ACCENTS, ...ARROWS].find(([id]) => id === k) || [k, 'Shape'])[1];
+/** A smooth closed outline through points (unit box), like the Blob. */
+function smoothClosed(ctx, pts, P) {
+  const p = pts.map(([u, v]) => P(u, v));
+  ctx.moveTo((p[0][0] + p[p.length - 1][0]) / 2, (p[0][1] + p[p.length - 1][1]) / 2);
+  for (let i = 0; i < p.length; i++) { const a = p[i]; const b = p[(i + 1) % p.length]; ctx.quadraticCurveTo(a[0], a[1], (a[0] + b[0]) / 2, (a[1] + b[1]) / 2); }
+  ctx.closePath();
+}
+/** An open arrowhead at (ex, ey) pointing along angle a. */
+function arrowHead(ctx, ex, ey, a, s) {
+  ctx.moveTo(ex - s * Math.cos(a - 0.55), ey - s * Math.sin(a - 0.55));
+  ctx.lineTo(ex, ey);
+  ctx.lineTo(ex - s * Math.cos(a + 0.55), ey - s * Math.sin(a + 0.55));
+}
+function sinePath(ctx, P, { v = 0.5, amp = 0.35, cycles = 2, phase = 0, from = 0, to = 1, steps = 140, move = true }) {
+  for (let i = 0; i <= steps; i++) {
+    const u = from + ((to - from) * i) / steps;
+    const pt = P(u, v + amp * Math.sin(Math.PI * 2 * (cycles * u) + phase));
+    if (!i && move) ctx.moveTo(pt[0], pt[1]); else ctx.lineTo(pt[0], pt[1]);
+  }
+}
+/** Paths for the accent and arrow shapes, in a unit box. Returns false for other kinds. */
+function extraPath(ctx, kind, x, y, w, h, it) {
+  const P = (u, v) => [x + u * w, y + v * h];
+  const m = (u, v) => ctx.moveTo(...P(u, v)); const l = (u, v) => ctx.lineTo(...P(u, v));
+  const cyc = it?.cycles; const ph = it?.phase || 0;
+  const s = Math.min(w, h);
+  switch (kind) {
+    case 'blob2': smoothClosed(ctx, [[0.55, 0.03], [0.93, 0.24], [0.88, 0.7], [0.56, 0.97], [0.12, 0.84], [0.04, 0.38], [0.27, 0.07]], P); return true;
+    case 'blob3': smoothClosed(ctx, [[0.3, 0.08], [0.72, 0.01], [0.98, 0.3], [0.78, 0.55], [0.96, 0.9], [0.5, 0.99], [0.12, 0.82], [0.02, 0.42]], P); return true;
+    case 'pebble': smoothClosed(ctx, [[0.2, 0.12], [0.62, 0.0], [0.97, 0.24], [0.92, 0.76], [0.5, 1.0], [0.08, 0.86], [0.0, 0.44]], P); return true;
+    case 'drop': m(0.5, 0); ctx.bezierCurveTo(...P(0.72, 0.28), ...P(1, 0.46), ...P(1, 0.68)); ctx.bezierCurveTo(...P(1, 0.9), ...P(0.78, 1), ...P(0.5, 1));
+      ctx.bezierCurveTo(...P(0.22, 1), ...P(0, 0.9), ...P(0, 0.68)); ctx.bezierCurveTo(...P(0, 0.46), ...P(0.28, 0.28), ...P(0.5, 0)); ctx.closePath(); return true;
+    case 'ribbon': { // a flowing band that can run across several carousel slides
+      const c = cyc ?? 1.25; const amp = 0.28; const half = 0.2;
+      sinePath(ctx, P, { v: 0.5 - half, amp, cycles: c, phase: ph, steps: 240 });
+      sinePath(ctx, P, { v: 0.5 + half, amp, cycles: c, phase: ph, from: 1, to: 0, steps: 240, move: false });
+      ctx.closePath(); return true;
+    }
+    case 'hill': sinePath(ctx, P, { v: 0.32, amp: 0.2, cycles: cyc ?? 1, phase: ph, steps: 200 }); l(1, 1); l(0, 1); ctx.closePath(); return true;
+    case 'swoosh': m(0, 1); ctx.quadraticCurveTo(...P(0.02, 0.02), ...P(1, 0)); ctx.quadraticCurveTo(...P(0.3, 0.3), ...P(0, 1)); ctx.closePath(); return true;
+    case 'quarter': ctx.moveTo(x, y); ctx.ellipse(x, y, w, h, 0, 0, Math.PI / 2); ctx.closePath(); return true;
+    case 'ring': { const cx = x + w / 2; const cy = y + h / 2; ctx.ellipse(cx, cy, w / 2, h / 2, 0, 0, Math.PI * 2); ctx.moveTo(cx + w * 0.32, cy); ctx.ellipse(cx, cy, w * 0.32, h * 0.32, 0, 0, Math.PI * 2, true); return true; }
+    case 'leaf': m(0, 1); ctx.bezierCurveTo(...P(0, 0.3), ...P(0.4, 0), ...P(1, 0)); ctx.bezierCurveTo(...P(1, 0.6), ...P(0.6, 1), ...P(0, 1)); ctx.closePath(); return true;
+    case 'sparkle': m(0.5, 0); ctx.quadraticCurveTo(...P(0.56, 0.44), ...P(1, 0.5)); ctx.quadraticCurveTo(...P(0.56, 0.56), ...P(0.5, 1));
+      ctx.quadraticCurveTo(...P(0.44, 0.56), ...P(0, 0.5)); ctx.quadraticCurveTo(...P(0.44, 0.44), ...P(0.5, 0)); ctx.closePath(); return true;
+    case 'dots': for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) { const [cx, cy] = P(0.125 + c * 0.25, 0.125 + r * 0.25); ctx.moveTo(cx + s * 0.055, cy); ctx.arc(cx, cy, s * 0.055, 0, Math.PI * 2); } return true;
+    case 'squiggle': sinePath(ctx, P, { amp: 0.32, cycles: cyc ?? 2.5, phase: ph, from: it?.edge ? 0 : 0.02, to: it?.edge ? 1 : 0.98, steps: it?.edge ? 400 : 200 }); return true;
+    case 'zigzag': { const n = 7; for (let i = 0; i <= n; i++) (i ? l : m)(0.03 + (0.94 * i) / n, i % 2 ? 0.2 : 0.8); return true; }
+    case 'wavelines': for (const v of [0.2, 0.5, 0.8]) sinePath(ctx, P, { v, amp: 0.1, cycles: cyc ?? 2, phase: ph, from: 0.02, to: 0.98 }); return true;
+    case 'scribble': m(0.03, 0.62); ctx.bezierCurveTo(...P(0.3, 0.3), ...P(0.6, 0.35), ...P(0.97, 0.45)); m(0.1, 0.8); ctx.bezierCurveTo(...P(0.4, 0.6), ...P(0.7, 0.62), ...P(0.9, 0.7)); return true;
+    case 'arrow': m(0, 0.33); l(0.6, 0.33); l(0.6, 0.05); l(1, 0.5); l(0.6, 0.95); l(0.6, 0.67); l(0, 0.67); ctx.closePath(); return true;
+    case 'arrowLine': { const [ex, ey] = P(0.97, 0.5); m(0.03, 0.5); ctx.lineTo(ex, ey); arrowHead(ctx, ex, ey, 0, Math.min(h * 0.42, w * 0.3)); return true; }
+    case 'arrowCurve': { const [ex, ey] = P(0.95, 0.2); m(0.05, 0.9); ctx.bezierCurveTo(...P(0.2, 0.25), ...P(0.6, 0.12), ex, ey); const [cx2, cy2] = P(0.6, 0.12); arrowHead(ctx, ex, ey, Math.atan2(ey - cy2, ex - cx2), s * 0.34); return true; }
+    case 'arrowWavy': { sinePath(ctx, P, { amp: 0.22, cycles: cyc ?? 1.5, phase: 0, from: 0.03, to: 0.93 }); const [ex, ey] = P(0.93, 0.5 + 0.22 * Math.sin(Math.PI * 2 * (cyc ?? 1.5) * 0.93)); const [px, py] = P(0.9, 0.5 + 0.22 * Math.sin(Math.PI * 2 * (cyc ?? 1.5) * 0.9)); arrowHead(ctx, ex, ey, Math.atan2(ey - py, ex - px), s * 0.4); return true; }
+    case 'arrowLoop': { m(0.03, 0.78); ctx.bezierCurveTo(...P(0.3, 0.78), ...P(0.56, 0.58), ...P(0.5, 0.3)); ctx.bezierCurveTo(...P(0.46, 0.08), ...P(0.28, 0.14), ...P(0.31, 0.36));
+      const [ex, ey] = P(0.96, 0.42); const [cx2, cy2] = P(0.72, 0.7); ctx.bezierCurveTo(...P(0.34, 0.6), cx2, cy2, ex, ey); arrowHead(ctx, ex, ey, Math.atan2(ey - cy2, ex - cx2), s * 0.32); return true; }
+    case 'arrowBend': { m(0.06, 0.05); l(0.06, 0.55); ctx.quadraticCurveTo(...P(0.06, 0.85), ...P(0.3, 0.85)); const [ex, ey] = P(0.96, 0.85); ctx.lineTo(ex, ey); arrowHead(ctx, ex, ey, 0, s * 0.3); return true; }
+    case 'arrowDouble': { const hs = Math.min(h * 0.42, w * 0.25); const [ax, ay] = P(0.03, 0.5); const [bx, by] = P(0.97, 0.5); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); arrowHead(ctx, bx, by, 0, hs); arrowHead(ctx, ax, ay, Math.PI, hs); return true; }
+    case 'chevrons': for (let i = 0; i < 3; i++) { const u = i * 0.34; m(u, 0); l(u + 0.14, 0); l(u + 0.3, 0.5); l(u + 0.14, 1); l(u, 1); l(u + 0.16, 0.5); ctx.closePath(); } return true;
+    case 'tri3': for (let i = 0; i < 3; i++) { const u = i * 0.36; m(u, 0.12); l(u + 0.27, 0.5); l(u, 0.88); ctx.closePath(); } return true;
+    case 'swipe': { // a short line with an arrow, like "swipe →" on a carousel cover
+      const [ex, ey] = P(0.97, 0.5); m(0.03, 0.5); ctx.lineTo(ex, ey); arrowHead(ctx, ex, ey, 0, Math.min(h * 0.45, w * 0.12)); return true;
+    }
+    default: return false;
+  }
+}
+
 export const DEVICE_ASPECT = { iphone: 0.49, macbook: 1.55 }; // width / height
-function shapePath(ctx, kind, x, y, w, h, r) {
+function shapePath(ctx, kind, x, y, w, h, r, it) {
   ctx.beginPath();
+  if (extraPath(ctx, kind, x, y, w, h, it)) return;
   if (kind === 'ellipse') { ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2); return; }
   if (kind === 'hexagon') {
     const pts = [[0.25, 0], [0.75, 0], [1, 0.5], [0.75, 1], [0.25, 1], [0, 0.5]];
@@ -452,13 +535,20 @@ function drawPlaceholder(ctx, x, y, w, h, color) {
 }
 /** Fill a shape: a photo, an empty photo spot, or a solid color. */
 function fillShape(ctx, it, kind, x, y, w, h, r, cache, placeholders) {
-  shapePath(ctx, kind, x, y, w, h, r);
+  if (STROKED.has(kind)) {
+    shapePath(ctx, kind, x, y, w, h, r, it);
+    ctx.strokeStyle = it.fill && it.fill !== 'none' ? it.fill : '#FFFFFF';
+    ctx.lineWidth = Math.max(1, (it.thick ?? THICK[kind] ?? 0.1) * Math.min(w, h));
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke();
+    return;
+  }
+  shapePath(ctx, kind, x, y, w, h, r, it);
   const img = it.photo ? edited(cache[it.photo], it.adjust, it.photo, cache) : null;
   if (img) { ctx.save(); ctx.clip(); drawCover(ctx, img, x, y, w, h); ctx.restore(); }
   else if (it.frame && placeholders) drawPlaceholder(ctx, x, y, w, h, it.fill || '#8A94A6');
   else if (it.fill !== 'none') { ctx.fillStyle = it.fill || '#FFFFFF'; ctx.fill(); }
   // An outline: a border around a photo (like a printed sticker) or an outlined tag.
-  if (it.line > 0) { shapePath(ctx, kind, x, y, w, h, r); ctx.strokeStyle = it.stroke || '#FFFFFF'; ctx.lineWidth = it.line * (w / Math.max(1, it.w * 1000)); ctx.stroke(); }
+  if (it.line > 0) { shapePath(ctx, kind, x, y, w, h, r, it); ctx.strokeStyle = it.stroke || '#FFFFFF'; ctx.lineWidth = it.line * (w / Math.max(1, it.w * 1000)); ctx.stroke(); }
   if (kind === 'window') drawWindowChrome(ctx, x, y, w, h, it.stroke || '#1B2033');
 }
 function drawDevice(ctx, it, x, y, w, h, cache, placeholders) {
@@ -554,8 +644,13 @@ export function renderPage(canvas, doc, pg, scale, cache, { skip, placeholders =
     ctx.globalAlpha = it.opacity ?? 1;
     if (it.type === 'shape') {
       const w = it.w * W; const h = it.h * H; const x = it.x * W - w / 2; const y = it.y * H - h / 2;
+      // Turned or flipped shapes (arrows pointing another way) turn around their center.
+      if (it.rot || it.flipX || it.flipY) {
+        ctx.translate(it.x * W, it.y * H); if (it.rot) ctx.rotate((it.rot * Math.PI) / 180);
+        ctx.scale(it.flipX ? -1 : 1, it.flipY ? -1 : 1); ctx.translate(-it.x * W, -it.y * H);
+      }
       // An eraser cuts through everything drawn under it, background included.
-      if (it.erase) { ctx.globalCompositeOperation = 'destination-out'; ctx.fillStyle = '#000'; shapePath(ctx, it.shape, x, y, w, h, (it.radius || 0) * k); ctx.fill(); }
+      if (it.erase) { ctx.globalCompositeOperation = 'destination-out'; ctx.fillStyle = '#000'; shapePath(ctx, it.shape, x, y, w, h, (it.radius || 0) * k, it); STROKED.has(it.shape) ? (ctx.lineWidth = (it.thick ?? THICK[it.shape] ?? 0.1) * Math.min(w, h), ctx.lineCap = 'round', ctx.stroke()) : ctx.fill(); }
       else if (DEVICE_ASPECT[it.shape]) drawDevice(ctx, it, x, y, w, h, cache, placeholders);
       else fillShape(ctx, it, it.shape, x, y, w, h, (it.radius || 0) * k, cache, placeholders);
       boxes[it.id] = { x0: it.x - it.w / 2, x1: it.x + it.w / 2, y0: it.y - it.h / 2, y1: it.y + it.h / 2 };
@@ -720,4 +815,19 @@ export function fillChurch(pages, info = {}) {
   ].filter(Boolean);
   if (!swaps.length) return pages;
   return pages.map((pg) => ({ ...pg, items: pg.items.map((it) => (it.type === 'text' ? { ...it, text: swaps.reduce((t, [re, to]) => t.replace(re, to), it.text) } : it)) }));
+}
+
+/** A small picture of a shape for the add panel: a black silhouette used as a CSS mask, so it takes the text color. */
+const iconCache = {};
+export function shapeIcon(kind) {
+  if (iconCache[kind]) return iconCache[kind];
+  if (typeof document === 'undefined') return '';
+  const c = document.createElement('canvas'); c.width = 96; c.height = 96;
+  const g = c.getContext('2d');
+  const wide = ['ribbon', 'hill', 'squiggle', 'zigzag', 'wavelines', 'scribble', 'arrow', 'arrowLine', 'arrowWavy', 'arrowDouble', 'chevrons', 'tri3', 'swipe'].includes(kind);
+  const box = wide ? [6, 26, 84, 44] : [12, 12, 72, 72];
+  if (kind === 'arrowLine' || kind === 'arrowDouble' || kind === 'swipe') { box[1] = 32; box[3] = 32; }
+  const it = { fill: '#000', thick: STROKED.has(kind) ? Math.min(0.5, 7 / Math.min(box[2], box[3])) : undefined, cycles: kind === 'ribbon' ? 1 : undefined };
+  fillShape(g, it, kind, box[0], box[1], box[2], box[3], 0, {}, false);
+  return (iconCache[kind] = c.toDataURL());
 }

@@ -1748,3 +1748,20 @@ button.tp-tile:active .tp-orb { transform: scale(.92); transition-duration: 120m
 .tp-stat > span:last-child { display: grid; min-width: 0; line-height: 1.15; }
 .tp-stat strong { font-family: var(--font-display); font-size: 19px; color: var(--ink); }
 .tp-stat small { font-size: 12px; color: var(--muted); font-weight: 600; margin-left: 1px; }
+
+/* ---------- design: shape panel with Basic, Accents and Arrows side by side (swipe or tap a tab) ---------- */
+.dz-shape-tabs button { padding-inline: 9px; }
+.dz-shape-track { flex: none; display: grid; grid-auto-flow: column; grid-auto-columns: 100%; gap: 12px; overflow-x: auto; overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory; scrollbar-width: none; margin-inline: -2px; padding: 2px; }
+.dz-shape-track::-webkit-scrollbar { display: none; }
+.dz-shape-track > .dz-shapes { scroll-snap-align: start; align-content: start; }
+.dz-shape-ico { width: 30px; height: 30px; display: block; background: currentColor;
+  -webkit-mask: var(--ico) center / contain no-repeat; mask: var(--ico) center / contain no-repeat; }
+
+/* ---------- layers: right-click menu (unlink a piece that runs across pages) ---------- */
+.layer-menu { position: fixed; z-index: 60; display: grid; min-width: 200px; padding: 5px; border-radius: 14px; box-shadow: var(--shadow-lg), inset 0 0 0 1px var(--line);
+  transform-origin: top left; animation: layer-menu-in 220ms var(--spring-snappy); }
+.layer-menu button { all: unset; display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 9px; font-size: 13px; color: var(--ink); cursor: default; }
+.layer-menu button:hover, .layer-menu button:focus-visible { background: var(--hover); }
+@keyframes layer-menu-in { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .layer-menu { animation: none; } }

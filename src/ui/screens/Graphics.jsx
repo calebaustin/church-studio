@@ -16,6 +16,7 @@ import { KINDS, SIZE_PRESETS, TEMPLATES as BASE_TEMPLATES, blankPage, copyForDat
 import { PACKS as PACKS1, PACK_TEMPLATES } from '../design/packs.js';
 import { PACKS2, PACK2_TEMPLATES, inBrandColors } from '../design/packs2.js';
 import { PACKS3, PACK3_TEMPLATES } from '../design/packs3.js';
+import { CAROUSEL_TEMPLATES } from '../design/carousels.js';
 
 // Every template pack: the newer plug-and-play packs first.
 export const PACKS = { ...PACKS3, ...PACKS2, ...PACKS1 };
@@ -23,7 +24,7 @@ import { buildDeck, parseNotes } from '../design/deckBuilder.js';
 
 // Event-ready templates fill in an event's details by themselves.
 const EVENT_READY = new Set(['post-event', 'flyer-event', ...Object.keys(PACKS1).map((k) => `${k}-event`)]);
-export const TEMPLATES = [...PACK3_TEMPLATES, ...PACK2_TEMPLATES, ...BASE_TEMPLATES.map((t) => (EVENT_READY.has(t.id) ? { ...t, event: true } : t)), ...PACK_TEMPLATES.map((t) => (EVENT_READY.has(t.id) ? { ...t, event: true, photos: 1 } : t))];
+export const TEMPLATES = [...PACK3_TEMPLATES, ...PACK2_TEMPLATES, ...BASE_TEMPLATES.map((t) => (EVENT_READY.has(t.id) ? { ...t, event: true } : t)), ...PACK_TEMPLATES.map((t) => (EVENT_READY.has(t.id) ? { ...t, event: true, photos: 1 } : t)), ...CAROUSEL_TEMPLATES];
 
 export { cohesive } from '../design/model.js';
 
