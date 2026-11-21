@@ -145,7 +145,7 @@ function SpeakerHelper({ project, clip, onClose, onDone }) {
   );
 }
 
-export default function ClipEditor({ project, transcript, clipId, onSelect, patch, jobs, onMore }) {
+export default function ClipEditor({ project, transcript, onTranscript, clipId, onSelect, patch, jobs, onMore }) {
   const { themes, config, trackJob, onJobFinished, go, setGuard, confirmLeave, toast, reloadThemes, aiWorking } = useApp();
   const original = project.clips.find((c) => c.id === clipId) || project.clips[0];
   const h = useHistory(original);
@@ -486,7 +486,11 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
             ))}
           </div>
 
-          {tab === 'words' && <WordsTab words={words} clip={clip} set={set} cut={cut} rel={rel} outLen={outLen} seek={(t) => { video.current.currentTime = t; }} />}
+          {tab === 'words' && <WordsTab words={words} clip={clip} set={set} cut={cut} rel={rel} outLen={outLen} seek={(t) => { video.current.currentTime = t; }}
+            fixWord={async (i, text) => {
+              const r = await api.put(`/api/projects/${project.id}/transcript/word`, { index: i, text });
+              onTranscript?.((t) => ({ ...t, words: t.words.map((w, k) => (k === i ? { ...w, ...r.word } : w)) }));
+            }} />}
 
           {tab === 'text' && (
             <div className="stack" style={{ gap: 14 }}>
@@ -718,7 +722,17 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
   );
 }
 
-function WordsTab({ words, clip, set, cut, rel, outLen, seek }) {
+function WordsTab({ words, clip, set, cut, rel, outLen, seek, fixWord }) {
+  // Click and hold a word to fix its spelling (for words the transcription heard wrong).
+  const [fixing, setFixing] = useState(null); // { i, text }
+  const hold = useRef({ timer: 0, fired: false });
+  const startHold = (i) => { hold.current.fired = false; clearTimeout(hold.current.timer); hold.current.timer = setTimeout(() => { hold.current.fired = true; setFixing({ i, text: words[i].w }); }, 500); };
+  const endHold = () => clearTimeout(hold.current.timer);
+  const saveFix = async () => {
+    const f = fixing; setFixing(null);
+    if (!f || !f.text.trim() || f.text.trim() === words[f.i].w) return;
+    try { await fixWord(f.i, f.text); } catch (e) { alert(e.message); }
+  };
   const firstIn = words.findIndex((w) => w.end > clip.start);
   let lastIn = words.findIndex((w) => w.start >= clip.end);
   lastIn = lastIn < 0 ? words.length - 1 : lastIn - 1;
@@ -763,15 +777,25 @@ function WordsTab({ words, clip, set, cut, rel, outLen, seek }) {
         <span className="chip accent num">{fmt(outLen)} long</span>
       </div>
       <hr className="hairline" />
-      <p className="muted small">Click a word to cut it. Click a grey word to extend the clip. Double-click to jump there.</p>
+      <p className="muted small">Click a word to cut it. Click a gray word to add it back. Click and hold a word to fix it.</p>
       <div className="words">
         {words.slice(lo, hi + 1).map((w, k) => {
           const i = lo + k;
           const out = i < firstIn || i > lastIn;
           const now = absNow >= w.start && absNow < w.end;
+          if (fixing?.i === i) {
+            return (
+              <span key={i} className="wd fixing">
+                <input className="wd-fix" autoFocus value={fixing.text} size={Math.max(3, fixing.text.length + 1)} aria-label="Fix this word"
+                  onChange={(e) => setFixing({ i, text: e.target.value })} onBlur={saveFix}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } else if (e.key === 'Escape') setFixing(null); }} />{' '}
+              </span>
+            );
+          }
           return (
-            <span key={i} className={`wd ${out ? 'out' : ''} ${cut.has(i) ? 'cut' : ''} ${now ? 'now' : ''}`}
-              onClick={() => { if (i < firstIn) set({ start: Math.max(0, w.start - 0.12) }); else if (i > lastIn) set({ end: w.end + 0.3 }); else toggleCut(i); }}
+            <span key={i} className={`wd ${out ? 'out' : ''} ${cut.has(i) ? 'cut' : ''} ${now ? 'now' : ''} ${w.fixed ? 'fixed' : ''}`}
+              onPointerDown={() => startHold(i)} onPointerUp={endHold} onPointerLeave={endHold}
+              onClick={() => { if (hold.current.fired) { hold.current.fired = false; return; } if (i < firstIn) set({ start: Math.max(0, w.start - 0.12) }); else if (i > lastIn) set({ end: w.end + 0.3 }); else toggleCut(i); }}
               onDoubleClick={() => seek(w.start)}>{w.w} </span>
           );
         })}

@@ -3,7 +3,7 @@ import ToolIntro from '../components/ToolIntro.jsx';
 import { useApp } from '../App.jsx';
 import { api, desktop, fmt, openLink } from '../api.js';
 import { usePoll } from '../poll.js';
-import { ChevronDown, Laptop, MessageSquare, Repeat2, Shapes } from 'lucide-react';
+import { ChevronDown, Laptop, MessageSquare, Plus, Repeat2, Shapes, Trash2 } from 'lucide-react';
 import { exportDesign } from '../design/exporters.js';
 import { checkCaption } from '../captionCheck.js';
 import Modal from '../components/Modal.jsx';
@@ -120,8 +120,13 @@ function PostRow({ post, s, plat, onEdit }) {
     const text = d.caption ?? [post.caption, tags].filter(Boolean).join('\n\n');
     return p?.captionMax ? text.slice(0, p.captionMax) : text;
   };
+  // A draft or scheduled post opens when you click anywhere on its card (except its own buttons and links).
+  const editable = ['draft', 'scheduled'].includes(post.status);
+  const open = (e) => { if (editable && !e.target.closest('button, a, input, select')) onEdit(post); };
   return (
-    <div className="glass" style={{ padding: 14, display: 'grid', gridTemplateColumns: '64px 1fr auto', gap: 14, alignItems: 'start' }}>
+    <div className={`glass post-card${editable ? ' editable' : ''}`} style={{ padding: 14, display: 'grid', gridTemplateColumns: '64px 1fr auto', gap: 14, alignItems: 'start' }}
+      onClick={open} role={editable ? 'button' : undefined} tabIndex={editable ? 0 : undefined} aria-label={editable ? `Edit ${post.title || 'post'}` : undefined}
+      onKeyDown={(e) => { if (editable && e.key === 'Enter' && e.target === e.currentTarget) onEdit(post); }}>
       <div style={{ width: 64, aspectRatio: '9/16', borderRadius: 10, overflow: 'hidden', background: 'var(--hover)' }}>
         {thumb && <img src={thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
       </div>
@@ -158,11 +163,10 @@ function PostRow({ post, s, plat, onEdit }) {
           {!post.destinations.length && <span className="muted small">No accounts picked yet.</span>}
         </div>
       </div>
-      <div className="stack">
-        {['draft', 'scheduled'].includes(post.status) && <button className="btn sm" onClick={() => onEdit(post)}>Edit</button>}
+      <div className="stack" style={{ justifyItems: 'end' }}>
+        {post.status !== 'publishing' && <button className="rt-btn" aria-label="Delete post" title="Delete" onClick={() => confirm(`Delete “${post.title || 'this post'}” from Church Studio? Anything already posted stays on the platform.`) && act(() => api.del(`/api/social/posts/${post.id}`))}><Trash2 size={15} /></button>}
         {['draft', 'scheduled'].includes(post.status) && post.destinations.length > 0 && <button className="btn primary sm" onClick={() => act(() => api.post(`/api/social/posts/${post.id}/publish`))}>Post now</button>}
         {['failed', 'partial'].includes(post.status) && post.destinations.some((d) => d.status === 'failed') && <button className="btn primary sm" onClick={() => act(() => api.post(`/api/social/posts/${post.id}/retry`))}>Retry failed</button>}
-        {post.status !== 'publishing' && <button className="btn ghost sm danger" onClick={() => confirm(`Delete “${post.title || 'this post'}” from Church Studio? Anything already posted stays on the platform.`) && act(() => api.del(`/api/social/posts/${post.id}`))}>Delete</button>}
       </div>
     </div>
   );
@@ -440,7 +444,7 @@ export function Composer({ s, plat, init, onClose, onConnect }) {
   const [designs, setDesigns] = useState(null);
   const [fromProject, setFromProject] = useState(init.projectId || '');
   const [preparing, setPreparing] = useState(null);
-  useEffect(() => { if (pickMedia && pickKind === 'designs' && !designs) api.get('/api/designs').then((r) => setDesigns(r.designs)).catch(() => setDesigns([])); }, [pickMedia, pickKind]);
+  useEffect(() => { if (pickKind === 'designs' && !designs) api.get('/api/designs').then((r) => setDesigns(r.designs)).catch(() => setDesigns([])); }, [pickMedia, pickKind]);
   // A design becomes PNG pages in the brand library's Graphics folder, then rides along with the post.
   const chooseDesign = async (d) => {
     setPreparing(d.id); setError(null);
@@ -486,6 +490,22 @@ export function Composer({ s, plat, init, onClose, onConnect }) {
     if (!tags) setTags((m.hashtags || []).join(', '));
   };
 
+  // New clip or design straight from the post. A design starts from the campaign's event (name, day, time,
+  // place) and stays tied to the campaign; a clip starts in the latest sermon's clip picker.
+  const campaignId = editing?.campaignId || init.campaignId || null;
+  const newDesign = async () => {
+    let ev = init.event || null;
+    if (!ev && campaignId) ev = (await api.get('/api/campaigns').catch(() => ({ campaigns: [] }))).campaigns.find((c) => c.id === campaignId)?.event || null;
+    onClose();
+    go(ev ? { name: 'graphics', event: ev, eventMode: 'pick', campaignId } : { name: 'graphics', ...(campaignId ? { campaignId } : {}) });
+  };
+  const newClip = async () => {
+    const list = (await api.get('/api/projects').catch(() => ({ projects: [] }))).projects;
+    const p = list.find((x) => x.isSermon && x.status === 'transcribed') || list.find((x) => x.status === 'transcribed');
+    onClose();
+    go(p ? { name: 'project', id: p.id, step: 'clips' } : { name: 'library' });
+  };
+
   const submit = async (m) => {
     setBusy(true);
     setError(null);
@@ -511,11 +531,10 @@ export function Composer({ s, plat, init, onClose, onConnect }) {
             <div className="vframe" style={{ width: 200, display: 'grid', placeItems: 'center', color: 'var(--muted)', cursor: 'pointer' }} onClick={() => setPickMedia(true)}>
               {media?.thumb ? <img src={media.thumb} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: media.kind === 'image' ? 'contain' : 'cover' }} /> : <span className="small" style={{ padding: 10, textAlign: 'center', wordBreak: 'break-word' }}>{preparing ? 'Preparing…' : media ? media.title : 'Nothing attached'}</span>}
             </div>
-            <button className="btn sm" onClick={() => setPickMedia(!pickMedia)}>{media ? 'Change' : 'Attach a clip or design'}</button>
             {media && <span className="muted small">{media.kind === 'image' ? `${media.pages > 1 ? `${media.pages} pages` : 'Image'} · ${media.title || 'Design'}` : `${media.length ? `${fmt(media.length)} · ` : ''}${media.sermon || media.title}`}</span>}
           </div>
           <div className="stack">
-            {pickMedia && (
+            {(
               <div className="keycard stack" style={{ gap: 10 }}>
                 <div className="row between wrap" style={{ gap: 8 }}>
                   <div className="row" style={{ gap: 6 }}>
@@ -524,7 +543,6 @@ export function Composer({ s, plat, init, onClose, onConnect }) {
                       <button className={pickKind === 'designs' ? 'on' : ''} onClick={() => setPickKind('designs')}>Designs</button>
                     </div>
                     <button className="btn sm" disabled={Boolean(preparing)} onClick={fromComputer}><Laptop size={13} />From your computer</button>
-                    {init.event && <button className="btn sm primary" onClick={() => { onClose(); go({ name: 'graphics', event: init.event, eventMode: 'pick' }); }}><Shapes size={13} />Make from template</button>}
                   </div>
                   {projects.length > 1 && (
                     <select className="input" style={{ width: 'auto', maxWidth: 260 }} value={fromProject} onChange={(e) => setFromProject(e.target.value)} aria-label="From project">
@@ -533,9 +551,9 @@ export function Composer({ s, plat, init, onClose, onConnect }) {
                     </select>
                   )}
                 </div>
-                {pickKind === 'clips' && !clipList.length && <span className="muted small">Export a clip first.</span>}
-                {pickKind === 'designs' && designs && !designList.length && <span className="muted small">No designs yet{fromProject ? ' from this project' : ''}. Make one in Design.</span>}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(92px, 1fr))', gap: 8, maxHeight: 260, overflow: 'auto' }}>
+                  {pickKind === 'clips' && <button className="media-pick media-new" onClick={newClip}><span className="media-new-plus"><Plus size={20} /></span><span className="small">New clip</span></button>}
+                  {pickKind === 'designs' && <button className="media-pick media-new" onClick={newDesign}><span className="media-new-plus"><Shapes size={20} /></span><span className="small">New design</span></button>}
                   {pickKind === 'clips' && clipList.map((m) => (
                     <button key={m.file} title={m.title} className={`media-pick ${media?.file === m.file ? 'on' : ''}`} onClick={() => choose(m)}>
                       {m.thumb && <img src={m.thumb} alt="" style={{ aspectRatio: '9/16' }} />}
@@ -550,7 +568,7 @@ export function Composer({ s, plat, init, onClose, onConnect }) {
                   ))}
                 </div>
                 {pickKind === 'designs' && <span className="hint">Designs save as images in your brand library. Share them to accounts you post to by hand.</span>}
-                {media && <button className="btn ghost sm" style={{ justifySelf: 'start' }} onClick={() => { setMedia(null); setPickMedia(false); }}>Post with nothing attached</button>}
+                {media && <button className="btn ghost sm" style={{ justifySelf: 'start' }} onClick={() => setMedia(null)}>Post with nothing attached</button>}
               </div>
             )}
             <label className="field">Title <span className="hint">Used for YouTube and for your own list</span><input className="input" value={title} maxLength={100} onChange={(e) => setTitle(e.target.value)} /></label>

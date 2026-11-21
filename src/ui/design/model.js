@@ -303,7 +303,10 @@ export function recolorSvg(txt, map) {
 export const SHAPES = [
   ['rect', 'Square'], ['ellipse', 'Circle'], ['hexagon', 'Hexagon'], ['arch', 'Arch'], ['blob', 'Blob'], ['wave', 'Wavy frame'], ['scallop', 'Badge'],
   ['burst', 'Starburst'], ['window', 'Window card'], ['iphone', 'iPhone'], ['macbook', 'MacBook'],
+  ['triangle', 'Triangle'], ['triEq', 'Equal triangle'], ['diamond', 'Diamond'], ['pentagon', 'Pentagon'], ['octagon', 'Octagon'], ['star', 'Star'],
 ];
+/** The extra basic shapes, shown in the add panel after the hand-drawn buttons. */
+export const MORE_BASIC = ['triangle', 'triEq', 'diamond', 'pentagon', 'octagon', 'star'];
 // Accent shapes: blobs, waves and little marks that dress up a design. Filled ones can hold a photo too.
 export const ACCENTS = [
   ['blob2', 'Soft blob'], ['blob3', 'Long blob'], ['pebble', 'Pebble'], ['drop', 'Drop'], ['ribbon', 'Ribbon wave'], ['hill', 'Wave edge'],
@@ -314,9 +317,10 @@ export const ACCENTS = [
 export const ARROWS = [
   ['arrow', 'Block arrow'], ['arrowLine', 'Arrow'], ['arrowCurve', 'Curved arrow'], ['arrowWavy', 'Wavy arrow'], ['arrowLoop', 'Loop arrow'],
   ['arrowBend', 'Bent arrow'], ['arrowDouble', 'Two-way arrow'], ['chevrons', 'Chevrons'], ['tri3', 'Triangles'], ['swipe', 'Swipe'],
+  ['arrowUTurn', 'U-turn arrow'], ['arrowCircle', 'Circle arrow'], ['arrowZigzag', 'Zigzag arrow'], ['arrowDashed', 'Dashed arrow'], ['arrowSplit', 'Split arrow'], ['arrowTag', 'Tag arrow'],
 ];
 /** Shapes drawn as a line (in the fill color) instead of filled. They can't hold a photo. */
-export const STROKED = new Set(['squiggle', 'zigzag', 'wavelines', 'scribble', 'arrowLine', 'arrowCurve', 'arrowWavy', 'arrowLoop', 'arrowBend', 'arrowDouble', 'swipe']);
+export const STROKED = new Set(['squiggle', 'zigzag', 'wavelines', 'scribble', 'arrowLine', 'arrowCurve', 'arrowWavy', 'arrowLoop', 'arrowBend', 'arrowDouble', 'swipe', 'arrowUTurn', 'arrowCircle', 'arrowZigzag', 'arrowDashed', 'arrowSplit']);
 const THICK = { squiggle: 0.14, zigzag: 0.12, wavelines: 0.07, scribble: 0.16, swipe: 0.09 };
 export const shapeLabel = (k) => ([...SHAPES, ...ACCENTS, ...ARROWS].find(([id]) => id === k) || [k, 'Shape'])[1];
 /** A smooth closed outline through points (unit box), like the Blob. */
@@ -382,6 +386,25 @@ function extraPath(ctx, kind, x, y, w, h, it) {
     case 'swipe': { // a short line with an arrow, like "swipe →" on a carousel cover
       const [ex, ey] = P(0.97, 0.5); m(0.03, 0.5); ctx.lineTo(ex, ey); arrowHead(ctx, ex, ey, 0, Math.min(h * 0.45, w * 0.12)); return true;
     }
+    // more basic shapes
+    case 'triangle': case 'triEq': m(0.5, 0); l(1, 1); l(0, 1); ctx.closePath(); return true;
+    case 'diamond': m(0.5, 0); l(1, 0.5); l(0.5, 1); l(0, 0.5); ctx.closePath(); return true;
+    case 'pentagon': case 'octagon': {
+      const n = kind === 'pentagon' ? 5 : 8; const off = kind === 'pentagon' ? -Math.PI / 2 : -Math.PI / 2 + Math.PI / 8;
+      for (let i = 0; i < n; i++) { const a = off + (i * 2 * Math.PI) / n; (i ? l : m)(0.5 + 0.5 * Math.cos(a), 0.5 + 0.5 * Math.sin(a)); }
+      ctx.closePath(); return true;
+    }
+    case 'star': for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + (i * Math.PI) / 5; const r = i % 2 ? 0.2 : 0.5; (i ? l : m)(0.5 + r * Math.cos(a), 0.53 + r * Math.sin(a)); } ctx.closePath(); return true;
+    // more arrows
+    case 'arrowUTurn': { m(0.08, 0.1); l(0.62, 0.1); ctx.bezierCurveTo(...P(0.98, 0.1), ...P(0.98, 0.9), ...P(0.62, 0.9)); const [ex, ey] = P(0.1, 0.9); ctx.lineTo(ex, ey); arrowHead(ctx, ex, ey, Math.PI, s * 0.32); return true; }
+    case 'arrowCircle': { const cx = x + w / 2; const cy = y + h / 2; const rx = w * 0.4; const ry = h * 0.4; const a1 = Math.PI * 1.65;
+      ctx.ellipse(cx, cy, rx, ry, 0, -Math.PI * 0.3, a1); const ex = cx + rx * Math.cos(a1); const ey = cy + ry * Math.sin(a1); arrowHead(ctx, ex, ey, a1 + Math.PI / 2, s * 0.26); return true; }
+    case 'arrowZigzag': { const pts = [[0.03, 0.75], [0.25, 0.25], [0.47, 0.75], [0.69, 0.25], [0.95, 0.6]]; pts.forEach(([u, v], i) => (i ? l : m)(u, v)); const [ex, ey] = P(0.95, 0.6); const [px, py] = P(0.69, 0.25); arrowHead(ctx, ex, ey, Math.atan2(ey - py, ex - px), s * 0.36); return true; }
+    case 'arrowDashed': { const [ex, ey] = P(0.97, 0.5); m(0.03, 0.5); ctx.lineTo(ex, ey); return true; } // the head is drawn solid in fillShape
+    case 'arrowSplit': { m(0.03, 0.5); l(0.42, 0.5); const [ax, ay] = P(0.95, 0.12); const [bx, by] = P(0.95, 0.88);
+      ctx.moveTo(...P(0.42, 0.5)); ctx.quadraticCurveTo(...P(0.62, 0.5), ax, ay); ctx.moveTo(...P(0.42, 0.5)); ctx.quadraticCurveTo(...P(0.62, 0.5), bx, by);
+      const [cx2, cy2] = P(0.62, 0.5); arrowHead(ctx, ax, ay, Math.atan2(ay - cy2, ax - cx2), s * 0.3); arrowHead(ctx, bx, by, Math.atan2(by - cy2, bx - cx2), s * 0.3); return true; }
+    case 'arrowTag': m(0, 0); l(0.72, 0); l(1, 0.5); l(0.72, 1); l(0, 1); l(0.18, 0.5); ctx.closePath(); return true;
     default: return false;
   }
 }
@@ -539,7 +562,13 @@ function fillShape(ctx, it, kind, x, y, w, h, r, cache, placeholders) {
     shapePath(ctx, kind, x, y, w, h, r, it);
     ctx.strokeStyle = it.fill && it.fill !== 'none' ? it.fill : '#FFFFFF';
     ctx.lineWidth = Math.max(1, (it.thick ?? THICK[kind] ?? 0.1) * Math.min(w, h));
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke();
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    if (kind === 'arrowDashed') {
+      const lw = ctx.lineWidth; ctx.setLineDash([lw * 1.6, lw * 1.9]); ctx.stroke(); ctx.setLineDash([]);
+      const ex = x + w * 0.97; const ey = y + h * 0.5; ctx.beginPath(); arrowHead(ctx, ex, ey, 0, Math.min(h * 0.42, w * 0.3)); ctx.stroke();
+      return;
+    }
+    ctx.stroke();
     return;
   }
   shapePath(ctx, kind, x, y, w, h, r, it);
@@ -824,9 +853,10 @@ export function shapeIcon(kind) {
   if (typeof document === 'undefined') return '';
   const c = document.createElement('canvas'); c.width = 96; c.height = 96;
   const g = c.getContext('2d');
-  const wide = ['ribbon', 'hill', 'squiggle', 'zigzag', 'wavelines', 'scribble', 'arrow', 'arrowLine', 'arrowWavy', 'arrowDouble', 'chevrons', 'tri3', 'swipe'].includes(kind);
+  const wide = ['ribbon', 'hill', 'squiggle', 'zigzag', 'wavelines', 'scribble', 'arrow', 'arrowLine', 'arrowWavy', 'arrowDouble', 'chevrons', 'tri3', 'swipe', 'arrowZigzag', 'arrowTag', 'arrowSplit'].includes(kind);
   const box = wide ? [6, 26, 84, 44] : [12, 12, 72, 72];
-  if (kind === 'arrowLine' || kind === 'arrowDouble' || kind === 'swipe') { box[1] = 32; box[3] = 32; }
+  if (['arrowLine', 'arrowDouble', 'swipe', 'arrowDashed'].includes(kind)) { box[0] = 6; box[2] = 84; box[1] = 32; box[3] = 32; }
+  if (kind === 'triEq') { box[1] = 17; box[3] = 62; }
   const it = { fill: '#000', thick: STROKED.has(kind) ? Math.min(0.5, 7 / Math.min(box[2], box[3])) : undefined, cycles: kind === 'ribbon' ? 1 : undefined };
   fillShape(g, it, kind, box[0], box[1], box[2], box[3], 0, {}, false);
   return (iconCache[kind] = c.toDataURL());

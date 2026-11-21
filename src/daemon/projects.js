@@ -84,6 +84,19 @@ export async function deleteProject(id) {
   await rm(projectDir(id), { recursive: true, force: true });
 }
 
+/** Fix one word the transcription got wrong (captions and writing use the new spelling; timing stays). */
+export async function setTranscriptWord(id, index, text) {
+  const t = await getTranscript(id);
+  if (!t?.words?.[index]) throw new Error('That word is not in the transcript.');
+  const w = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+  if (!w) throw new Error('Type the word.');
+  t.words[index] = { ...t.words[index], w, fixed: true };
+  const f = file(id, 'transcript.json');
+  await writeFile(`${f}.tmp`, JSON.stringify(t));
+  await rename(`${f}.tmp`, f);
+  return t.words[index];
+}
+
 export async function getTranscript(id) {
   const f = file(id, 'transcript.json');
   if (!existsSync(f)) return null;

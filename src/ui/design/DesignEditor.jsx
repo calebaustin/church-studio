@@ -12,7 +12,7 @@ import FontMenu, { useFamilies } from '../components/FontMenu.jsx';
 import BackgroundEraser from '../components/BackgroundEraser.jsx';
 import LibraryPicker from '../components/LibraryPicker.jsx';
 import Popover, { PopList } from '../components/Popover.jsx';
-import { ACCENTS, ARROWS, DEVICE_ASPECT, KINDS, PATTERNS, RESIZE_TARGETS, SHAPES, STROKED, shapeIcon, resizeDesign, blankPage, cohesive, loadAssets, onColor, page as newPage, renderPage, shape as newShape, svgColors, text as newText, uid } from './model.js';
+import { ACCENTS, ARROWS, MORE_BASIC, DEVICE_ASPECT, KINDS, PATTERNS, RESIZE_TARGETS, SHAPES, STROKED, shapeIcon, resizeDesign, blankPage, cohesive, loadAssets, onColor, page as newPage, renderPage, shape as newShape, svgColors, text as newText, uid } from './model.js';
 import { snapMove } from './snap.js';
 import PhotoEdits from './PhotoEdits.jsx';
 import Layers, { label as layerLabel } from './Layers.jsx';
@@ -87,8 +87,24 @@ export default function DesignEditor({ id, onClose }) {
   // The shape panel: Basic, Accents and Arrows, side by side. Swipe between them or pick a tab.
   const [shapeTab, setShapeTabState] = useState(0);
   const shapeTrack = useRef(null);
-  const setShapeTab = (i) => { setShapeTabState(i); const el = shapeTrack.current; if (el) el.scrollTo({ left: i * el.clientWidth, behavior: 'smooth' }); };
-  const onShapeScroll = (e) => { const el = e.currentTarget; const i = Math.round(el.scrollLeft / Math.max(1, el.clientWidth)); if (i !== shapeTab) setShapeTabState(i); };
+  // A tap glides the highlight straight to its tab; the scroll that follows doesn't drag it through the tabs in
+  // between. A swipe moves the highlight once the pages settle.
+  const tabScroll = useRef({ until: 0, timer: 0 });
+  const setShapeTab = (i) => {
+    setShapeTabState(i);
+    const el = shapeTrack.current; if (!el) return;
+    tabScroll.current.until = Date.now() + 700;
+    el.scrollTo({ left: i * el.clientWidth, behavior: 'smooth' });
+  };
+  const onShapeScroll = (e) => {
+    const el = e.currentTarget; const t = tabScroll.current;
+    clearTimeout(t.timer);
+    t.timer = setTimeout(() => {
+      if (Date.now() < t.until) return;
+      const i = Math.round(el.scrollLeft / Math.max(1, el.clientWidth));
+      setShapeTabState((cur) => (cur === i ? cur : i));
+    }, 90);
+  };
   const [swap, setSwap] = useState(null);
   const [extend, setExtend] = useState(null); // { id, dir: 'next' | 'prev', fresh: true when it needs a new page, at } // { kind: 'color' | 'font', from, to, count, at }
   const pendingSwap = useRef(null);
@@ -577,6 +593,11 @@ export default function DesignEditor({ id, onClose }) {
             <button aria-label="Starburst" title="Starburst" onClick={() => addItem(newShape({ shape: 'burst', w: 0.16, h: 0.16 * (doc.size.w / doc.size.h), fill: colors[1] }))}><span className="dz-ico">✺</span></button>
             <button aria-label="Window card" title="Window card" onClick={() => addItem(newShape({ shape: 'window', w: 0.56, h: 0.3 * (doc.size.w / doc.size.h), fill: '#FFFFFF' }))}><span className="dz-ico">▭</span></button>
             <button aria-label="Line" title="Line" onClick={() => addItem(newShape({ w: 0.5, h: 3 / doc.size.h, fill: onColor(fill) }))}><Minus size={22} /></button>
+            {MORE_BASIC.map((k) => (
+              <button key={k} aria-label={SHAPES.find(([id]) => id === k)[1]} title={SHAPES.find(([id]) => id === k)[1]} onClick={() => addItem(newShape(addShapeProps(k, doc, colors, fill)))}>
+                <span className="dz-shape-ico" style={{ '--ico': `url(${shapeIcon(k)})` }} />
+              </button>
+            ))}
           </div>
           {[ACCENTS, ARROWS].map((set, n) => (
             <div key={n} className="dz-shapes">
@@ -879,7 +900,7 @@ export default function DesignEditor({ id, onClose }) {
               </div>
               <div className="row" style={{ gap: 10 }}>
                 <ColorField value={doc.tint?.color || '#FF9A62'} onChange={(c) => update((d) => { d.tint = { ...(d.tint || {}), color: c }; return d; }, { record: false })} />
-                <label className="field grow">Make colors work together · {Math.round((doc.tint?.amount || 0) * 100)}%
+                <label className="field grow" title="Nudges your five design colors toward this one so they feel like a set">Tint the palette · {Math.round((doc.tint?.amount || 0) * 100)}%
                   <input type="range" min="0" max="0.8" step="0.05" value={doc.tint?.amount || 0} onChange={(e) => update((d) => { d.tint = { ...(d.tint || { color: '#FF9A62' }), amount: Number(e.target.value) }; return d; }, { record: false })} />
                 </label>
               </div>
@@ -891,7 +912,6 @@ export default function DesignEditor({ id, onClose }) {
               )}
               <hr className="hairline" />
               <Layers items={pg.items} sel={sel} onSelect={setSel} onUnlink={(lid) => { unlinkItem(lid); toast({ text: 'Unlinked. This piece now moves on its own.' }); }} onMove={(from, to) => update((d) => { const list = d.pages[pi].items; const [x] = list.splice(from, 1); list.splice(to, 0, x); return d; })} onDelete={(id) => update((d) => { d.pages[pi].items = d.pages[pi].items.filter((x) => x.id !== id); return d; })} />
-              <span className="hint">Click an item to edit it. Double-click text to type on the page. Drag to move; guides show when things line up.</span>
             </>
           )}
         </aside>
@@ -959,10 +979,12 @@ function addShapeProps(k, doc, colors, fill) {
     ribbon: [1, 0.36], hill: [1, 0.26], squiggle: [0.36, 0.07], zigzag: [0.32, 0.07], wavelines: [0.3, 0.12], scribble: [0.4, 0.07],
     arrow: [0.26, 0.14], arrowLine: [0.34, 0.06], arrowWavy: [0.34, 0.1], arrowDouble: [0.34, 0.06], chevrons: [0.2, 0.09], tri3: [0.18, 0.08], swipe: [0.26, 0.05],
     arrowCurve: [0.2, 0.16], arrowLoop: [0.26, 0.18], arrowBend: [0.2, 0.16],
+    arrowUTurn: [0.22, 0.16], arrowCircle: [0.18, 0.18], arrowZigzag: [0.3, 0.1], arrowDashed: [0.34, 0.06], arrowSplit: [0.26, 0.14], arrowTag: [0.26, 0.12],
+    triEq: [0.3, 0.26],
   };
   const [w, h] = SIZE[k] || [0.3, 0.3];
   const tall = SIZE[k] ? h * r : h * r;
-  const line = STROKED.has(k) || ['arrow', 'chevrons', 'tri3', 'dots', 'sparkle'].includes(k);
+  const line = STROKED.has(k) || ['arrow', 'chevrons', 'tri3', 'dots', 'sparkle', 'arrowTag'].includes(k);
   return { shape: k, w, h: tall, y: k === 'hill' ? 1 - tall / 2 : 0.5, fill: line ? onColor(fill) : colors[1] };
 }
 

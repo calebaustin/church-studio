@@ -2,6 +2,22 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## 0.21.0 · November 22, 2026
+
+### New
+- **Fix a word in the transcript.** In the clip editor, click and hold a word to fix one the transcription heard wrong. Captions use your spelling from then on. Click a word to cut it, and click a gray word to add it back.
+- **Six more basic shapes:** triangle, equal triangle, diamond, pentagon, octagon and star.
+- **Six more arrows:** U-turn, circle, zigzag, dashed, split and tag.
+- **New clip or New design, right from a post.** In a post, the clip and design pickers now start with New clip and New design. A new design starts from the campaign's event, with its name, day, time and place filled in, and stays tied to the campaign. A new clip starts in your latest sermon's clip picker.
+
+### Changed
+- Click anywhere on a draft or scheduled post to open it. The Edit button is gone, and Delete is a small icon in the corner.
+- The clip and design picker is always open in a post, so there's no extra Attach button.
+- Switching between Basic, Accents and Arrows glides straight to the tab you tap.
+- "Make colors work together" is now "Tint the palette", which says what it does: it nudges your five design colors toward one color so they feel like a set.
+- Long writing titles stay on one line in previews, ending in "...".
+- Removed the extra help line under the layers list.
+
 ## 0.20.0 · November 21, 2026
 
 ### Changed

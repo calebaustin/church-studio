@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { ROOT, PROJECTS_DIR, toolStatus, repairTool, run, tool } from './tools.js';
 import { loadConfig, saveConfig, mask, KEY_GUIDE } from './config.js';
 import * as jobs from './jobs.js';
-import { listProjects, getProject, updateProject, deleteProject, getTranscript, projectDir, createProject, file as fileOf } from './projects.js';
+import { listProjects, getProject, updateProject, deleteProject, getTranscript, projectDir, createProject, file as fileOf, setTranscriptWord } from './projects.js';
 import { channelDetails, listChannel, downloadToProject, importLocalFile, replaceSource, scoutVideo } from './youtube.js';
 import { transcribeProject } from './transcribe.js';
 import { proposeClips } from './pipeline.js';
@@ -239,6 +239,10 @@ route('PATCH', '/api/projects/:id', async ({ id }, b) => {
 
 route('DELETE', '/api/projects/:id', async ({ id }) => { await requireProject(id); await deleteProject(id); return { ok: true }; });
 
+route('PUT', '/api/projects/:id/transcript/word', async ({ id }, b) => {
+  await requireProject(id);
+  try { return { word: await setTranscriptWord(id, Number(b.index), b.text) }; } catch (e) { throw new HttpError(400, e.message); }
+});
 route('GET', '/api/projects/:id/transcript', async ({ id }) => {
   const project = await requireProject(id);
   const t = await getTranscript(id);

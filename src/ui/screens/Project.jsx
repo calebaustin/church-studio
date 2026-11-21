@@ -187,7 +187,7 @@ export default function Project({ id, initialStep, initialClip, initialTime }) {
           onEdit={(cid) => { setSelected(cid); setStep('edit'); }} />
       )}
       {step === 'edit' && transcript && (
-        <ClipEditor project={project} transcript={transcript} clipId={selected || project.clips[0]?.id}
+        <ClipEditor project={project} transcript={transcript} onTranscript={setTranscript} clipId={selected || project.clips[0]?.id}
           onSelect={setSelected} patch={patch} jobs={busy} onMore={() => setStep('clips')} />
       )}
       {step === 'exports' && <ExportsStep project={project} />}
