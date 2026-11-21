@@ -2,7 +2,7 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
-## 0.21.0 · November 22, 2026
+## 0.21.0 · November 21, 2026
 
 ### New
 - **Fix a word in the transcript.** In the clip editor, click and hold a word to fix one the transcription heard wrong. Captions use your spelling from then on. Click a word to cut it, and click a gray word to add it back.
