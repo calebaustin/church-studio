@@ -2,7 +2,7 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
-## Unreleased
+## 0.19.0 · November 21, 2026
 
 ### New
 - **Swipeable carousels in every template pack.** Seventeen new carousels, one in each pack's look, built to swipe like one long picture: ribbons, winding paths, blobs, circles and color blocks run across the edges between slides so each swipe slides along the same scene. Each is a sermon recap (filled in from your sermon), a first Sunday guide for visitors, or a Bible basics list, and you can change every word.
