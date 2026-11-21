@@ -751,11 +751,18 @@ export default function DesignEditor({ id, onClose }) {
                     </div>
                   )}
                   {item.photo && !item.erase && <PhotoEdits value={item.adjust} colors={colors} onChange={(adjust) => setItem({ adjust }, { record: false })} />}
-                  {!item.photo && !item.erase && <div className="row" style={{ gap: 10 }}><ColorField label={DEVICE_ASPECT[item.shape] ? 'Screen color' : STROKED.has(item.shape) ? 'Color' : 'Fill'} value={item.fill} onChange={(c) => setItem({ fill: c }, { record: false })} swatches={colors} /></div>}
-                  {(item.shape || 'rect') === 'rect' && <label className="field">Corners · {item.radius || 0}<input type="range" min="0" max="200" value={item.radius || 0} onChange={(e) => setItem({ radius: Number(e.target.value) }, { record: false })} /></label>}
-                  {!DEVICE_ASPECT[item.shape] && (
-                    <label className="switch"><input type="checkbox" checked={Boolean(item.erase)} onChange={(e) => setItem({ erase: e.target.checked })} /><Eraser size={14} />Use as an eraser</label>
+                  {((!item.photo && !item.erase) || !DEVICE_ASPECT[item.shape]) && (
+                    <div className="row between" style={{ gap: 10 }}>
+                      {!item.photo && !item.erase ? <ColorField label={DEVICE_ASPECT[item.shape] ? 'Screen color' : STROKED.has(item.shape) ? 'Color' : 'Fill'} value={item.fill} onChange={(c) => setItem({ fill: c }, { record: false })} swatches={colors} /> : <span className="small" style={{ fontWeight: 600 }}>Eraser</span>}
+                      {!DEVICE_ASPECT[item.shape] && (
+                        <label className="switch icon-switch" title={item.erase ? 'Eraser is on' : 'Use as an eraser'}>
+                          <input type="checkbox" aria-label="Use as an eraser" checked={Boolean(item.erase)} onChange={(e) => setItem({ erase: e.target.checked })} />
+                          <Eraser size={11} strokeWidth={2.4} className="switch-knob-icon" aria-hidden="true" />
+                        </label>
+                      )}
+                    </div>
                   )}
+                  {(item.shape || 'rect') === 'rect' && <label className="field">Corners · {item.radius || 0}<input type="range" min="0" max="200" value={item.radius || 0} onChange={(e) => setItem({ radius: Number(e.target.value) }, { record: false })} /></label>}
                   {item.erase && (
                     <div className="stack" style={{ gap: 6 }}>
                       <span className="small" style={{ fontWeight: 600 }}>Erases</span>

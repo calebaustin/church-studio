@@ -2,6 +2,11 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## Unreleased
+
+### Changed
+- **Fill and the eraser share one line.** The eraser switch now sits next to Fill, with a small eraser on its knob, so shape settings take less room.
+
 ## 0.19.0 · November 21, 2026
 
 ### New

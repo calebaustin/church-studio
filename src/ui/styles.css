@@ -1765,3 +1765,11 @@ button.tp-tile:active .tp-orb { transform: scale(.92); transition-duration: 120m
 .layer-menu button:hover, .layer-menu button:focus-visible { background: var(--hover); }
 @keyframes layer-menu-in { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .layer-menu { animation: none; } }
+
+/* ---------- a switch with an icon riding on its knob (the eraser toggle next to Fill) ---------- */
+.icon-switch { position: relative; gap: 0; }
+.icon-switch .switch-knob-icon { position: absolute; left: 6.5px; top: 50%; margin-top: -5.5px; color: var(--muted); pointer-events: none;
+  transition: transform var(--d-bouncy) var(--spring-bouncy), color 200ms var(--ease); }
+.icon-switch input:checked + .switch-knob-icon { transform: translateX(16px); color: var(--ok); }
+.icon-switch input:checked:active + .switch-knob-icon { transform: translateX(11px); }
+.icon-switch input.dragging + .switch-knob-icon { opacity: 0; }
