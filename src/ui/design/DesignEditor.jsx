@@ -753,11 +753,12 @@ export default function DesignEditor({ id, onClose }) {
                   {item.photo && !item.erase && <PhotoEdits value={item.adjust} colors={colors} onChange={(adjust) => setItem({ adjust }, { record: false })} />}
                   {((!item.photo && !item.erase) || !DEVICE_ASPECT[item.shape]) && (
                     <div className="row between" style={{ gap: 10 }}>
-                      {!item.photo && !item.erase ? <ColorField label={DEVICE_ASPECT[item.shape] ? 'Screen color' : STROKED.has(item.shape) ? 'Color' : 'Fill'} value={item.fill} onChange={(c) => setItem({ fill: c }, { record: false })} swatches={colors} /> : <span className="small" style={{ fontWeight: 600 }}>Eraser</span>}
+                      {!item.photo && !item.erase ? <ColorField label={DEVICE_ASPECT[item.shape] ? 'Screen color' : STROKED.has(item.shape) ? 'Color' : 'Fill'} value={item.fill} onChange={(c) => setItem({ fill: c }, { record: false })} swatches={colors} /> : <span />}
                       {!DEVICE_ASPECT[item.shape] && (
                         <label className="switch icon-switch" title={item.erase ? 'Eraser is on' : 'Use as an eraser'}>
-                          <input type="checkbox" aria-label="Use as an eraser" checked={Boolean(item.erase)} onChange={(e) => setItem({ erase: e.target.checked })} />
+                          <input type="checkbox" checked={Boolean(item.erase)} onChange={(e) => setItem({ erase: e.target.checked })} />
                           <Eraser size={11} strokeWidth={2.4} className="switch-knob-icon" aria-hidden="true" />
+                          <span className="small">Eraser</span>
                         </label>
                       )}
                     </div>

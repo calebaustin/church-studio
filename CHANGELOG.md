@@ -5,7 +5,7 @@ Every update keeps your sermons, designs, drafts and settings. Before a new vers
 ## Unreleased
 
 ### Changed
-- **Fill and the eraser share one line.** The eraser switch now sits next to Fill, with a small eraser on its knob, so shape settings take less room.
+- **Fill and the eraser share one line.** The eraser switch now sits next to Fill, with a small eraser on its knob and the word Eraser beside it, so shape settings take less room.
 
 ## 0.19.0 · November 21, 2026
 

@@ -1767,7 +1767,7 @@ button.tp-tile:active .tp-orb { transform: scale(.92); transition-duration: 120m
 @media (prefers-reduced-motion: reduce) { .layer-menu { animation: none; } }
 
 /* ---------- a switch with an icon riding on its knob (the eraser toggle next to Fill) ---------- */
-.icon-switch { position: relative; gap: 0; }
+.icon-switch { position: relative; gap: 8px; }
 .icon-switch .switch-knob-icon { position: absolute; left: 6.5px; top: 50%; margin-top: -5.5px; color: var(--muted); pointer-events: none;
   transition: transform var(--d-bouncy) var(--spring-bouncy), color 200ms var(--ease); }
 .icon-switch input:checked + .switch-knob-icon { transform: translateX(16px); color: var(--ok); }
