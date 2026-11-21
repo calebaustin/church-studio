@@ -562,26 +562,32 @@ export default function ClipEditor({ project, transcript, clipId, onSelect, patc
                 </div>
                 <span className="hint">A full-screen graphic for the first seconds, like your series title. It moves out as the clip begins.</span>
                 {clip.introCard?.rel && (
-                  <>
-                    <label className="field">Shows for the first · {(clip.introCard.seconds ?? 2.5).toFixed(1)}s
+                  <div className="row" style={{ gap: 12, alignItems: 'end' }}>
+                    <label className="field grow">Shows for the first · {(clip.introCard.seconds ?? 2.5).toFixed(1)}s
                       <input type="range" min="1" max="6" step="0.5" value={clip.introCard.seconds ?? 2.5} onChange={(e) => set({ introCard: { ...clip.introCard, seconds: Number(e.target.value) } })} />
                     </label>
                     <div className="seg sm">{[['fade', 'Fade'], ['slide', 'Slide'], ['zoom', 'Zoom']].map(([k, l]) => <button key={k} className={(clip.introCard.motion || 'fade') === k ? 'on' : ''} onClick={() => set({ introCard: { ...clip.introCard, motion: k } })}>{l}</button>)}</div>
-                  </>
+                  </div>
                 )}
               </div>
               <div className="keycard">
                 <div className="row between"><strong>End card</strong>
-                  {clip.endCard?.rel ? <button className="btn ghost sm danger" onClick={() => set({ endCard: null })}>Remove</button> : <button className="btn sm" onClick={() => setLibPick('endCard')}>Pick a graphic</button>}
+                  {clip.endCard?.rel ? <button className="btn ghost sm danger" onClick={() => set({ endCard: null })}>Remove</button> : (
+                    <span className="row" style={{ gap: 6 }}>
+                      <button className="btn ghost sm" onClick={() => go({ name: 'graphics' })}>Make one in Design</button>
+                      <button className="btn sm" onClick={() => setLibPick('endCard')}>Pick a graphic</button>
+                    </span>
+                  )}
                 </div>
-                <span className="hint">A full-screen graphic for the last few seconds, like “Join us Sunday”. Make one in Design.</span>
+                <span className="hint">A full-screen graphic for the last few seconds, like “Join us Sunday”.</span>
                 {clip.endCard?.rel && (
-                  <label className="field">Shows for the last · {(clip.endCard.seconds ?? 3).toFixed(1)}s
-                    <input type="range" min="1" max="8" step="0.5" value={clip.endCard.seconds ?? 3} onChange={(e) => set({ endCard: { ...clip.endCard, seconds: Number(e.target.value) } })} />
-                  </label>
+                  <div className="row" style={{ gap: 12, alignItems: 'end' }}>
+                    <label className="field grow">Shows for the last · {(clip.endCard.seconds ?? 3).toFixed(1)}s
+                      <input type="range" min="1" max="8" step="0.5" value={clip.endCard.seconds ?? 3} onChange={(e) => set({ endCard: { ...clip.endCard, seconds: Number(e.target.value) } })} />
+                    </label>
+                    <div className="seg sm">{[['fade', 'Fade'], ['slide', 'Slide'], ['zoom', 'Zoom']].map(([k, l]) => <button key={k} className={(clip.endCard.motion || 'fade') === k ? 'on' : ''} onClick={() => set({ endCard: { ...clip.endCard, motion: k } })}>{l}</button>)}</div>
+                  </div>
                 )}
-                {clip.endCard?.rel && <div className="seg sm">{[['fade', 'Fade'], ['slide', 'Slide'], ['zoom', 'Zoom']].map(([k, l]) => <button key={k} className={(clip.endCard.motion || 'fade') === k ? 'on' : ''} onClick={() => set({ endCard: { ...clip.endCard, motion: k } })}>{l}</button>)}</div>}
-                <button className="btn ghost sm" onClick={() => go({ name: 'graphics' })}>Make one in Design</button>
               </div>
             </div>
           )}

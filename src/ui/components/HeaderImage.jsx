@@ -63,15 +63,19 @@ export default function HeaderImage({ pid, value, onChange, title, styles = ['fu
           {style !== 'full' && <strong className="hdr-title">{title}</strong>}
         </div>
       ) : (
-        <div className="hdr-empty"><ImagePlus size={22} /><span>Add a photo, a graphic, or a still from the sermon video.</span></div>
+        <div className="hdr-empty">
+          <ImagePlus size={22} /><span className="grow">Add a photo, a graphic, or a still from the sermon video.</span>
+          <button className="btn sm" onClick={() => setPick('library')}><ImagePlus size={13} />From library</button>
+          {pid && <button className="btn sm" onClick={() => setPick('still')}><Clapperboard size={13} />Sermon still</button>}
+          {styles.includes('color') && <button className="btn ghost sm" onClick={() => onChange({ style: 'color', color: brandColors[0] || '#2B7F5F' })}><Palette size={13} />Color band</button>}
+        </div>
       )}
-      <div className="row wrap" style={{ gap: 6 }}>
+      {v && <div className="row wrap" style={{ gap: 6 }}>
         <button className="btn sm" onClick={() => setPick('library')}><ImagePlus size={13} />{url ? 'Change' : 'From library'}</button>
         {pid && <button className="btn sm" onClick={() => setPick('still')}><Clapperboard size={13} />Sermon still</button>}
         {style === 'color' && v && <ColorField label="Band color" value={v.color || brandColors[0] || '#2B7F5F'} onChange={(c) => onChange({ ...v, color: c })} swatches={brandColors} />}
         {v && <button className="btn ghost sm danger" onClick={() => onChange(null)}><Trash2 size={13} />Remove</button>}
-        {styles.includes('color') && !v && <button className="btn ghost sm" onClick={() => onChange({ style: 'color', color: brandColors[0] || '#2B7F5F' })}><Palette size={13} />Color band</button>}
-      </div>
+      </div>}
       {pick === 'library' && <LibraryPicker title="Pick a header image" onClose={() => setPick(null)} onPick={(i) => choose(i.rel)} />}
       {pick === 'still' && <StillPicker pid={pid} onClose={() => setPick(null)} onPick={(r) => choose(r.rel)} />}
     </section>

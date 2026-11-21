@@ -1773,3 +1773,8 @@ button.tp-tile:active .tp-orb { transform: scale(.92); transition-duration: 120m
 .icon-switch input:checked + .switch-knob-icon { transform: translateX(16px); color: var(--ok); }
 .icon-switch input:checked:active + .switch-knob-icon { transform: translateX(11px); }
 .icon-switch input.dragging + .switch-knob-icon { opacity: 0; }
+
+/* Writing: the rewrite action sits at the end of the angle chips' last line */
+.angle-actions { margin-left: auto; display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.hdr-empty { flex-wrap: wrap; }
+.hdr-empty > .btn { flex: none; }

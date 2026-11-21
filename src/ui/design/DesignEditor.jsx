@@ -3,7 +3,7 @@ import {
   AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical,
   ArrowLeft, ArrowRight, BringToFront, Check, ChevronDown, ChevronLeft, ChevronRight, Circle, Copy, Download, Grid3x3, Image as ImageIcon,
   Magnet, Minus, MonitorUp, Hexagon, Scaling, Smartphone, Laptop, Eraser, ImageOff, Play, RefreshCw, Plus, QrCode, Redo2, SendToBack, Shapes, Square, Trash2, Type, Undo2, Shuffle, X,
-  Send, FlipHorizontal2, FlipVertical2, Link2,
+  Send, FlipHorizontal2, FlipVertical2, Link2, AlignLeft, AlignCenter, AlignRight, Palette,
 } from 'lucide-react';
 import { useApp, useHelperFocus } from '../App.jsx';
 import { api } from '../api.js';
@@ -229,6 +229,7 @@ export default function DesignEditor({ id, onClose }) {
     });
     toast({ text: `Fonts set to ${pr.label}. Undo puts them back.` });
   };
+  const opacityField = item ? <label className="field">Opacity · {Math.round((item.opacity ?? 1) * 100)}%<input type="range" min="0.05" max="1" step="0.05" value={item.opacity ?? 1} onChange={(e) => setItem({ opacity: Number(e.target.value) }, { record: false })} /></label> : null;
   const setItem = (p, opts) => {
     if (item) {
       for (const k of ['color', 'fill', 'stroke']) if (k in p && typeof item[k] === 'string' && typeof p[k] === 'string') noteChange('color', item[k], p[k]);
@@ -701,11 +702,14 @@ export default function DesignEditor({ id, onClose }) {
                     <div className="seg sm grow">{[[500, 'Regular'], [700, 'Bold'], [800, 'Heavy']].map(([w, l]) => <button key={w} className={item.weight === w ? 'on' : ''} onClick={() => setItem({ weight: w })}>{l}</button>)}</div>
                     <ColorField value={item.color} onChange={(c) => setItem({ color: c }, { record: false })} swatches={colors} align="right" />
                   </div>
-                  <label className="field">Size · {item.size}<input type="range" min="12" max={Math.round(doc.size.w * 0.2)} value={item.size} onChange={(e) => setItem({ size: Number(e.target.value) }, { record: false })} /></label>
+                  <div className="token-grid">
+                    <label className="field">Size · {item.size}<input type="range" min="12" max={Math.round(doc.size.w * 0.2)} value={item.size} onChange={(e) => setItem({ size: Number(e.target.value) }, { record: false })} /></label>
+                    {opacityField}
+                  </div>
                   <div className="row" style={{ gap: 8 }}>
-                    <div className="seg sm">{['left', 'center', 'right'].map((a) => <button key={a} className={item.align === a ? 'on' : ''} onClick={() => setItem({ align: a })}>{a[0].toUpperCase() + a.slice(1)}</button>)}</div>
-                    <button className={`pill-choice ${item.upper ? 'on' : ''}`} onClick={() => setItem({ upper: !item.upper })}>AA</button>
-                    <button className={`pill-choice ${item.italic ? 'on' : ''}`} style={{ fontStyle: 'italic' }} onClick={() => setItem({ italic: !item.italic })}>I</button>
+                    <div className="seg sm">{[['left', AlignLeft], ['center', AlignCenter], ['right', AlignRight]].map(([a, Ic]) => <button key={a} className={item.align === a ? 'on' : ''} aria-label={`Align ${a}`} title={`Align ${a}`} onClick={() => setItem({ align: a })}><Ic size={15} /></button>)}</div>
+                    <button className={`pill-choice ${item.upper ? 'on' : ''}`} title="All caps" aria-label="All caps" onClick={() => setItem({ upper: !item.upper })}>AA</button>
+                    <button className={`pill-choice ${item.italic ? 'on' : ''}`} style={{ fontStyle: 'italic' }} title="Italic" aria-label="Italic" onClick={() => setItem({ italic: !item.italic })}>I</button>
                   </div>
                   <div className="token-grid">
                     <label className="field">Spacing · {item.letter || 0}<input type="range" min="-4" max="20" value={item.letter || 0} onChange={(e) => setItem({ letter: Number(e.target.value) }, { record: false })} /></label>
@@ -725,15 +729,21 @@ export default function DesignEditor({ id, onClose }) {
                     </label>
                   )}
                   {!DEVICE_ASPECT[item.shape] && (
-                    <div className="stack" style={{ gap: 6 }}>
+                    <div className="token-grid">
                       <label className="field">Turn · {item.rot || 0}°<input type="range" min="-180" max="180" step="5" value={item.rot || 0} onChange={(e) => setItem({ rot: Number(e.target.value) }, { record: false })} /></label>
-                      <div className="row wrap" style={{ gap: 6 }}>
-                        <button className={`btn sm${item.flipX ? ' primary' : ''}`} onClick={() => setItem({ flipX: !item.flipX })}><FlipHorizontal2 size={13} />Flip across</button>
-                        <button className={`btn sm${item.flipY ? ' primary' : ''}`} onClick={() => setItem({ flipY: !item.flipY })}><FlipVertical2 size={13} />Flip up and down</button>
-                      </div>
+                      {opacityField}
                     </div>
                   )}
-                  {STROKED.has(item.shape) && <label className="field">Thickness · {Math.round((item.thick ?? 0.1) * 100)}<input type="range" min="0.02" max="0.4" step="0.01" value={item.thick ?? 0.1} onChange={(e) => setItem({ thick: Number(e.target.value) }, { record: false })} /></label>}
+                  {DEVICE_ASPECT[item.shape] && opacityField}
+                  {!DEVICE_ASPECT[item.shape] && (
+                    <div className="row" style={{ gap: 6, alignItems: 'end' }}>
+                      {!STROKED.has(item.shape) && ((item.shape || 'rect') !== 'rect' || item.erase) && <span className="small" style={{ fontWeight: 600, marginRight: 4, alignSelf: 'center' }}>Flip</span>}
+                      <button className={`btn icon sm${item.flipX ? ' primary' : ''}`} aria-pressed={Boolean(item.flipX)} aria-label="Flip across" title="Flip across" onClick={() => setItem({ flipX: !item.flipX })}><FlipHorizontal2 size={15} /></button>
+                      <button className={`btn icon sm${item.flipY ? ' primary' : ''}`} aria-pressed={Boolean(item.flipY)} aria-label="Flip up and down" title="Flip up and down" onClick={() => setItem({ flipY: !item.flipY })}><FlipVertical2 size={15} /></button>
+                      {STROKED.has(item.shape) && <label className="field grow">Thickness · {Math.round((item.thick ?? 0.1) * 100)}<input type="range" min="0.02" max="0.4" step="0.01" value={item.thick ?? 0.1} onChange={(e) => setItem({ thick: Number(e.target.value) }, { record: false })} /></label>}
+                      {(item.shape || 'rect') === 'rect' && !item.erase && <label className="field grow">Corners · {item.radius || 0}<input type="range" min="0" max="200" value={item.radius || 0} onChange={(e) => setItem({ radius: Number(e.target.value) }, { record: false })} /></label>}
+                    </div>
+                  )}
                   {!item.erase && !STROKED.has(item.shape) && (
                     <div className="keycard stack" style={{ gap: 8 }}>
                       <strong className="small">{DEVICE_ASPECT[item.shape] ? 'Screen' : 'Photo'}</strong>
@@ -760,7 +770,6 @@ export default function DesignEditor({ id, onClose }) {
                       )}
                     </div>
                   )}
-                  {(item.shape || 'rect') === 'rect' && <label className="field">Corners · {item.radius || 0}<input type="range" min="0" max="200" value={item.radius || 0} onChange={(e) => setItem({ radius: Number(e.target.value) }, { record: false })} /></label>}
                   {item.erase && (
                     <div className="stack" style={{ gap: 6 }}>
                       <span className="small" style={{ fontWeight: 600 }}>Erases</span>
@@ -777,17 +786,21 @@ export default function DesignEditor({ id, onClose }) {
                   )}
                 </>
               )}
-              {item.type === 'image' && <label className="field">Corners · {item.radius || 0}<input type="range" min="0" max="200" value={item.radius || 0} onChange={(e) => setItem({ radius: Number(e.target.value) }, { record: false })} /></label>}
+              {item.type === 'image' && (
+                <div className="token-grid">
+                  <label className="field">Corners · {item.radius || 0}<input type="range" min="0" max="200" value={item.radius || 0} onChange={(e) => setItem({ radius: Number(e.target.value) }, { record: false })} /></label>
+                  {opacityField}
+                </div>
+              )}
               {item.type === 'image' && !/\.svg$/i.test(item.rel) && <button className="btn sm" onClick={() => setErasing(item.rel)}><Eraser size={13} />Erase background</button>}
               {item.type === 'image' && !/\.svg$/i.test(item.rel) && <PhotoEdits value={item.adjust} colors={colors} onChange={(adjust) => setItem({ adjust }, { record: false })} />}
               {item.type === 'image' && /\.svg$/i.test(item.rel) && <SvgColors item={item} cache={cache.current} swatches={colors} onChange={(recolor) => setItem({ recolor }, { record: false })} />}
               {item.type === 'qr' && (
                 <>
                   <label className="field">Link<input className="input" value={item.url} onChange={(e) => setItem({ url: e.target.value }, { record: false })} placeholder="https://yourchurch.org/give" /></label>
-                  <div className="row"><ColorField label="Color" value={item.color} onChange={(c) => setItem({ color: c }, { record: false })} swatches={colors} /></div>
+                  <div className="row" style={{ gap: 12, alignItems: 'end' }}><ColorField label="Color" value={item.color} onChange={(c) => setItem({ color: c }, { record: false })} swatches={colors} /><div className="grow">{opacityField}</div></div>
                 </>
               )}
-              <label className="field">Opacity · {Math.round((item.opacity ?? 1) * 100)}%<input type="range" min="0.05" max="1" step="0.05" value={item.opacity ?? 1} onChange={(e) => setItem({ opacity: Number(e.target.value) }, { record: false })} /></label>
               <hr className="hairline" />
               <span className="eyebrow">Arrange</span>
               <div className="dz-align">
@@ -828,8 +841,18 @@ export default function DesignEditor({ id, onClose }) {
                 </div>
               )}
               {pg.bg?.type === 'image' && <PhotoEdits value={pg.bg.adjust} colors={colors} onChange={(adjust) => setPage({ bg: { ...pg.bg, adjust } }, { record: false })} />}
-              {['mesh', 'gradient', 'pattern', undefined].includes(pg.bg?.type) && <label className="field">Grain · {Math.round((pg.bg?.grain || 0) * 100)}%<input type="range" min="0" max="0.5" step="0.02" value={pg.bg?.grain || 0} onChange={(e) => setPage({ bg: { ...pg.bg, grain: Number(e.target.value) } }, { record: false })} /></label>}
-              {pg.bg?.type === 'solid' && <ColorField label="Background" value={pg.bg.color || colors[0]} onChange={(c) => setPage({ bg: { ...pg.bg, color: c } }, { record: false })} swatches={colors} />}
+              {['mesh', 'gradient', 'pattern', undefined].includes(pg.bg?.type) && (
+                <div className="token-grid">
+                  <label className="field">Grain · {Math.round((pg.bg?.grain || 0) * 100)}%<input type="range" min="0" max="0.5" step="0.02" value={pg.bg?.grain || 0} onChange={(e) => setPage({ bg: { ...pg.bg, grain: Number(e.target.value) } }, { record: false })} /></label>
+                  <label className="field">Darken · {Math.round((pg.bg?.darken || 0) * 100)}%<input type="range" min="0" max="0.8" step="0.05" value={pg.bg?.darken || 0} onChange={(e) => setPage({ bg: { ...pg.bg, darken: Number(e.target.value) } }, { record: false })} /></label>
+                </div>
+              )}
+              {pg.bg?.type === 'solid' && (
+                <div className="row" style={{ gap: 12, alignItems: 'end' }}>
+                  <ColorField label="Background" value={pg.bg.color || colors[0]} onChange={(c) => setPage({ bg: { ...pg.bg, color: c } }, { record: false })} swatches={colors} />
+                  <div className="grow"><label className="field">Darken · {Math.round((pg.bg?.darken || 0) * 100)}%<input type="range" min="0" max="0.8" step="0.05" value={pg.bg?.darken || 0} onChange={(e) => setPage({ bg: { ...pg.bg, darken: Number(e.target.value) } }, { record: false })} /></label></div>
+                </div>
+              )}
               {pg.bg?.type === 'gradient' && (
                 <div className="row wrap" style={{ gap: 12 }}>
                   <ColorField label="From" value={pg.bg.from || colors[0]} onChange={(c) => setPage({ bg: { ...pg.bg, from: c } }, { record: false })} swatches={colors} />
@@ -838,7 +861,7 @@ export default function DesignEditor({ id, onClose }) {
                 </div>
               )}
               {(pg.bg?.type || 'mesh') === 'mesh' && <button className="btn sm" onClick={() => setPage({ bg: { ...pg.bg, seed: Math.floor(Math.random() * 9999) } })}><Shuffle size={13} />Shuffle gradient</button>}
-              <label className="field">Darken · {Math.round((pg.bg?.darken || 0) * 100)}%<input type="range" min="0" max="0.8" step="0.05" value={pg.bg?.darken || 0} onChange={(e) => setPage({ bg: { ...pg.bg, darken: Number(e.target.value) } }, { record: false })} /></label>
+              {pg.bg?.type === 'image' && <label className="field">Darken · {Math.round((pg.bg?.darken || 0) * 100)}%<input type="range" min="0" max="0.8" step="0.05" value={pg.bg?.darken || 0} onChange={(e) => setPage({ bg: { ...pg.bg, darken: Number(e.target.value) } }, { record: false })} /></label>}
               <hr className="hairline" />
               <label className="field small">
                 <span className="eyebrow" style={{ margin: 0 }}>Font pairing</span>
@@ -847,7 +870,10 @@ export default function DesignEditor({ id, onClose }) {
                   {PAIRINGS(config).map((pr) => <option key={pr.id} value={pr.id}>{pr.label}</option>)}
                 </select>
               </label>
-              <span className="eyebrow">Design colors</span>
+              <div className="row between" style={{ gap: 8 }}>
+                <span className="eyebrow">Design colors</span>
+                <button className="btn ghost sm" title="Use my brand colors" onClick={() => update((d) => { d.palette = [...(config.brandColors || d.palette)].slice(0, 5); while (d.palette.length < 5) d.palette.push('#888888'); return d; })}><Palette size={13} />Brand colors</button>
+              </div>
               <div className="row wrap" style={{ gap: 8 }}>
                 {doc.palette.map((c, i) => <ColorField key={i} value={c} onChange={(v) => { noteChange('color', c, v); update((d) => { d.palette[i] = v; return d; }, { record: false }); }} />)}
               </div>
@@ -857,7 +883,6 @@ export default function DesignEditor({ id, onClose }) {
                   <input type="range" min="0" max="0.8" step="0.05" value={doc.tint?.amount || 0} onChange={(e) => update((d) => { d.tint = { ...(d.tint || { color: '#FF9A62' }), amount: Number(e.target.value) }; return d; }, { record: false })} />
                 </label>
               </div>
-              <button className="btn ghost sm" onClick={() => update((d) => { d.palette = [...(config.brandColors || d.palette)].slice(0, 5); while (d.palette.length < 5) d.palette.push('#888888'); return d; })}>Use my brand colors</button>
               {doc.kind === 'presentation' && (
                 <>
                   <hr className="hairline" />

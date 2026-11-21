@@ -272,13 +272,14 @@ function WritingEditor({ pid, onBack, startKind }) {
                     <span className="field-label">Angle</span>
                     <div className="angle-row">
                       {ANGLES.map(([k, l]) => <button key={k} type="button" className={`pill-choice ${angle === k ? 'on' : ''}`} onClick={() => setAngle(k)}>{l}</button>)}
-                    </div>
-                    <div className="row wrap">
-                      <button className="btn primary" disabled={busy} onClick={rewrite}><RefreshCw size={15} />Rewrite post</button>
-                      {config.llmProvider !== 'none' && (
-                        <Toggle checked={useAi} onChange={(e) => setUseAi(e.target.checked)} icon={Sparkles} label="AI helper" small />
-                      )}
-                      {undoBlog && <button className="btn ghost sm" onClick={() => { set({ blog: undoBlog }); setUndoBlog(null); }}><Undo2 size={13} />Undo rewrite</button>}
+                      {/* The rewrite action rides at the end of the last line of angles instead of taking its own. */}
+                      <span className="angle-actions">
+                        {config.llmProvider !== 'none' && (
+                          <Toggle checked={useAi} onChange={(e) => setUseAi(e.target.checked)} icon={Sparkles} label="AI helper" small />
+                        )}
+                        {undoBlog && <button className="btn ghost sm" onClick={() => { set({ blog: undoBlog }); setUndoBlog(null); }}><Undo2 size={13} />Undo</button>}
+                        <button className="btn primary" disabled={busy} onClick={rewrite}><RefreshCw size={15} />Rewrite post</button>
+                      </span>
                     </div>
                   </div></>}
                 </section>

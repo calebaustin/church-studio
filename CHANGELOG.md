@@ -2,10 +2,11 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
-## Unreleased
+## 0.20.0 · November 21, 2026
 
 ### Changed
 - **Fill and the eraser share one line.** The eraser switch now sits next to Fill, with a small eraser on its knob and the word Eraser beside it, so shape settings take less room.
+- **Tidier settings panels.** Settings that sat alone on a line now share one with their neighbor, so there's less scrolling. In Design: the align buttons are icons, so All caps and Italic fit beside them; Size, Turn and Corners each sit next to Opacity; Flip is two small buttons; Background sits next to Darken; and Brand colors moved up beside the Design colors heading. In Writing: Rewrite post and the AI helper switch ride at the end of the angle choices, and the header buttons sit inside the empty header box. In the clip editor: the intro and end cards keep their length and motion on one line, and Make one in Design sits beside Pick a graphic.
 - **Clearer switches everywhere.** Every on/off setting is now a switch with a small icon on its knob that shows what it does: a bell for notifications, captions for captions, a palette for brand colors, a droplet for liquid glass and so on. Labels are shorter too ("Captions" instead of "Captions on"), and a few settings that were plain checkboxes, like burning in captions or remembering export settings, are now switches. Lists you pick from keep their checkboxes.
 
 ## 0.19.0 · November 21, 2026
