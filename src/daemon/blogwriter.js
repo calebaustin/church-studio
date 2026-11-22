@@ -142,17 +142,27 @@ const SCALE = { apple: 2400, cshelper: 5200 };
  * Write the blog with the AI helper, section by section. a: the analysis (parts, refs, all), opts: { title,
  * keyphrase, angle note, voice guide, church }. onProgress(n, of) after each section. Returns markdown, or throws.
  */
-export async function writeBlogWithAI(cfg, a, { title = '', keyphrase = '', angleNote = '', guide = '', example = '', signal, onProgress, onSection } = {}) {
+export async function writeBlogWithAI(cfg, a, { title = '', keyphrase = '', angleNote = '', guide = '', example = '', digest = null, signal, onProgress, onSection } = {}) {
   const max = SCALE[cfg.llmProvider] || 9000;
   // On-device helpers get a shorter example so the sermon excerpt still fits.
   const ex = exampleBlock(cfg.llmProvider === 'apple' ? example.slice(0, 450) : example);
   const system = `You turn one part of a sermon into one section of a church blog post.\n${RULES}\n${guide || ''}${ex}`.trim();
   const sections = [];
+  // The whole message in brief, so each section knows where it sits and doesn't repeat the others.
+  // Each part's own point leads its section; the other points are named only so it doesn't repeat them.
+  const pointOf = (k) => (digest || []).find((d, i) => (d.part ?? (digest.length === a.parts.length ? i : -1)) === k)?.point || '';
+  const whole = (k) => {
+    if (!digest?.length) return '';
+    const own = pointOf(k);
+    const others = digest.map((d) => d.point).filter((p) => p && p !== own);
+    return `${own ? `\nThis part's point: ${own}` : ''}${others.length ? `\nOther parts of the sermon cover these, so leave them out of this section: ${others.join('; ')}` : ''}`;
+  };
   const source = a.all;
   for (let k = 0; k < a.parts.length; k++) {
     onProgress?.(k, a.parts.length);
     const text = a.parts[k].map((s) => s.text).join(' ').slice(0, max);
     const user = `Sermon: "${title}"${a.refs.length ? `\nPassages: ${a.refs.join(', ')}` : ''}${keyphrase ? `\nFocus: ${keyphrase}` : ''}
+${whole(k)}
 This is part ${k + 1} of ${a.parts.length}.${k === 0 ? ' If it opens with greetings, jokes or announcements, leave them out.' : ''}
 Write a heading that states this part's point as a short claim (3 to 7 words, Title Case, not a question, made from
 this part's own idea), exactly two short paragraphs (70 to 110 words in all) that explain the point with its illustration
@@ -179,7 +189,7 @@ or Scripture, and one key line (a sentence a reader could remember).\n\nExcerpt:
   for (let attempt = 0; attempt < 2 && !frame?.intro; attempt++) try {
     frame = await completeJSON(cfg, `You write the opening and closing of a church blog post from its outline.\n${RULES}\n${guide || ''}${ex}`.trim(),
       `Sermon: "${title}"${keyphrase ? `\nFocus keyphrase (use it naturally in the intro): ${keyphrase}` : ''}${angleNote ? `\n${angleNote}` : ''}
-${mainPassage ? `Main passage: ${mainPassage}\n` : ''}Outline:\n${outline}\n\nThe post's first section reads:\n${(sections.find(Boolean)?.paras || []).join(' ').slice(0, 900)}
+${mainPassage ? `Main passage: ${mainPassage}\n` : ''}${digest?.length ? `The message in brief:\n${digest.map((d) => `- ${d.point}: ${d.summary}`).join('\n').slice(0, 1400)}\n` : ''}Outline:\n${outline}\n\nThe post's first section reads:\n${(sections.find(Boolean)?.paras || []).join(' ').slice(0, 900)}
 Write: a title (under 70 characters${title ? `; you may keep "${title}"` : ''}); an intro of three or four short sentences that opens with
 a relatable hook, then names the main passage and states the message's big idea in your own words (do not paste the title,
 do not write "the message is:", and do not say "today"); a closing of two or three sentences that applies the message
@@ -223,7 +233,7 @@ export async function sermonDigest(cfg, a, { title = '', signal, onProgress } = 
         const r = await completeJSON(cfg, system, `Sermon: "${title}". Part ${k + 1} of ${a.parts.length}.
 Give: this part's point as one short claim (under 9 words); a summary in two or three sentences; the story or example it uses, in one
 sentence (or "" if none); and one way to live it this week, as a short instruction that starts with a verb (under 16 words).\n\nExcerpt:\n${text}`, DIGEST_SCHEMA, { signal, maxTokens: 450 });
-        if (r.summary) d = { point: String(r.point || '').replace(/[.?!:]+$/, ''), summary: grounded(r.summary, a.all, 3), illustration: grounded(r.illustration, a.all, 1), apply: grounded(r.apply, a.all, 1), refs: extractRefs(text, 3) };
+        if (r.summary) d = { point: String(r.point || '').replace(/[.?!:]+$/, ''), summary: grounded(r.summary, a.all, 3), illustration: grounded(r.illustration, a.all, 1), apply: grounded(r.apply, a.all, 1), refs: extractRefs(text, 3), part: k };
       } catch (e) { if (signal?.aborted) throw e; }
     }
     if (d?.summary) out.push(d);

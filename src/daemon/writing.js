@@ -418,7 +418,9 @@ Use the focus keyphrase "${keyphrase}" naturally in the first paragraph and in o
   const r = await withFallback(cfg, async () => {
     // Each finished section is sent along as it's written, so the post fills in on screen.
     const onSection = onPartial ? (done) => onPartial(assembleBlog({ title, intro: '', sections: done, closing: '', invite: '' })) : undefined;
-    const out = await writeBlogWithAI(cfg, a, { title, keyphrase, angleNote: ANGLE_NOTES[angle] || '', guide, example: styleExample(a.voice?.samples, a.all), signal, onSection });
+    // The whole-sermon summary (made after transcribing, or now) gives each section the big picture.
+    const digest = await makeDigest(projectId, { signal }).catch((e) => { if (signal?.aborted) throw e; return null; });
+    const out = await writeBlogWithAI(cfg, a, { title, keyphrase, angleNote: ANGLE_NOTES[angle] || '', guide, example: styleExample(a.voice?.samples, a.all), digest, signal, onSection });
     const localSections = (() => { const md = localPost(a, project, { title, kp: keyphrase }); return md.split(/\n## /).slice(1).map((chunk) => { const [heading, ...rest] = chunk.split('\n\n'); return { heading, paras: rest.filter((x) => !x.startsWith('[Watch') && !x.includes('join ')) }; }); })();
     const sections = out.sections.map((x, k) => { if (x) return x; local++; return localSections[k] || null; }).filter(Boolean);
     const f = out.frame || {};
