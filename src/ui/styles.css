@@ -1809,3 +1809,16 @@ button.tp-tile:active .tp-orb { transform: scale(.92); transition-duration: 120m
 .wd-bar-input { width: 200px; min-height: 30px; padding: 4px 10px; }
 @keyframes wd-bar-in { from { opacity: 0; transform: translateY(4px) scale(.96); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .wd-bar { animation: none; } }
+
+/* Long tasks: a details panel above the progress card, shown on hover or keyboard focus */
+.tray-card { position: relative; }
+.job-details { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); padding: 10px 12px; border-radius: 14px;
+  background: var(--surface-solid); box-shadow: var(--shadow-lg), inset 0 0 0 1px var(--line);
+  opacity: 0; transform: translateY(6px) scale(.98); transform-origin: bottom center; pointer-events: none;
+  transition: opacity 160ms var(--ease), transform 320ms var(--spring-snappy); }
+.tray-card:hover .job-details, .tray-card:focus-within .job-details { opacity: 1; transform: none; }
+.job-details dl { margin: 6px 0 0; display: grid; gap: 3px; }
+.job-details dl > div { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; }
+.job-details dt { color: var(--muted); }
+.job-details dd { margin: 0; color: var(--ink); font-weight: 600; text-align: right; }
+@media (prefers-reduced-motion: reduce) { .job-details { transition: opacity 120ms linear; transform: none; } }

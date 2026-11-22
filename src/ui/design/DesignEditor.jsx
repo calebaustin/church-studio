@@ -386,8 +386,15 @@ export default function DesignEditor({ id, onClose }) {
   // Keyboard
   useEffect(() => {
     const key = (e) => {
-      if (presenting != null || (show && consoleOpen) || isTyping(document.activeElement) || editing) return;
       const mod = e.metaKey || e.ctrlKey;
+      // Bold and italic for the selected text box, also while typing in it (a text box has one style throughout).
+      if (mod && !e.shiftKey && !e.altKey && ['b', 'i'].includes(e.key.toLowerCase()) && item?.type === 'text' && presenting == null) {
+        e.preventDefault();
+        if (e.key.toLowerCase() === 'b') setItem({ weight: (item.weight || 600) >= 700 ? 500 : 700 });
+        else setItem({ italic: !item.italic });
+        return;
+      }
+      if (presenting != null || (show && consoleOpen) || isTyping(document.activeElement) || editing) return;
       if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
       if (mod && e.key.toLowerCase() === 'd') { e.preventDefault(); duplicateItem(); return; }
       if (mod && e.key.toLowerCase() === 'c' && item) { clip.current = clone(item); return; }

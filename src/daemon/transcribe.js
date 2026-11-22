@@ -27,11 +27,21 @@ export async function transcribeProject(id, { start = null, end = null, cleanup 
   await run(tool('ffmpeg'), ['-y', '-loglevel', 'error', ...range, '-i', source, '-vn', ...(af ? ['-af', af] : []), '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', wav], { signal: ctx.signal });
 
   ctx.progress(6, `Transcribing with Whisper (${config.whisperModel})… the first run downloads the model.`);
+  ctx.detail({ Model: `Whisper ${config.whisperModel}`, Audio: af ? 'Cleaned up first' : null });
+  const began = Date.now();
+  const clock = (t) => { t = Math.round(t); const h = Math.floor(t / 3600); const m = Math.floor((t % 3600) / 60); const x = String(t % 60).padStart(2, '0'); return h ? `${h}:${String(m).padStart(2, '0')}:${x}` : `${m}:${x}`; };
   const { stdout } = await run(...pyCommand('transcribe', [wav, '--model', config.whisperModel, '--offset', String(start ?? 0), '--hotwords', WHISPER_HINT]), {
     signal: ctx.signal,
     onStderr: (chunk) => {
-      const m = [...chunk.matchAll(/PROGRESS (\d+)/g)].pop();
-      if (m) ctx.progress(6 + Number(m[1]) * 0.9, `Transcribing… ${m[1]}%`);
+      const dev = chunk.match(/DEVICE (\w+)/);
+      if (dev) ctx.detail({ 'Runs on': dev[1] === 'cuda' ? 'Graphics card' : dev[1] === 'cpu' ? 'This Mac’s processor' : dev[1] });
+      const m = [...chunk.matchAll(/PROGRESS (\d+)(?: ([\d.]+) ([\d.]+) (\d+))?/g)].pop();
+      if (!m) return;
+      ctx.progress(6 + Number(m[1]) * 0.9, `Transcribing… ${m[1]}%`);
+      if (m[2]) {
+        const at = Number(m[2]); const len = Number(m[3]); const secs = (Date.now() - began) / 1000;
+        ctx.detail({ Position: `${clock(at)} of ${clock(len)}`, 'Words so far': Number(m[4]).toLocaleString(), Pace: secs > 5 && at > 0 ? `${(at / secs).toFixed(1)}× real time` : null });
+      }
     },
   });
   const transcript = jsonFrom(stdout);
@@ -44,9 +54,12 @@ export async function transcribeProject(id, { start = null, end = null, cleanup 
   await rm(wav, { force: true });
 
   ctx.progress(97, 'Finding the sermon…');
+  const total = project.media?.duration ?? transcript.duration;
   const sermon = transcript.range
     ? { start: transcript.range.start, end: transcript.range.end, confidence: 1, method: 'manual', confirmed: true, reasons: ['You set this range before transcribing.'] }
-    : detectSermon(transcript.words, project.media?.duration ?? transcript.duration);
+    // Only the sermon was downloaded: the whole file is the sermon.
+    : project.range ? { start: 0, end: total, confidence: 1, method: 'manual', confirmed: true, reasons: ['You downloaded just the sermon.'] }
+      : detectSermon(transcript.words, total);
   await updateProject(id, (p) => {
     p.status = 'transcribed';
     p.sermon = sermon;

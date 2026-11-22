@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { AudioLines, Clapperboard, Download, FileAudio, Film, Minus, RefreshCw, Scissors, Square, Wand2, X } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { api, fmtEta } from '../api.js';
+import JobDetails, { jobSpeed, jobSummary } from './JobDetails.jsx';
 
 // Work happens one task at a time. The rest wait in line and start on their own.
 const ICONS = { download: Download, import: FileAudio, transcribe: Wand2, export: Film, 'export-joined': Film, preview: Clapperboard, track: Scissors, 'clean-audio': AudioLines, update: RefreshCw, propose: Wand2 };
@@ -37,7 +38,7 @@ export default function JobsTray() {
   if (mini) {
     return (
       <div className="tray">
-        <button className="tray-mini glass strong" onClick={() => setMini(false)} aria-label={`Show progress: ${top?.label || ''}`} title={top ? `${top.label} · ${top.status === 'running' ? `${top.progress}%` : 'waiting'}` : ''}>
+        <button className="tray-mini glass strong" onClick={() => setMini(false)} aria-label={`Show progress: ${top?.label || ''}`} title={top ? `${top.label}\n${jobSummary(top)}` : ''}>
           <Ring job={top} />
           {queued.length > (running ? 0 : 1) && <span className="tray-count">{queued.length - (running ? 0 : 1) + 1}</span>}
         </button>
@@ -48,7 +49,8 @@ export default function JobsTray() {
     <div className="tray" aria-live="polite">
       {stopped.map((j) => <div key={j.id} className="glass strong toast"><span className="small muted">Stopped: {j.label}</span></div>)}
       {top && (
-        <div className="glass strong toast tray-card">
+        <div className="glass strong toast tray-card" tabIndex={0} aria-describedby={`job-details-${top.id}`}>
+          <div id={`job-details-${top.id}`}><JobDetails job={top} /></div>
           <div className="row between" style={{ gap: 8 }}>
             <div className="row" style={{ gap: 10, minWidth: 0 }}>
               <Ring job={top} size={34} />
@@ -62,7 +64,7 @@ export default function JobsTray() {
           <div className="progress" role="progressbar" aria-valuenow={top.progress} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${top.status === 'queued' ? 0 : top.progress}%` }} /></div>
           <div className="row between small muted" style={{ gap: 8 }}>
             <span className="truncate">{top.status === 'queued' ? 'Starting soon' : top.message}</span>
-            {top.status === 'running' && <span className="num" style={{ flex: 'none', opacity: 0.8 }}>{fmtEta(top.eta) || `${top.progress}%`}</span>}
+            {top.status === 'running' && <span className="num" style={{ flex: 'none', opacity: 0.8 }}>{[jobSpeed(top), fmtEta(top.eta) || `${top.progress}%`].filter(Boolean).join(' · ')}</span>}
           </div>
           {queued.filter((j) => j !== top).length > 0 && (
             <div className="tray-queue">

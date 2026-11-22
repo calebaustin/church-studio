@@ -176,11 +176,15 @@ export async function downloadToProject(url, ctx, existingProject = null, range 
   const report = (pct, what) => ctx.progress(Math.min(97, pct), what);
   const parse = (chunk) => {
     if (/Destination: .*\.(m4a|webm|mp3|opus)\s*$/m.test(chunk) || /\[download\] Destination: .*\.f\d+\.(m4a|webm)/.test(chunk)) phase = 1;
-    const m = [...chunk.matchAll(/PROGRESS\s+([\d.]+)%/g)].pop();
+    const m = [...chunk.matchAll(/PROGRESS\s+([\d.]+)%(?:\|(\S*)\|(\S*)\|(\S*)\|(\S*))?/g)].pop();
     if (m) {
       const p = Number(m[1]);
       if (phase === 0) report(3 + p * (part ? 0.78 : 0.82), 'Downloading video');
       else report((part ? 81 : 85) + p * 0.1, 'Downloading audio');
+      // Bytes, total and speed from yt-dlp ("NA" when it doesn't know yet).
+      const n = (x) => (x && x !== 'NA' && Number.isFinite(Number(x)) ? Number(x) : 0);
+      if (m[2] !== undefined) ctx.transfer(n(m[2]), n(m[3]) || n(m[4]), n(m[5]));
+      ctx.detail({ Part: phase === 0 ? 'Video (1 of 2)' : 'Audio (2 of 2)', From: 'YouTube' });
     }
     if (/\[Merger\]|Merging formats/.test(chunk)) report(part ? 91 : 96, 'Putting video and audio together');
   };
@@ -188,7 +192,7 @@ export async function downloadToProject(url, ctx, existingProject = null, range 
     '--no-playlist', '--no-warnings', '--newline', '--ffmpeg-location', tool('ffmpeg'),
     '-f', 'bv*[height<=1080][vcodec^=avc1]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]/b',
     '--merge-output-format', 'mp4',
-    '--progress-template', 'download:PROGRESS %(progress._percent_str)s',
+    '--progress-template', 'download:PROGRESS %(progress._percent_str)s|%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s',
     '-o', part ? full : out, url,
   ], { signal: ctx.signal, onStdout: parse, onStderr: parse });
     if (part) {

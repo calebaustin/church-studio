@@ -101,7 +101,8 @@ export async function downloadUpdate(ctx) {
   const total = Number(r.headers.get('content-length')) || info.asset.bytes || 0;
   let got = 0;
   const body = Readable.fromWeb(r.body);
-  body.on('data', (c) => { got += c.length; if (total) ctx.progress(Math.min(99, (got / total) * 100), `Downloading ${info.latest}…`); });
+  ctx.detail({ Version: info.latest, From: 'GitHub', 'Saved to': 'Downloads' });
+  body.on('data', (c) => { got += c.length; if (total) ctx.progress(Math.min(99, (got / total) * 100), `Downloading ${info.latest}…`); ctx.transfer(got, total); });
   await pipeline(body, createWriteStream(dest));
   ctx.progress(100, `Church Studio ${info.latest} is in Downloads`);
   await run('open', [dest]).catch(() => {});

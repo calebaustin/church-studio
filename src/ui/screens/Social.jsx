@@ -61,7 +61,7 @@ export default function Social({ compose: initialCompose, caption: initialCaptio
       {tab === 'posts' && <Posts s={s} plat={plat} onEdit={(p) => setComposer({ post: p })} onConnect={() => setTab('accounts')} onShareAgain={(p) => setComposer({ caption: p.caption, media: p.media, title: p.title, hashtags: p.hashtags })} />}
       {tab === 'accounts' && <Accounts s={s} />}
       {tab === 'messages' && <Messages s={s} plat={plat} />}
-      {composer && <Composer s={s} plat={plat} init={composer} onClose={() => { setComposer(null); s.load(); }} onConnect={() => { setComposer(null); setTab('accounts'); }} />}
+      {composer && <Composer key={composer.post?.id || 'new'} s={s} plat={plat} init={{ ...composer, onOpenPost: (p) => setComposer({ post: p }) }} onClose={() => { setComposer(null); s.load(); }} onConnect={() => { setComposer(null); setTab('accounts'); }} />}
     </div>
   );
 }

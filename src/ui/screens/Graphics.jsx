@@ -17,14 +17,26 @@ import { PACKS as PACKS1, PACK_TEMPLATES } from '../design/packs.js';
 import { PACKS2, PACK2_TEMPLATES, inBrandColors } from '../design/packs2.js';
 import { PACKS3, PACK3_TEMPLATES } from '../design/packs3.js';
 import { CAROUSEL_TEMPLATES } from '../design/carousels.js';
+import { TEXT_TEMPLATES } from '../design/textposts.js';
 
 // Every template pack: the newer plug-and-play packs first.
 export const PACKS = { ...PACKS3, ...PACKS2, ...PACKS1 };
 import { buildDeck, parseNotes } from '../design/deckBuilder.js';
 
 // Event-ready templates fill in an event's details by themselves.
+/** Photo spots in a template: its own count when it says, else the frames in what it builds (counted once). */
+const photoCounts = new Map();
+export function photoCount(t) {
+  if (t.photos != null) return t.photos;
+  if (!photoCounts.has(t.id)) {
+    let n = 1;
+    try { n = (t.build({ church: {}, c: ['#2B7F5F', '#D9A441', '#1B2440', '#F4EFE6', '#8FB8A8'], h: 'Georgia', b: 'Avenir Next' }) || []).reduce((a, pg) => a + pg.items.filter((it) => it.type === 'shape' && (it.frame || it.photo)).length + (pg.bg?.type === 'image' ? 1 : 0), 0); } catch { /* count it as a photo template */ }
+    photoCounts.set(t.id, n);
+  }
+  return photoCounts.get(t.id);
+}
 const EVENT_READY = new Set(['post-event', 'flyer-event', ...Object.keys(PACKS1).map((k) => `${k}-event`)]);
-export const TEMPLATES = [...PACK3_TEMPLATES, ...PACK2_TEMPLATES, ...BASE_TEMPLATES.map((t) => (EVENT_READY.has(t.id) ? { ...t, event: true } : t)), ...PACK_TEMPLATES.map((t) => (EVENT_READY.has(t.id) ? { ...t, event: true, photos: 1 } : t)), ...CAROUSEL_TEMPLATES];
+export const TEMPLATES = [...PACK3_TEMPLATES, ...PACK2_TEMPLATES, ...BASE_TEMPLATES.map((t) => (EVENT_READY.has(t.id) ? { ...t, event: true } : t)), ...PACK_TEMPLATES.map((t) => (EVENT_READY.has(t.id) ? { ...t, event: true, photos: 1 } : t)), ...CAROUSEL_TEMPLATES, ...TEXT_TEMPLATES];
 
 export { cohesive } from '../design/model.js';
 
@@ -102,6 +114,9 @@ export function eventForDesign(e) {
 export default function Graphics({ image, design, event, eventMode, quote, make, campaignId }) {
   const { toast } = useApp();
   const ctx = useBrandCtx();
+  // With a photo, or text only: how many photo spots a template has (counted once from what it builds).
+  const [look, setLook] = useState(() => { try { return localStorage.getItem('cs-tpl-look') || ''; } catch { return ''; } });
+  const chooseLook = (v) => { setLook(v); try { localStorage.setItem('cs-tpl-look', v); } catch { /* fine */ } };
   const [open, setOpen] = useState(design || null);
   const [designs, setDesigns] = useState(null);
   const [tab, setTab] = useState('home');
@@ -162,7 +177,8 @@ export default function Graphics({ image, design, event, eventMode, quote, make,
   if (open) return <DesignEditor id={open} onClose={() => setOpen(null)} />;
 
   const ql = q.trim().toLowerCase();
-  const tpls = TEMPLATES.filter((t) => (!kind || t.kind === kind) && (!pack || t.pack === pack) && (!ql || `${t.name} ${KINDS[t.kind].label}`.toLowerCase().includes(ql)));
+  const tpls = TEMPLATES.filter((t) => (!kind || t.kind === kind) && (!pack || t.pack === pack) && (!look || (look === 'text' ? photoCount(t) === 0 : photoCount(t) > 0))
+    && (!ql || `${t.name} ${KINDS[t.kind].label} ${photoCount(t) === 0 ? 'text only no photo' : 'photo'}`.toLowerCase().includes(ql)));
   const mine = (designs || []).filter((d) => !ql || d.name.toLowerCase().includes(ql));
   const pick = (k) => {
     if (k === 'import') return setModal('import');
@@ -256,6 +272,9 @@ export default function Graphics({ image, design, event, eventMode, quote, make,
         </div>
         <div className="row wrap" style={{ gap: 6 }} role="radiogroup" aria-label="Template pack">
           <Toggle checked={inBrand} onChange={(e) => setInBrand(e.target.checked)} icon={Palette} label="My brand colors" small style={{marginRight: 8}} />
+          <div className="seg sm" role="radiogroup" aria-label="Photo or text" style={{ marginRight: 8 }}>
+            {[['', 'Any'], ['photo', 'With a photo'], ['text', 'Text only']].map(([v, l]) => <button key={v || 'any'} className={look === v ? 'on' : ''} role="radio" aria-checked={look === v} onClick={() => chooseLook(v)}>{l}</button>)}
+          </div>
           <button className={`pill-choice ${!pack ? 'on' : ''}`} onClick={() => setPack(null)}>All styles</button>
           {Object.entries(PACKS).map(([id, P]) => (
             <button key={id} className={`pill-choice pack-chip ${pack === id ? 'on' : ''}`} title={P.about} onClick={() => { setPack(pack === id ? null : id); setTab('templates'); }}>

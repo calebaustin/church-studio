@@ -47,6 +47,7 @@ def main() -> None:
 
     print("PROGRESS 1 loading model", file=sys.stderr, flush=True)
     model, device = load_model(args.model)
+    print(f"DEVICE {device}", file=sys.stderr, flush=True)
     audio = load_wav(args.wav)
     duration = len(audio) / 16000.0
     segments, info = model.transcribe(
@@ -81,7 +82,8 @@ def main() -> None:
         pct = int(100 * segment.end / max(duration, 1))
         if pct != last:
             last = pct
-            print(f"PROGRESS {pct}", file=sys.stderr, flush=True)
+            # Percent, then where it is in the audio, how long the audio is and words so far (for the details).
+            print(f"PROGRESS {pct} {segment.end:.1f} {duration:.1f} {len(words)}", file=sys.stderr, flush=True)
 
     sys.stdout.reconfigure(encoding="utf-8")
     json.dump({

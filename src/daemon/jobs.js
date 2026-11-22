@@ -55,6 +55,23 @@ async function pump() {
       job.log.push(line);
       if (job.log.length > 200) job.log.shift();
     },
+    /** Extra facts shown when someone hovers the task (stage, model, words so far…). null removes one. */
+    detail(fields) {
+      const d = { ...(job.details || {}) };
+      for (const [k, v] of Object.entries(fields || {})) { if (v == null || v === '') delete d[k]; else d[k] = String(v); }
+      job.details = d;
+    },
+    /**
+     * A file transfer: bytes so far and the total (if known). Fills in speed, size and an honest time left
+     * from the transfer rate. rate: bytes a second when the tool reports its own.
+     */
+    transfer(got, total, rate) {
+      const now = Date.now(); const t = job._tr || (job._tr = { t: now, g: got, speed: 0 });
+      if (rate > 0) t.speed = t.speed ? t.speed * 0.6 + rate * 0.4 : rate;
+      else if (now - t.t >= 700) { const inst = Math.max(0, (got - t.g) / ((now - t.t) / 1000)); t.speed = t.speed ? t.speed * 0.6 + inst * 0.4 : inst; t.t = now; t.g = got; }
+      ctx.detail({ Speed: t.speed > 0 ? rateText(t.speed) : null, Downloaded: total ? `${bytesText(got)} of ${bytesText(total)}` : bytesText(got) });
+      if (total && t.speed > 0) job.eta = Math.max(0, Math.round((total - got) / t.speed));
+    },
   };
   try {
     job.result = await job.fn(ctx);
@@ -74,6 +91,9 @@ async function pump() {
   }
 }
 
+export const bytesText = (b) => (b >= 1e9 ? `${(b / 1e9).toFixed(2)} GB` : b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.round(b / 1e3)} KB`);
+export const rateText = (b) => (b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB/s` : `${Math.round(b / 1e3)} KB/s`);
+
 export function cancel(id) {
   const job = jobs.get(id);
   if (!job) return null;
@@ -84,7 +104,7 @@ export function cancel(id) {
 
 export function view(job) {
   if (!job) return null;
-  const { fn, controller, _t0, _p0, ...rest } = job;
+  const { fn, controller, _t0, _p0, _tr, ...rest } = job;
   return rest;
 }
 

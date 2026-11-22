@@ -22,6 +22,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 import cv2
@@ -34,6 +35,11 @@ FFPROBE = os.environ.get("FFPROBE_PATH", "ffprobe")
 
 def progress(pct: float, msg: str = "") -> None:
     print(f"PROGRESS {int(pct)} {msg}", file=sys.stderr, flush=True)
+
+
+def detail(key: str, value: str) -> None:
+    """An extra fact for the task's hover details, like "Frames|900 of 1800"."""
+    print(f"DETAIL {key}|{value}", file=sys.stderr, flush=True)
 
 
 def probe_size(video: str) -> tuple[int, int]:
@@ -860,6 +866,7 @@ def main() -> None:
     size = src_w * src_h * 3
     n = 0
     written = 0
+    render_began = time.time()
     thumb = None
     fit = mode in ("fit", "stack3")
     bg_cfg = crop.get("bg") or {"type": "blur"}
@@ -949,6 +956,10 @@ def main() -> None:
                 thumb = img.copy()
             if written % 30 == 0:
                 progress(30 + 68 * written / max(1, out_len * fps), "Rendering")
+                if written % 90 == 0:
+                    took = max(0.001, time.time() - render_began)
+                    detail("Frames", f"{written:,} of {int(out_len * fps):,}")
+                    detail("Render speed", f"{written / took:.0f} frames a second")
         enc.stdin.close()
         err = enc.stderr.read().decode(errors="replace")
         if enc.wait() != 0:

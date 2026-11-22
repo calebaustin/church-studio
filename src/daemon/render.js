@@ -135,6 +135,7 @@ function runRender(job, ctx, extraArgs = []) {
     onStderr: (chunk) => {
       const m = [...chunk.matchAll(/PROGRESS (\d+) ?([^\n]*)/g)].pop();
       if (m) ctx.progress(Number(m[1]), m[2] ? `${m[2]}… ${m[1]}%` : undefined);
+      for (const d of chunk.matchAll(/DETAIL ([^|\n]+)\|([^\n]*)/g)) ctx.detail?.({ [d[1].trim()]: d[2].trim() });
     },
   });
 }

@@ -2,6 +2,17 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## Unreleased
+
+### New
+- **More detail on long tasks.** Downloads show their speed and time left beside the bar. Hover the progress card for the details: size so far, speed and which part is downloading; the Whisper model, position in the audio, words so far and pace while transcribing; frames and render speed while exporting; plus time spent and time left. Updates and the CS Helper download show speed too.
+- **Text-only announcements.** Every template pack has a text announcement that needs no photo, in four layouts (Big type, Color block, Badge and Poster), filled in from your event. A new "With a photo / Text only" switch in Design templates finds them, and searching "text" works too.
+- **Bold and italic shortcuts.** In Design, Command-B and Command-I make the selected text box bold or italic, even while you're typing in it.
+
+### Fixed
+- In a post's campaign strip, clicking another post opens it, from the Social screen as well as the Calendar.
+- After downloading just the sermon, the transcribe step no longer asks whether to transcribe the whole video, and the sermon is already marked.
+
 ## 0.24.0 · November 21, 2026
 
 ### New

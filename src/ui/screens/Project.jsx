@@ -1,9 +1,10 @@
 import { ShareProject } from '../components/Backups.jsx';
+import { jobSpeed, jobSummary } from '../components/JobDetails.jsx';
 import Toggle from '../components/Toggle.jsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp, useHelperFocus } from '../App.jsx';
 import { api, fmt, fmtEta, media } from '../api.js';
-import { ArrowLeft, ArrowRight, Check, Square, Wand2, Download, Trash2, Plus, Send, FolderOpen, Copy, ScissorsLineDashed, AudioLines, ChevronDown, FileText, PenLine, Quote, Share2, Clock } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Square, Wand2, Download, Trash2, Plus, Send, FolderOpen, Copy, ScissorsLineDashed, Scissors, AudioLines, ChevronDown, FileText, PenLine, Quote, Share2, Clock } from 'lucide-react';
 import AudioCleanup from '../components/AudioCleanup.jsx';
 import ContentPlan from '../components/ContentPlan.jsx';
 import ClipEditor from './ClipEditor.jsx';
@@ -15,7 +16,7 @@ import ExportDialog from '../components/ExportDialog.jsx';
 export function InlineJob({ job, label }) {
   if (!job) return null;
   return (
-    <div className="inline-job" aria-live="polite">
+    <div className="inline-job" aria-live="polite" title={jobSummary(job)}>
       <div className="row between">
         <strong className="truncate">{label || job.label}</strong>
         <button className="btn sm danger" onClick={() => api.del(`/api/jobs/${job.id}`)}><Square size={11} fill="currentColor" />Stop</button>
@@ -23,7 +24,7 @@ export function InlineJob({ job, label }) {
       <div className="progress"><i style={{ width: `${job.status === 'queued' ? 0 : job.progress}%` }} /></div>
       <div className="row between small muted" style={{ gap: 8 }}>
         <span className="truncate">{job.status === 'queued' ? 'Waiting for the current task' : job.message}</span>
-        {job.status === 'running' && <span className="num" style={{ flex: 'none', opacity: 0.8 }}>{fmtEta(job.eta) || `${job.progress}%`}</span>}
+        {job.status === 'running' && <span className="num" style={{ flex: 'none', opacity: 0.8 }}>{[jobSpeed(job), fmtEta(job.eta) || `${job.progress}%`].filter(Boolean).join(' · ')}</span>}
       </div>
     </div>
   );
@@ -220,7 +221,7 @@ function TranscribeStep({ project, src, player, job, onStart, audioOnly, onRead 
             <div className="three-steps">
               <strong className="small">Share-ready clips in 3 easy steps</strong>
               <ol>
-                <li className={mode === 'range' ? 'on' : ''}><span>1</span>Trim to the sermon <em>optional, faster</em></li>
+                <li className={mode === 'range' || project.range ? 'on' : ''}><span>1</span>Trim to the sermon <em>{project.range ? 'done when it downloaded' : 'optional, faster'}</em></li>
                 <li className="on"><span>2</span>Make the transcript</li>
                 <li><span>3</span>Pick and polish clips</li>
               </ol>
@@ -231,7 +232,10 @@ function TranscribeStep({ project, src, player, job, onStart, audioOnly, onRead 
             <h2>{audioOnly ? 'Transcribe the recording' : 'Transcribe the video'}</h2>
             <p className="muted">{audioOnly ? 'Turns speech into text you can read, search and share.' : 'Turns speech into timed text for captions and clips.'}</p>
           </div>
-          <div className="stack" style={{ gap: 6 }} role="radiogroup" aria-label="What to transcribe">
+          {project.range && (
+            <div className="banner info small"><Scissors size={15} />You downloaded just the sermon{project.range.end > project.range.start ? ` (${fmt(project.range.end - project.range.start)})` : ''}, so the whole file is the sermon. No trimming needed.</div>
+          )}
+          {!project.range && <div className="stack" style={{ gap: 6 }} role="radiogroup" aria-label="What to transcribe">
             <h3>What should we transcribe?</h3>
             <div className="choices" style={{ gridTemplateColumns: '1fr' }}>
               <button role="radio" aria-checked={mode === 'all'} className={`choice ${mode === 'all' ? 'on' : ''}`} onClick={() => setMode('all')}>
@@ -243,8 +247,8 @@ function TranscribeStep({ project, src, player, job, onStart, audioOnly, onRead 
                 <span className="d">Faster. Mark the start and end.</span>
               </button>
             </div>
-          </div>
-          {mode === 'range' && (
+          </div>}
+          {mode === 'range' && !project.range && (
             <div className="keycard">
               <div className="row"><strong style={{ width: 44 }}>Start</strong><TimeInput value={range.start} onChange={(v) => setRange({ ...range, start: v })} /><button className="btn sm" onClick={() => setRange({ ...range, start: cur() })}>Use player time</button></div>
               <div className="row"><strong style={{ width: 44 }}>End</strong><TimeInput value={range.end} onChange={(v) => setRange({ ...range, end: v })} /><button className="btn sm" onClick={() => setRange({ ...range, end: cur() })}>Use player time</button></div>

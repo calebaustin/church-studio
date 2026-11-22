@@ -113,7 +113,7 @@ export async function downloadCsModel(ctx) {
   const total = CS_MODEL.bytes;
   let got = have;
   const body = Readable.fromWeb(r.body);
-  body.on('data', (c) => { got += c.length; ctx.progress(Math.min(99, (got / total) * 100), `Downloading CS Helper… ${(got / 1e9).toFixed(2)} of ${(total / 1e9).toFixed(1)} GB`); });
+  body.on('data', (c) => { got += c.length; ctx.progress(Math.min(99, (got / total) * 100), `Downloading CS Helper… ${(got / 1e9).toFixed(2)} of ${(total / 1e9).toFixed(1)} GB`);  ctx.transfer?.(got, total); });
   await pipeline(body, createWriteStream(part, { flags: have ? 'a' : 'w' }));
   const st = await stat(part);
   if (st.size < total * 0.95) throw new Error('The download stopped early. Press Download again to pick up where it left off.');
