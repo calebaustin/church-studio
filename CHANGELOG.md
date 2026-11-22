@@ -2,7 +2,7 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
-## Unreleased
+## 0.22.0 · November 21, 2026
 
 ### New
 - **Start fresh.** If a setting got changed by mistake, Settings has a Start fresh button in its own small panel under the list. It explains what clears and what stays, and asks if you're sure. Everything cleared goes into one folder in the Trash, so you can get it back until you empty the Trash. Downloaded helper programs stay.
