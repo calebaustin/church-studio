@@ -488,6 +488,7 @@ route('GET', '/api/seasons', async () => ({ seasons: await inspiration.seasonDay
 route('GET', '/api/inspiration/year', async (_p, _b, q) => inspiration.yearInReview(Number(q?.searchParams?.get('year')) || new Date().getFullYear()));
 route('POST', '/api/blog/sync', async (_p, b) => { try { return await blog.syncBlog({ url: b.url || null }); } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/blog/forget', async () => blog.forgetBlog());
+route('POST', '/api/blog/voice', async (_p, b) => blog.setBlogVoice(b?.on !== false));
 route('GET', '/api/library/notes', async () => ({ notes: await photos.loadNotes() }));
 route('PUT', '/api/library/notes', async (_p, b) => ({ note: await photos.setNote(String(b.rel || ''), b) }));
 route('POST', '/api/library/notes/suggest', async (_p, b) => { try { return await photos.suggestNote(String(b.rel || '')); } catch (e) { throw new HttpError(400, e.message); } });

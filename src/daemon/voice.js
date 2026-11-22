@@ -37,6 +37,23 @@ export async function addSample({ title = '', text = '', source = 'pasted' }) {
   await save(v);
   return s;
 }
+/**
+ * Keep the newest blog posts as writing samples, so writing help sounds like the church's own posts.
+ * Replaces earlier blog samples (pasted and Writing samples stay). posts: [{ title, text, link, date }].
+ */
+export async function setBlogSamples(posts) {
+  const v = await loadVoice();
+  const old = new Map(v.samples.filter((x) => x.source === 'blog').map((x) => [x.link, x]));
+  const blog = posts.map((p) => old.get(p.link) || { id: randomUUID().slice(0, 8), title: String(p.title || 'Blog post').slice(0, 120), text: String(p.text).trim().slice(0, 30000), source: 'blog', link: p.link, added: p.date || new Date().toISOString() });
+  v.samples = [...v.samples.filter((x) => x.source !== 'blog'), ...blog].slice(0, 40);
+  await save(v);
+  return blog.length;
+}
+export async function clearBlogSamples() {
+  const v = await loadVoice();
+  v.samples = v.samples.filter((x) => x.source !== 'blog');
+  return save(v);
+}
 export async function removeSample(id) {
   const v = await loadVoice();
   v.samples = v.samples.filter((s) => s.id !== id);

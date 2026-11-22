@@ -1,6 +1,7 @@
 // Inspiration: what your church has been saying, what it hasn't said in a while, what's coming up,
 // and ideas for the blog. All worked out on this Mac.
 import { useEffect, useState } from 'react';
+import Toggle from '../components/Toggle.jsx';
 import { BookOpen, CalendarDays, Compass, ExternalLink, Lightbulb, PenLine, RefreshCw, Rss, Send, Shapes, Sparkles, X } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { api, openLink } from '../api.js';
@@ -29,7 +30,7 @@ export default function Inspiration({ embedded = false }) {
   };
   const syncBlog = async (url) => {
     setSyncing(true);
-    try { const r = await api.post('/api/blog/sync', url ? { url } : {}); toast({ text: r.added ? `Found ${r.added} new post${r.added === 1 ? '' : 's'} on your blog.` : 'Your blog is up to date.' }); await load(); } catch (e) { toast({ kind: 'error', text: e.message }); }
+    try { const r = await api.post('/api/blog/sync', url ? { url } : {}); toast({ text: `${r.added ? `Found ${r.added} new post${r.added === 1 ? '' : 's'} on your blog.` : 'Your blog is up to date.'}${r.samples ? ` Your ${r.samples} newest posts help writing sound like you.` : ''}` }); await load(); } catch (e) { toast({ kind: 'error', text: e.message }); }
     setSyncing(false);
   };
   const yearReview = async () => {
@@ -173,7 +174,7 @@ export default function Inspiration({ embedded = false }) {
 }
 
 function BlogPanel({ data, blogUrl, setBlogUrl, syncing, syncBlog, writeAbout, reload }) {
-  const { go } = useApp();
+  const { go, config, saveConfig, toast } = useApp();
   const b = data.blog;
   if (!b) {
     return (
@@ -203,6 +204,9 @@ function BlogPanel({ data, blogUrl, setBlogUrl, syncing, syncBlog, writeAbout, r
         <div className="stack" style={{ gap: 0 }}><strong className="num" style={{ fontSize: 22 }}>{b.total}</strong><span className="muted small">posts saved</span></div>
       </div>
       <div className="spark" aria-label="Posts per month for the last year">{b.months.map((m) => <span key={m.key} title={`${m.label}: ${m.n}`} style={{ height: `${Math.max(4, (m.n / max) * 100)}%` }} className={m.n ? '' : 'none'} />)}</div>
+      <Toggle checked={config.blogVoice !== false} icon={PenLine} small label="Writing learns from my newest posts"
+        title="Your 8 newest posts become brand voice samples, so writing help sounds like your own blog"
+        onChange={async (e) => { const on = e.target.checked; await saveConfig({ blogVoice: on }); const r = await api.post('/api/blog/voice', { on }); toast({ text: on ? `Writing now learns from your ${r.samples} newest posts.` : 'Blog posts removed from your writing samples.' }); }} />
       <span className="eyebrow">Ideas for the next post</span>
       {data.ideas.unblogged.slice(0, 3).map((s) => (
         <div key={s.id} className="insp-row">

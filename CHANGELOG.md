@@ -5,6 +5,7 @@ Every update keeps your sermons, designs, drafts and settings. Before a new vers
 ## Unreleased
 
 ### New
+- **Writing learns from your blog.** Connect your blog in Calendar › Inspiration and your 8 newest posts become brand voice writing samples, so writing help sounds like your own posts. When the blog's feed only has a summary, Church Studio reads the full post from its page. They show as "From your blog" in Brand library, update each time new posts are found, and a switch on the blog panel turns this off.
 - **Select words to cut or replace.** In the transcript, drag across words (or click one and shift-click another) and a small bar offers Cut and Replace. Replace fixes a phrase the transcription heard wrong, and captions use your words.
 
 ### Fixed

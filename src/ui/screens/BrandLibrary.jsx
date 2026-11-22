@@ -378,7 +378,7 @@ function BrandVoice() {
             <span className="type-badge" style={{ width: 30, height: 30, '--t': 'var(--tone-4)' }}><FileText size={14} /></span>
             <div className="stack grow" style={{ gap: 0, minWidth: 0 }}>
               <strong className="small truncate">{smp.title || 'Untitled'}</strong>
-              <span className="small muted truncate">{words(smp.text)} words · {smp.source === 'writing' ? 'From Writing' : 'Pasted'} · {new Date(smp.added).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
+              <span className="small muted truncate">{words(smp.text)} words · {smp.source === 'writing' ? 'From Writing' : smp.source === 'blog' ? 'From your blog' : 'Pasted'} · {new Date(smp.added).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
             </div>
             <button className="rt-btn" aria-label={`Remove ${smp.title}`} title="Remove" onClick={async () => { const r = await api.del(`/api/brand-voice/samples/${smp.id}`); setV(r.voice); }}><Trash2 size={14} /></button>
           </div>

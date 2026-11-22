@@ -5,6 +5,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { DATA_DIR } from './tools.js';
 import { loadConfig, saveConfig } from './config.js';
+import { clearBlogSamples, setBlogSamples } from './voice.js';
 
 const STORE = path.join(DATA_DIR, 'blog.json');
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15';
@@ -91,9 +92,38 @@ export async function syncBlog({ url } = {}) {
   const out = { feed, site: new URL(feed).origin, fetched: new Date().toISOString(), posts: [...seen.values()].sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).slice(0, 600) };
   await save(out);
   if (cfg.blogFeed !== feed) await saveConfig({ blogFeed: feed });
-  return { added, total: out.posts.length, feed };
+  const samples = cfg.blogVoice === false ? 0 : await blogToVoice(out.posts).catch((e) => { console.error('Blog samples:', e.message); return 0; });
+  return { added, total: out.posts.length, feed, samples };
+}
+
+const VOICE_POSTS = 8;
+/** Article paragraphs from a post's page, for feeds that only carry a short summary. */
+async function articleText(url) {
+  const page = await get(url);
+  if (!page) return '';
+  const html = page.text.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<nav[\s\S]*?<\/nav>|<footer[\s\S]*?<\/footer>|<header[\s\S]*?<\/header>/gi, ' ');
+  const scope = html.match(/<article\b[\s\S]*?<\/article>/i)?.[0] || html.match(/<main\b[\s\S]*?<\/main>/i)?.[0] || html;
+  return [...scope.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi)].map((m) => strip(m[1])).filter((t) => t.split(' ').length >= 12 && !/cookie|copyright|©|subscribe/i.test(t)).join('\n\n');
+}
+/** The newest posts become brand voice writing samples (full text when the feed only has a summary). */
+async function blogToVoice(posts) {
+  const picked = [];
+  for (const p of posts.slice(0, 20)) {
+    if (picked.length >= VOICE_POSTS) break;
+    let text = p.text || '';
+    if (text.split(' ').length < 150 && p.link) text = (await articleText(p.link)) || text;
+    if (text.split(' ').length >= 120) picked.push({ title: p.title, text, link: p.link, date: p.date });
+  }
+  return setBlogSamples(picked);
 }
 
 export async function blogHistory() { return load(); }
 
-export async function forgetBlog() { await save({ feed: '', fetched: null, posts: [] }); await saveConfig({ blogFeed: '' }); return { ok: true }; }
+export async function forgetBlog() { await save({ feed: '', fetched: null, posts: [] }); await saveConfig({ blogFeed: '' }); await clearBlogSamples(); return { ok: true }; }
+
+/** Turn blog writing samples on or off. On: the saved posts are used right away. */
+export async function setBlogVoice(on) {
+  await saveConfig({ blogVoice: Boolean(on) });
+  if (!on) { await clearBlogSamples(); return { samples: 0 }; }
+  return { samples: await blogToVoice((await load()).posts || []) };
+}
