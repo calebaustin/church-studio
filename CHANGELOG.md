@@ -2,7 +2,7 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
-## Unreleased
+## 0.24.0 · November 21, 2026
 
 ### New
 - **Blog posts that read like writing.** Rewriting a blog post with CS Helper or another AI helper now writes it one part of the sermon at a time, then the title, intro and closing, so even an on-device helper writes real paragraphs instead of stitching transcript lines together. Posts follow the shape good sermon recaps share: a hook and the big idea up top, four or five short sections with headings that state each point, Scripture named inline, a closing that applies it, and an invitation with your service times. Everything is checked against the sermon: quotes must be the sermon's own words, and numbers must appear in it.
