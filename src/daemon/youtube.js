@@ -176,11 +176,14 @@ export async function downloadToProject(url, ctx, existingProject = null, range 
   let project = existingProject;
   if (!project) {
     ctx.progress(1, 'Reading video details…');
-    const { stdout } = await ytdlp(['--no-playlist', '--no-warnings', '--print', 'title', '--skip-download', url], { signal: ctx.signal });
+    // The title, and the day it was streamed (for the sermon's date in its YouTube title later).
+    const { stdout } = await ytdlp(['--no-playlist', '--no-warnings', '--print', 'title', '--print', '%(release_timestamp|timestamp|)s', '--print', '%(upload_date|)s', '--skip-download', url], { signal: ctx.signal });
+    const [, ts, ud] = stdout.trim().split(/\r?\n/);
+    const uploadedOn = Number(ts) > 0 ? new Date(Number(ts) * 1000).toISOString() : /^\d{8}$/.test(ud || '') ? new Date(Number(ud.slice(0, 4)), Number(ud.slice(4, 6)) - 1, Number(ud.slice(6, 8))).toISOString() : null;
     const id = youtubeId(url);
     project = await createProject({
       title: stdout.trim().split(/\r?\n/)[0] || 'Sermon',
-      sourceUrl: url, youtubeId: id,
+      sourceUrl: url, youtubeId: id, uploadedOn,
       thumbnail: id ? `https://i.ytimg.com/vi/${id}/mqdefault.jpg` : null,
     });
   }

@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { AudioLines, Clapperboard, Download, FileAudio, Film, Minus, RefreshCw, Scissors, Square, Wand2, X } from 'lucide-react';
+import { AudioLines, Clapperboard, Download, FileAudio, Film, Minus, RefreshCw, Scissors, Square, Wand2, X , Upload } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { api, fmtEta } from '../api.js';
 import JobDetails, { jobSpeed, jobSummary } from './JobDetails.jsx';
 
 // Work happens one task at a time. The rest wait in line and start on their own.
-const ICONS = { download: Download, import: FileAudio, transcribe: Wand2, export: Film, 'export-joined': Film, preview: Clapperboard, track: Scissors, 'clean-audio': AudioLines, update: RefreshCw, propose: Wand2 };
+const ICONS = { 'youtube-upload': Upload, download: Download, import: FileAudio, transcribe: Wand2, export: Film, 'export-joined': Film, preview: Clapperboard, track: Scissors, 'clean-audio': AudioLines, update: RefreshCw, propose: Wand2 };
 const iconFor = (j) => ICONS[j.kind] || RefreshCw;
 
 /** A progress ring with the task's icon in the middle. */

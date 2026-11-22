@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import Toggle from './Toggle.jsx';
-import { BookOpen, CalendarDays, Check, ChevronDown, Clapperboard, ExternalLink, FileText, Headphones, Layers, Link2, Megaphone, Minus, PenLine, Plus, Search, Send, Shapes, Sparkles, X, Mic } from 'lucide-react';
+import { BookOpen, CalendarDays, Check, ChevronDown, Clapperboard, ExternalLink, FileText, Headphones, Layers, Link2, Megaphone, Minus, PenLine, Plus, Search, Send, Shapes, Sparkles, X, Mic, Upload } from 'lucide-react';
 import { api, fmt, media, openLink } from '../api.js';
 import { useApp } from '../App.jsx';
 import Modal, { ModalHead } from './Modal.jsx';
+import YouTubePublish from './YouTubePublish.jsx';
 
 const GROUPS = [['Video', Clapperboard], ['Words', PenLine], ['Design', Shapes], ['Audio', Headphones], ['Share', Send]];
 
@@ -23,6 +24,7 @@ export default function ContentPlan({ project, setStep, onChange }) {
   const [plan, setPlan] = useState(null);
   const [showIdeas, setShowIdeas] = useState(false);
   const [podcast, setPodcast] = useState(false);
+  const [posting, setPosting] = useState(false);
   const [series, setSeries] = useState(project.series || '');
   const load = () => api.get(`/api/projects/${project.id}/plan`).then(setPlan).catch(() => {});
   useEffect(() => { load(); }, [project.id]);
@@ -92,6 +94,9 @@ export default function ContentPlan({ project, setStep, onChange }) {
           <div className="row wrap" style={{ gap: 8 }}>
             <button className="btn sm" onClick={() => setStep(project.status === 'transcribed' ? 'text' : 'transcribe')}><FileText size={13} />Transcript</button>
             {sm.watch && <button className="btn sm ghost" onClick={() => openLink(sm.watch)}><ExternalLink size={13} />Watch</button>}
+            {project.media?.width > 0 && (project.youtubeUpload
+              ? <button className="btn sm ghost" title={`Posted as “${project.youtubeUpload.title}”`} onClick={() => openLink(project.youtubeUpload.url)}><ExternalLink size={13} />Sermon on YouTube</button>
+              : <button className="btn sm" title="Upload just the sermon as its own video, titled your way, into your sermons playlist" onClick={() => setPosting(true)}><Upload size={13} />Post to YouTube</button>)}
             {sermonType && <button className="btn sm ghost" title="Take this out of Sermons. Everything tied to it stays." onClick={() => markSermon(false)}>Not a sermon</button>}
           </div>
         </div>
@@ -188,6 +193,7 @@ export default function ContentPlan({ project, setStep, onChange }) {
       </section>
       {linking && <LinkPicker projectId={project.id} title={project.title} onClose={() => setLinking(false)} onDone={() => { setLinking(false); load(); }} />}
       {podcast && <PodcastDialog project={project} onClose={() => setPodcast(false)} onStart={(job) => { trackJob(job); setPodcast(false); toast({ text: 'Making your episode. It goes to Downloads with show notes.' }); }} />}
+      {posting && <YouTubePublish project={project} onClose={() => { setPosting(false); onChange?.(); }} />}
     </div>
   );
 }

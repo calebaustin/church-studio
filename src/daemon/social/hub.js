@@ -53,7 +53,8 @@ export function startGoogleAuth({ clientId, clientSecret, label }, origin) {
   const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
   url.search = new URLSearchParams({
     client_id: clientId.trim(), redirect_uri: redirect, response_type: 'code', access_type: 'offline', prompt: 'consent',
-    scope: 'https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly',
+    // Upload for Shorts and sermons; the full scope lets Church Studio add sermons to a playlist like "Sunday Sermons".
+    scope: 'https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube',
     code_challenge: challenge, code_challenge_method: 'S256', state,
   }).toString();
   return { url: url.toString() };

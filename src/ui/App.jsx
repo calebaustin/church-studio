@@ -5,7 +5,7 @@ import SideCards from './components/SideCards.jsx';
 import { maybeNote } from './encourage.js';
 import NextSteps from './components/NextSteps.jsx';
 import NotificationsWallet, { NotificationsButton } from './components/Notifications.jsx';
-import { api, fmt as fmtClock } from './api.js';
+import { api, fmt as fmtClock, openLink } from './api.js';
 import Library from './screens/Library.jsx';
 import Dashboard from './screens/Dashboard.jsx';
 import Writing from './screens/Writing.jsx';
@@ -263,8 +263,9 @@ export default function App() {
       toast({ keep: true, text: `${what}. ${r.summary || ''}`.trim(), duration: 9000, action: { label: 'Open', run: () => setRoute({ name: 'project', id: r.projectId }) } });
     }
     if (j.status === 'done' && j.kind === 'export-joined') toast({ keep: true, celebrate: true, text: `Joined ${j.result?.clips || ''} clips into one video.`, duration: 9000, action: { label: 'Show', run: () => api.post('/api/reveal', { path: j.result?.file }) } });
+    if (j.status === 'done' && j.kind === 'youtube-upload') toast({ keep: true, celebrate: true, text: `The sermon is on YouTube.${j.result?.playlistNote ? ` ${j.result.playlistNote}` : ''}`, duration: 12000, action: { label: 'Open', run: () => openLink(j.result.url) } });
     if (j.status === 'done' && j.kind === 'transcribe') toast({ keep: true, text: `Transcribed ${j.result?.words?.toLocaleString() || ''} words. Check the sermon range next.`, duration: 7000 });
-    if (j.status === 'error' && ['export', 'export-joined', 'download', 'transcribe'].includes(j.kind)) toast({ keep: true, kind: 'error', text: `${j.label} didn't finish: ${j.error?.slice(0, 160)}`, duration: 9000 });
+    if (j.status === 'error' && ['export', 'export-joined', 'download', 'transcribe', 'youtube-upload'].includes(j.kind)) toast({ keep: true, kind: 'error', text: `${j.label} didn't finish: ${j.error?.slice(0, 160)}`, duration: 9000 });
   }), [onJobFinished, toast]);
 
   // What the helper chat is looking at (set by the open editor), and how to use a suggestion there.
