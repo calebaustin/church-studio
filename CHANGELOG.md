@@ -2,6 +2,31 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## Unreleased
+
+### New
+- **Check the spots before you download.** The YouTube dialog plays the video right there. Scrub to a spot and press Start here or End here; click Start or End to jump the video to that time.
+- **When a livestream's captions aren't ready.** If YouTube hasn't added captions yet, the dialog says how long ago the stream ended and about how many hours to wait before trying again.
+- **Full-screen cards.** In a clip's Graphics tab, add a card at any moment. It covers everything for a while with the words being said, phrase by phrase or all at once with each word lighting up as it's spoken, or your own text, like a verse. Add a reference such as "Luke 22:19" above or below. Backgrounds can be mesh, gradient, pattern, solid or slowly moving (drift, glow or soft lights). Cards fade, blur or slide in from any side.
+- **Video tab.** A clip's new Video tab holds the studio looks (moved from Framing), quick fixes for exposure, contrast, saturation and warmth, and a color wash that tints the picture one color.
+- **Hook switch.** Turn the on-screen hook on or off in Title & hook; its settings show only when it's on.
+- **"You often keep clips like this."** Suggested clips that look like the ones your church usually keeps get a star. It never changes the score.
+- **Writing when you ask.** A sermon's writing opens empty, with the blog's title, keyphrase and description suggested from the sermon summary. Pick an angle and press Write post; the post's heading always matches the title you chose. Email, guide and devotional each have a Write it button, and social captions are written about a clip you kept or the blog post.
+- **Spots to fill in.** Click the pill to jump to the next [bracketed] spot.
+
+### Changed
+- Progress bars follow the real work: bytes downloaded and audio transcribed.
+- YouTube downloads fetch several pieces at once, which is faster when YouTube slows a single connection.
+- How hard to look is a themed menu showing about how long each choice takes and how many looks it gets. Clip cards no longer show the helper's name.
+- Every writing piece starts with a color band header in your first brand color.
+- The setup list's "Done?" is a small bubble pointing at the circle.
+- The clip editor's tabs are grouped with small dividers.
+- The AI working wave is easier to see.
+
+### Fixed
+- The clip preview no longer stutters at cuts: the editor makes a small preview copy in the background that jumps across cuts smoothly. Exports still use the original.
+- Moving color is no longer offered for clips with video.
+
 ## 0.26.0 · November 22, 2026
 
 ### New

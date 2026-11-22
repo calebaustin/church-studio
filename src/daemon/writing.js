@@ -106,6 +106,9 @@ function metasFor(a, kp, n = 4) {
 /** Choices for the blog's title, keyphrase, web address and meta description. */
 export async function suggest(projectId, { keyphrase = '' } = {}) {
   const { a } = await load(projectId);
+  // With the sermon summary, the choices come from what the message is about, not lines lifted from it.
+  const digest = await savedDigest(projectId);
+  if (digest?.length) return suggestFromDigest(a, digest, keyphrase);
   const kpList = [...new Set([...phrases(a.sentences, 5), ...a.keys.slice(0, 6), ...a.refs.slice(0, 2)])].slice(0, 10);
   const kp = keyphrase || kpList[0] || '';
   const Kp = titleCase(kp);
@@ -124,6 +127,29 @@ export async function suggest(projectId, { keyphrase = '' } = {}) {
     titles: [...new Set(titles)].slice(0, 7),
     metas: metasFor(a, kp),
   };
+}
+
+/** Titles, keyphrases and descriptions built from the summary's points. */
+function suggestFromDigest(a, digest, keyphrase = '') {
+  const points = digest.map((d) => String(d.point || '').replace(/[.?!:]+$/, '')).filter(Boolean);
+  // Keyphrases: the sermon's own recurring phrases (like "Lord's Supper"), ranked by how much the summary is about them.
+  const text = digest.map((d) => `${d.point} ${d.summary}`).join(' ').toLowerCase();
+  const hits = (ph) => (text.match(new RegExp(`\\b${ph.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'g')) || []).length;
+  const cands = [...new Set([...phrases(a.sentences, 14), ...a.keys.slice(0, 12)])];
+  const ranked = cands.map((ph, i) => ({ ph, n: hits(ph), i })).filter((x) => x.n > 0).sort((x, y) => (y.ph.includes(' ') - x.ph.includes(' ')) || y.n - x.n || x.i - y.i).map((x) => x.ph);
+  const kpList = [...new Set([...ranked, ...cands, ...a.refs.slice(0, 2)])].slice(0, 10);
+  const kp = keyphrase || kpList[0] || '';
+  const Kp = titleCase(kp);
+  const titles = [
+    ...points.slice(0, 4).map((pt) => titleCase(pt)).filter((t) => t.length <= 70),
+    kp && `What the Bible Says About ${Kp}`,
+    kp && points[0] && `${Kp}: ${titleCase(points[0])}`.length <= 70 && `${Kp}: ${titleCase(points[0])}`,
+    a.refs[0] && kp && `${a.refs[0]} and ${Kp}`,
+  ].filter(Boolean);
+  // Descriptions: a summary sentence that names the keyphrase when it can, under 156 characters.
+  const sentences = digest.flatMap((d) => String(d.summary || '').split(/(?<=[.?!])\s+/)).map((x) => x.trim()).filter((x) => x.length > 40);
+  const metas = [...sentences.filter((x) => kp && x.toLowerCase().includes(kp.toLowerCase())), ...sentences].map((x) => (x.length > 155 ? `${x.slice(0, 152).replace(/\s+\S*$/, '')}…` : x));
+  return { keyphrases: kpList, titles: [...new Set(titles)].slice(0, 7), metas: [...new Set(metas)].slice(0, 5), fromDigest: true };
 }
 
 async function load(projectId) {
@@ -424,7 +450,7 @@ Use the focus keyphrase "${keyphrase}" naturally in the first paragraph and in o
     const localSections = (() => { const md = localPost(a, project, { title, kp: keyphrase }); return md.split(/\n## /).slice(1).map((chunk) => { const [heading, ...rest] = chunk.split('\n\n'); return { heading, paras: rest.filter((x) => !x.startsWith('[Watch') && !x.includes('join ')) }; }); })();
     const sections = out.sections.map((x, k) => { if (x) return x; local++; return localSections[k] || null; }).filter(Boolean);
     const f = out.frame || {};
-    return assembleBlog({ title: f.title?.trim() || title, intro: f.intro || localPost(a, project, { title, kp: keyphrase }).split('\n\n')[1] || '', sections, closing: f.closing || '', invite: inviteLine(a, project) });
+    return assembleBlog({ title: title?.trim() || f.title?.trim() || 'Untitled post', intro: f.intro || localPost(a, project, { title, kp: keyphrase }).split('\n\n')[1] || '', sections, closing: f.closing || '', invite: inviteLine(a, project) });
   }, () => draft);
   const notice = r.notice?.text || (r.local ? `${PROVIDER_LABEL(cfg)} couldn't write this one, so it was written locally.` : local ? `${PROVIDER_LABEL(cfg)} wrote most of this. ${local} part${local === 1 ? ' was' : 's were'} written locally.` : null);
   return { text: r.value, notice };
@@ -721,4 +747,77 @@ export async function aiWrite(projectId, kind, { days = 5, signal } = {}) {
   if (kind === 'group') return { text: await writeGuideWithAI(cfg, digest, { title, refs: a.refs, source: a.all, signal }) };
   if (kind === 'devotional') return { text: await writeDevotionalWithAI(cfg, digest, { title, days, refs: a.refs, source: a.all, signal }) };
   throw new Error('That kind of writing can\'t be written this way yet.');
+}
+
+// ---------------------------------------------------------------- pieces written when asked
+/**
+ * A sermon's writing starts empty: the post settings are filled in with suggestions, and each piece (blog, email,
+ * guide, devotional, captions) is written when someone asks for it.
+ */
+export async function startDraft(projectId) {
+  const have = await loadDraft(projectId);
+  if (have) return have;
+  const { a } = await load(projectId);
+  const s = await suggest(projectId, {});
+  const title = s.titles[0] || 'Untitled post';
+  return saveDraft(projectId, {
+    title, keyphrase: s.keyphrases[0] || '', slug: slugify(title), metaDescription: s.metas[0] || '', angle: 'teaching',
+    blog: '', email: '', group: '', devotional: '', social: '', keywords: a.keys, refs: a.refs, started: new Date().toISOString(),
+  });
+}
+
+/** Write one piece now: with the AI helper from the sermon summary when it's on, otherwise on this Mac. */
+export async function writeKind(projectId, kind, { days = 5, clipId = null, about = 'clip', signal } = {}) {
+  if (kind === 'social') return { text: await socialCaptions(projectId, { clipId, about, signal }) };
+  const cfg = await loadConfig();
+  if (['email', 'group', 'devotional'].includes(kind) && providerReady(cfg)) {
+    try { return await aiWrite(projectId, kind, { days, signal }); } catch (e) { if (signal?.aborted) throw e; /* fall back to writing it here */ }
+  }
+  if (kind === 'devotional') return { text: (await devotional(projectId, days)).text, local: true };
+  const all = await generate(projectId);
+  if (!(kind in all)) throw new Error('That kind of writing can\'t be written here.');
+  return { text: all[kind], local: true };
+}
+
+/**
+ * Social captions about one thing: a clip (its own words) or the blog post. Three short options, each with a
+ * line to act on and a few hashtags.
+ */
+async function socialCaptions(projectId, { clipId, about, signal }) {
+  const { project, a } = await load(projectId);
+  const draft = await loadDraft(projectId);
+  const cfg = await loadConfig();
+  const tags = (list) => [...new Set(list.map((t) => `#${String(t).replace(/[^A-Za-z0-9]/g, '')}`).filter((t) => t.length > 2))].slice(0, 4).join(' ');
+  if (about === 'blog') {
+    if (!draft?.blog?.trim()) throw new Error('Write the blog post first, then captions for it.');
+    const title = draft.title; const desc = draft.metaDescription || '';
+    const link = '[ADD: link to the post]';
+    const kp = draft.keyphrase || a.keys[0] || 'faith';
+    return [
+      `**Caption 1**\nNew on the blog: ${title}. ${desc}\n\nRead it here: ${link}\n\n${tags([kp, 'sermon', 'faith'])}`,
+      `**Caption 2**\nMissed Sunday? We wrote up the heart of the message: ${title}.\n\nLink in bio.\n\n${tags([kp, 'church'])}`,
+      `**Caption 3**\n${desc || title}\n\nThe full post is on our blog. ${link}\n\n${tags([kp, 'blog'])}`,
+    ].join('\n\n');
+  }
+  const clips = (project.clips || []).filter((c) => c.status === 'kept' || c.status === 'exported' || c.export);
+  const clip = clips.find((c) => c.id === clipId) || clips[0];
+  if (!clip) throw new Error('Keep a clip first, then write captions for it.');
+  const words = (await getTranscript(projectId)).words.filter((w) => w.start >= clip.start && w.end <= clip.end).map((w) => w.w).join(' ');
+  if (providerReady(cfg)) {
+    try {
+      const { completeJSON } = await import('./ai.js');
+      const r = await completeJSON(cfg, `You write short social captions for a church's video clips (Reels, Shorts, TikTok).\nUse only what the speaker says in the clip. No em dashes. Warm, plain, no clickbait.`,
+        `Clip from "${project.title}":\n${words.slice(0, 1800)}\n\nWrite three different captions (one to three sentences each). One invites a comment or share, one quotes the clip's strongest line, one points to the full message. Then four hashtags without #.`,
+        { type: 'object', additionalProperties: false, required: ['captions', 'hashtags'], properties: { captions: { type: 'array', minItems: 3, maxItems: 3, items: { type: 'string', maxLength: 320 } }, hashtags: { type: 'array', items: { type: 'string', maxLength: 30 }, maxItems: 6 } } },
+        { signal, maxTokens: 600 });
+      if (r.captions?.length) return r.captions.map((c, i) => `**Caption ${i + 1}**\n${String(c).trim()}\n\n${tags(r.hashtags || clip.hashtags || [])}`).join('\n\n');
+    } catch (e) { if (signal?.aborted) throw e; }
+  }
+  // On this Mac: the clip's own strongest line, its summary and a next step.
+  const line = clip.keyLine || clip.hook || clip.title;
+  return [
+    `**Caption 1**\n${sentenceEnd(clean(line))}\n\nShare this with someone who needs it today.\n\n${tags(clip.hashtags || ['sermon', 'faith'])}`,
+    `**Caption 2**\n${clip.summary ? sentenceEnd(clean(clip.summary)) : sentenceEnd(clean(clip.title))}\n\nWatch the full message at the link in our bio.\n\n${tags(clip.hashtags || ['church'])}`,
+    `**Caption 3**\nWhat would change this week if you believed this?\n\n${tags(clip.hashtags || ['faith'])}`,
+  ].join('\n\n');
 }

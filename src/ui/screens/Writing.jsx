@@ -121,7 +121,10 @@ function WritingEditor({ pid, onBack, startKind }) {
   const [devoDays, setDevoDays] = useState(5);
 
   useEffect(() => { if (!standalone) api.get(`/api/projects/${pid}`).then((r) => setProject(r.project)).catch(() => setProject(null)); }, [pid]);
-  useEffect(() => { api.get(`/api/writing/${pid}`).then((r) => { setDraft(r.draft); setTrashed(Boolean(r.trashed)); setDirty(false); setIdeas(null); setUndoBlog(null); setAngle(r.draft?.angle || 'teaching'); if (!startKind && r.draft?.source?.type === 'newsletter') setKind('newsletter'); setLoaded(true); }); }, [pid]);
+  useEffect(() => { api.get(`/api/writing/${pid}`).then(async (r) => {
+    // A sermon's writing starts empty, with the post settings suggested; pieces are written when asked.
+    if (!r.draft && !standalone) { try { r = { ...r, draft: (await api.post(`/api/writing/${pid}/start`, {})).draft }; } catch { /* not transcribed yet */ } }
+    setDraft(r.draft); setTrashed(Boolean(r.trashed)); setDirty(false); setIdeas(null); setUndoBlog(null); setAngle(r.draft?.angle || 'teaching'); if (!startKind && r.draft?.source?.type === 'newsletter') setKind('newsletter'); setLoaded(true); }); }, [pid]);
   const loadIdeas = (kp = draft?.keyphrase) => api.post(`/api/writing/${pid}/suggest`, { keyphrase: kp }).then(setIdeas).catch(() => setIdeas({ titles: [], keyphrases: [], metas: [] }));
   const rewrite = async () => {
     setBusy(true);
@@ -176,21 +179,42 @@ function WritingEditor({ pid, onBack, startKind }) {
     return true;
   });
   // Email, discussion guide and devotional, written by the AI helper from the whole sermon.
-  const aiWriteKind = async () => {
+  // Write one piece when asked: from the sermon summary with the AI helper, or on this Mac.
+  const [socialAbout, setSocialAbout] = useState('clip');
+  const [socialClip, setSocialClip] = useState(null);
+  const writePiece = async (k = kind) => {
     setBusy(true);
     try {
-      const r = await api.post(`/api/writing/${pid}/ai-write`, { kind, days: devoDays });
-      set({ [kind]: r.text });
-      toast({ text: r.notice || 'Written from the whole sermon. Read it over, then save.' });
+      const r = await api.post(`/api/writing/${pid}/write`, { kind: k, days: devoDays, about: socialAbout, clipId: socialClip });
+      const before = draft[k];
+      set({ [k]: r.text });
+      toast({ text: r.local ? 'Written from the sermon. Read it over, then save.' : 'Written from the whole sermon with your AI helper. Read it over, then save.', ...(before?.trim() ? { action: { label: 'Undo', run: () => set({ [k]: before }) } } : {}) });
     } catch (e) { toast({ kind: 'error', text: e.message }); }
     setBusy(false);
   };
+  const aiWriteKind = () => writePiece(kind);
   const polish = async () => {
     setBusy(true);
     try { const r = await api.post(`/api/writing/${pid}/polish`, { kind, text: draft[kind] }); set({ [kind]: r.text }); toast({ text: r.notice || 'Polished. Read it over before using it.' }); } catch (e) { toast({ kind: 'error', text: e.message }); }
     setBusy(false);
   };
-  const header = draft?.headers?.[kind] || null;
+  // Every piece starts with a color band header in the first brand color; a photo or still can replace it.
+  // The "spots to fill in" pill: each click jumps to the next [BRACKETED] spot in the editor and selects it.
+  const blankAt = useRef(0);
+  const nextBlank = () => {
+    const root = document.querySelector('.rt-panel [contenteditable="true"]') || document.querySelector('.rt-panel');
+    if (!root) return;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const hits = [];
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) { const re = /\[[^\]]{2,}\]/g; let m; while ((m = re.exec(n.textContent))) hits.push({ n, a: m.index, b: m.index + m[0].length }); }
+    if (!hits.length) return;
+    const h = hits[blankAt.current % hits.length]; blankAt.current += 1;
+    const range = document.createRange(); range.setStart(h.n, h.a); range.setEnd(h.n, h.b);
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    h.n.parentElement?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    root.focus?.({ preventScroll: true });
+  };
+  const header = draft?.headers?.[kind] || (draft ? { style: 'color', color: (config.brandColors || [])[0] || '#2B7F5F' } : null);
   const setHeader = (h) => set({ headers: { ...(draft.headers || {}), [kind]: h } });
   // Images go along as data, so they paste into email and website tools.
   const inlineImages = async (html) => {
@@ -239,11 +263,11 @@ function WritingEditor({ pid, onBack, startKind }) {
             <span className="muted small truncate">{standalone ? draft?.source?.type === 'newsletter' ? 'Newsletter' : (draft?.source?.type === 'event' ? `About an event${draft.source.event?.start ? ` on ${new Date(draft.source.event.start).toLocaleDateString([], { month: 'short', day: 'numeric' })}` : ''}` : 'Your own writing') : `From “${project?.title || 'a sermon'}”`}</span>
           </div>
         </div>
-        {!standalone && <button className="btn primary" disabled={busy} onClick={generate}><Wand2 size={15} />{draft ? 'Write again' : 'Write drafts'}</button>}
+
       </div>
 
       {!draft && loaded && (
-        <div className="glass empty"><PenLine size={40} /><h3>No drafts for this sermon yet</h3><p>Press Write drafts. Everything comes from the sermon's words; you fill in the details.</p></div>
+        <div className="glass empty"><PenLine size={40} /><h3>Transcribe the sermon first</h3><p>Writing comes from the sermon's words, so it needs a transcript.</p></div>
       )}
 
       {draft && trashed && (
@@ -254,7 +278,7 @@ function WritingEditor({ pid, onBack, startKind }) {
           <div className="row between wrap">
             <div className="seg">{KINDS.filter(([k]) => (k !== 'newsletter' || draft.newsletter != null) && !(draft.source?.type === 'newsletter' && ['blog', 'email', 'group', 'devotional'].includes(k) && !draft[k]) && !(standalone && (k === 'group' || k === 'devotional') && !draft[k])).map(([k, l]) => <button key={k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>{l}</button>)}</div>
             <div className="row wrap">
-              {placeholders > 0 && <span className="chip warn">{placeholders} spot{placeholders > 1 ? 's' : ''} to fill in</span>}
+              {placeholders > 0 && <button className="chip warn chip-btn" title="Go to the next spot to fill in" onClick={nextBlank}>{placeholders} spot{placeholders > 1 ? 's' : ''} to fill in</button>}
               <button className="btn sm" onClick={() => copy(true)}><Copy size={13} />Copy formatted</button>
               <div style={{ position: 'relative' }}>
                 <button className="btn sm" data-pop-trigger onClick={() => setRewriteMenu(!rewriteMenu)}><Users size={13} />Rewrite for…</button>
@@ -262,8 +286,8 @@ function WritingEditor({ pid, onBack, startKind }) {
                   <PopList items={AUDIENCE_LIST.map(([id, label, about]) => ({ label, hint: about, value: id }))} onPick={(id) => { setRewriteMenu(false); rewriteForAudience(id); }} />
                 </Popover>
               </div>
-              {!standalone && config.llmProvider !== 'none' && ['email', 'group', 'devotional'].includes(kind) && (
-                <button className="btn sm" disabled={busy} onClick={aiWriteKind} title="Writes it from the whole sermon with your AI helper"><Sparkles size={13} className={busy ? 'spin' : ''} />{busy ? 'Writing…' : 'Write with AI helper'}</button>
+              {!standalone && kind !== 'blog' && draft[kind]?.trim() && (
+                <button className="btn sm" disabled={busy} onClick={aiWriteKind} title={config.llmProvider !== 'none' ? 'Write it again from the sermon summary with your AI helper' : 'Write it again from the sermon'}><Sparkles size={13} className={busy ? 'spin' : ''} />{busy ? 'Writing…' : 'Write again'}</button>
               )}
               <div style={{ position: 'relative' }}>
                 <button className="btn sm" data-pop-trigger onClick={() => setMoreMenu(!moreMenu)}>More<ChevronDown size={13} /></button>
@@ -315,7 +339,7 @@ function WritingEditor({ pid, onBack, startKind }) {
                           <Toggle checked={useAi} onChange={(e) => setUseAi(e.target.checked)} icon={Sparkles} label="AI helper" small />
                         )}
                         {undoBlog && <button className="btn ghost sm" onClick={() => { set({ blog: undoBlog }); setUndoBlog(null); }}><Undo2 size={13} />Undo</button>}
-                        <button className="btn primary" disabled={busy} onClick={rewrite}><RefreshCw size={15} className={busy ? 'spin' : ''} />{busy ? (useAi && config.llmProvider !== 'none' ? 'Writing, about a minute…' : 'Rewriting…') : 'Rewrite post'}</button>
+                        <button className="btn primary" disabled={busy} onClick={rewrite}><RefreshCw size={15} className={busy ? 'spin' : ''} />{busy ? (useAi && config.llmProvider !== 'none' ? 'Writing, about a minute…' : 'Writing…') : draft.blog?.trim() ? 'Rewrite post' : 'Write post'}</button>
                       </span>
                     </div>
                   </div></>}
@@ -324,9 +348,9 @@ function WritingEditor({ pid, onBack, startKind }) {
               {kind !== 'social' && (
                 <HeaderImage pid={standalone || !project?.media?.width ? null : pid} value={header} onChange={setHeader} brandColors={config.brandColors || []}
                   title={kind === 'blog' ? draft.title : ((draft[kind] || '').match(/^#\s+(.*)/m)?.[1] || draft.title).replace(/^(Small group guide|\d-day devotional):\s*/i, '')}
-                  styles={kind === 'group' ? ['full', 'blur', 'color'] : ['full']} />
+                  styles={['color', 'full', 'blur']} />
               )}
-              {kind === 'devotional' && !standalone && (
+              {kind === 'devotional' && !standalone && draft.devotional?.trim() && (
                 <section className="glass panel row between wrap" style={{ gap: 10 }}>
                   <div className="stack" style={{ gap: 1 }}><strong>Devotional series</strong><span className="small muted">One reading a day, walking through the sermon in order.</span></div>
                   <div className="row" style={{ gap: 8 }}>
@@ -335,10 +359,15 @@ function WritingEditor({ pid, onBack, startKind }) {
                   </div>
                 </section>
               )}
+              {!standalone && !draft[kind]?.trim() && !(kind === 'blog' && busy) ? (
+                <EmptyPiece kind={kind} busy={busy} useAi={config.llmProvider !== 'none'} project={project} days={devoDays} setDays={setDevoDays}
+                  hasBlog={Boolean(draft.blog?.trim())} about={socialAbout} setAbout={setSocialAbout} clipId={socialClip} setClipId={setSocialClip} onWrite={() => writePiece(kind)} />
+              ) : (
               <section className={`glass strong panel rt-panel ${busy || aiWorking === 'writing' ? 'ai-wave' : ''}`} aria-busy={busy || undefined}>
                 <RichEditor key={kind} value={draft[kind] || ''} onChange={(v) => set({ [kind]: v })}
                   onPickImage={kind === 'social' ? undefined : () => new Promise((resolve) => setImgPick(() => resolve))} />
               </section>
+              )}
             </div>
             {kind === 'blog' && checks && (
               <aside className="glass panel stack sticky-col" style={{ gap: 16 }}>
@@ -372,6 +401,40 @@ function WritingEditor({ pid, onBack, startKind }) {
         </>
       )}
     </div>
+  );
+}
+
+const PIECE_ABOUT = {
+  email: ['Email summary', 'A warm “in case you missed Sunday” email: the heart of the message, a few points and a next step.'],
+  group: ['Discussion guide', 'Questions for small groups, walking through the message in order, with Scripture to read.'],
+  devotional: ['Devotional', 'One short reading a day for the week, each with a passage, a reflection and a prayer.'],
+  social: ['Social captions', 'Three short captions about one thing: a clip from this sermon, or the blog post.'],
+};
+/** Before a piece is written: what it will be, and one button to write it from the sermon. */
+function EmptyPiece({ kind, busy, useAi, project, days, setDays, hasBlog, about, setAbout, clipId, setClipId, onWrite }) {
+  if (kind === 'blog') {
+    return <section className="glass panel stack" style={{ gap: 6 }}><strong>Ready when you are</strong><span className="small muted">Pick the title, keyphrase and angle above, then press Write post. It's written from the sermon{useAi ? ' summary, with your AI helper if it\'s on' : ''}.</span></section>;
+  }
+  const [title, about1] = PIECE_ABOUT[kind] || ['', ''];
+  const clips = (project?.clips || []).filter((c) => c.status === 'kept' || c.status === 'exported' || c.export);
+  return (
+    <section className={`glass panel stack ${busy ? 'ai-wave' : ''}`} style={{ gap: 12 }}>
+      <div className="stack" style={{ gap: 2 }}><h3 style={{ margin: 0 }}>{title}</h3><span className="small muted">{about1}</span></div>
+      {kind === 'devotional' && <div className="seg sm" role="group" aria-label="Days">{[3, 5, 7].map((d) => <button key={d} className={days === d ? 'on' : ''} onClick={() => setDays(d)}>{d} days</button>)}</div>}
+      {kind === 'social' && (
+        <div className="stack" style={{ gap: 8 }}>
+          <div className="seg sm" role="group" aria-label="Captions about">
+            <button className={about === 'clip' ? 'on' : ''} onClick={() => setAbout('clip')}>A clip</button>
+            <button className={about === 'blog' ? 'on' : ''} disabled={!hasBlog} title={hasBlog ? '' : 'Write the blog post first'} onClick={() => setAbout('blog')}>The blog post</button>
+          </div>
+          {about === 'clip' && (clips.length
+            ? <select className="input" style={{ maxWidth: 420 }} value={clipId || clips[0].id} onChange={(e) => setClipId(e.target.value)}>{clips.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}</select>
+            : <span className="small muted">Keep a clip from this sermon first, then write captions for it.</span>)}
+        </div>
+      )}
+      <button className="btn primary" disabled={busy || (kind === 'social' && about === 'clip' && !clips.length)} onClick={onWrite}><Wand2 size={15} className={busy ? 'spin' : ''} />{busy ? 'Writing…' : kind === 'social' ? 'Write captions' : 'Write it'}</button>
+      {busy && <div className="ai-wave-box ai-wave" style={{ height: 120 }} aria-label="Writing…" />}
+    </section>
   );
 }
 
@@ -432,7 +495,7 @@ function WritingHome({ onOpen }) {
         </button>
         <button className="start-tile glass" onClick={() => setPickSermon(true)}>
           <span className="type-badge" style={{ width: 40, height: 40, '--t': 'var(--tone-1)' }}><FileText size={19} /></span>
-          <strong>From a transcript</strong><span className="small muted">A blog post, email, small group guide and captions, written from the sermon's own words.</span>
+          <strong>From a transcript</strong><span className="small muted">Pick a sermon, then write the blog post, email, guide or captions from it when you're ready.</span>
         </button>
         <button className="start-tile glass" onClick={() => create({ type: 'newsletter' })}>
           <span className="type-badge" style={{ width: 40, height: 40, '--t': 'var(--tone-4)' }}><Mail size={19} /></span>
@@ -464,7 +527,7 @@ function WritingHome({ onOpen }) {
 
       {pickSermon && (
         <Modal onClose={() => setPickSermon(false)} width={520} label="Pick a transcript">
-          <ModalHead title="Pick a transcript" sub="Drafts are written from its words. You fill in the [bracketed] spots." />
+          <ModalHead title="Pick a transcript" sub="Pick the sermon. Each piece is written from it when you ask." />
           {sermons && !sermons.length && <div className="stack" style={{ gap: 8 }}><span className="muted">Transcribe a video or recording first.</span><button className="btn sm" onClick={() => go({ name: 'library' })}>Go to Videos</button></div>}
           <div className="pop-list" style={{ maxHeight: 360 }}>
             {(sermons || []).map((p) => <button key={p.id} className="pop-item" onClick={() => { setPickSermon(false); onOpen(p.id); }}>{p.title}</button>)}
