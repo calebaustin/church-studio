@@ -405,10 +405,19 @@ function ClipPreview({ player, src, clip, words, onStop }) {
   );
 }
 
+const EFFORT_HINT = {
+  auto: 'Your helper reads the whole message, then takes a second look at the best ones.',
+  good: 'Quickest. Reads the strongest moments once.',
+  better: 'Reads twice as many moments across the message.',
+  best: 'Slowest and steadiest. Reads every moment twice and checks the best again.',
+};
+
 function ClipsStep({ project, transcript, src, player, patch, busy, job, start, onEdit }) {
   const [preview, setPreview] = useState(null); // the suggested clip playing on a loop in the player
-  const { config, trackJob, toast } = useApp();
+  const { config, saveConfig, trackJob, toast } = useApp();
   const [exportKept, setExportKept] = useState(false);
+  const effort = config.clipEffort || 'auto';
+  const helperOn = config.llmProvider && config.llmProvider !== 'none';
   const [topic, setTopic] = useState('');
   const [opts, setOpts] = useState({ count: config.clipCount, min: config.clipMin, max: config.clipMax });
   const clips = useMemo(() => [...project.clips].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)), [project.clips]);
@@ -447,9 +456,19 @@ function ClipsStep({ project, transcript, src, player, patch, busy, job, start, 
             <label className="field grow">Min sec<input className="input" type="number" value={opts.min} onChange={(e) => setOpts({ ...opts, min: e.target.value })} /></label>
             <label className="field grow">Max sec<input className="input" type="number" value={opts.max} onChange={(e) => setOpts({ ...opts, max: e.target.value })} /></label>
           </div>
+          {helperOn && (
+            <label className="field">How hard to look <span className="hint">{EFFORT_HINT[effort]}</span>
+              <select className="input" value={effort} onChange={(e) => saveConfig({ clipEffort: e.target.value })}>
+                <option value="auto">Auto</option>
+                <option value="good">Good</option>
+                <option value="better">Better</option>
+                <option value="best">Best</option>
+              </select>
+            </label>
+          )}
           <div className="row between">
             <span className="muted small">Kept clips stay put.</span>
-            {!job && <button className="btn primary" onClick={() => start('propose', { prompt: topic, ...opts })}><Wand2 size={15} />{project.clips.length ? 'Find again' : 'Find clips'}</button>}
+            {!job && <button className="btn primary" onClick={() => start('propose', { prompt: topic, ...opts, effort })}><Wand2 size={15} />{project.clips.length ? 'Find again' : 'Find clips'}</button>}
           </div>
           {job && <InlineJob job={job} label="Finding clips…" />}
         </section>

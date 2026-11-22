@@ -24,7 +24,15 @@ export function spread(cands, n) {
   return picked.sort((a, b) => b.score - a.score);
 }
 
-export async function proposeClips(id, { prompt = '', count, min, max, replace = true } = {}, ctx) {
+/** How hard the helper works when finding clips. Auto reads widely once, then takes a second look at the best. */
+export const EFFORT = {
+  good: { label: 'Good', pool: 12, passes: 1, finalists: 0, minutes: 3 },
+  better: { label: 'Better', pool: 24, passes: 1, finalists: 0, minutes: 6 },
+  auto: { label: 'Auto', pool: 24, passes: 1, finalists: 12, minutes: 8 },
+  best: { label: 'Best', pool: 30, passes: 2, finalists: 12, minutes: 15 },
+};
+
+export async function proposeClips(id, { prompt = '', count, min, max, replace = true, effort = 'auto' } = {}, ctx) {
   const project = await getProject(id);
   const transcript = await getTranscript(id);
   if (!transcript) throw new Error('Transcribe the video first.');
@@ -54,30 +62,56 @@ export async function proposeClips(id, { prompt = '', count, min, max, replace =
       if (LOCAL_PROVIDERS.includes(cfg.llmProvider)) {
         // On-device helpers read a few moments at a time: each request stays small and quick, the bar moves after
         // every batch, and a slow Mac never waits on one giant request (that used to look like a freeze at 40%).
-        const pool = spread(cands, cfg.llmProvider === 'apple' ? 10 : 24);
-        const size = cfg.llmProvider === 'apple' ? 5 : 6;
-        const started = Date.now(); const budget = 6 * 60_000; const scored = [];
+        // How hard it works depends on the effort picked. Reading a moment more than once, next to different
+        // neighbors, and averaging is what makes the picks steady: one odd rating can't decide a clip.
+        const apple = cfg.llmProvider === 'apple';
+        const plan = EFFORT[effort] || EFFORT.auto;
+        const pool = spread(cands, Math.round((apple ? 10 : plan.pool) * (apple ? Math.min(1, plan.pool / 24) : 1)) || 6);
+        const size = apple ? 5 : 6;
+        const batchesOf = (list) => { const out = []; for (let k = 0; k < list.length; k += size) out.push(list.slice(k, k + size)); return out; };
+        // Pass 1 in score order; pass 2 interleaved so each moment sits beside different ones.
+        const orders = [pool, pool.filter((_, i) => i % 2).concat(pool.filter((_, i) => !(i % 2)))].slice(0, plan.passes);
+        const finalists = plan.finalists ? Math.min(plan.finalists, pool.length) : 0;
+        const total = orders.reduce((n, o) => n + batchesOf(o).length, 0) + (finalists ? Math.ceil(finalists / size) : 0);
+        const started = Date.now(); const budget = plan.minutes * 60_000;
+        const votes = new Map(); // "start-end" -> { clip (best-rated version), scores: [] }
+        const keyOf = (c) => `${c.start}-${c.end}`;
+        const vote = (r) => { const k = keyOf(r); const v = votes.get(k); if (!v) votes.set(k, { clip: r, scores: [r.score] }); else { v.scores.push(r.score); if (r.score > v.clip.score) v.clip = { ...r }; } };
+        const avg = (k) => { const v = votes.get(k); return v ? v.scores.reduce((a, b) => a + b, 0) / v.scores.length : 0; };
         // The bar spans the helper's whole job (8% to 96%) and keeps moving inside each batch at the pace the
         // batches so far have taken, so it never sits still while the helper reads.
-        const span = (k) => 8 + (88 * k) / pool.length;
-        let per = 30_000; let tick = null;
-        for (let k = 0; k < pool.length; k += size) {
-          if (Date.now() - started > budget) { warning = `${PROVIDER_NAMES[cfg.llmProvider]} took a while, so the rest were picked locally.`; break; }
-          const part = pool.slice(k, k + size);
-          const msg = `${PROVIDER_NAMES[cfg.llmProvider]} is reading moments ${k + 1}-${k + part.length} of ${pool.length}…`;
-          const from = span(k); const to = span(k + part.length); const t0 = Date.now();
-          ctx.progress(from, msg);
-          ctx.detail?.({ Batch: `${Math.floor(k / size) + 1} of ${Math.ceil(pool.length / size)}`, Helper: PROVIDER_NAMES[cfg.llmProvider] });
+        let done = 0; let per = 30_000; let tick = null;
+        const runBatch = async (part, label) => {
+          const from = 8 + (88 * done) / total; const to = 8 + (88 * (done + 1)) / total; const t0 = Date.now();
+          ctx.progress(from, label);
+          ctx.detail?.({ Batch: `${done + 1} of ${total}`, Helper: PROVIDER_NAMES[cfg.llmProvider], Effort: plan.label });
           clearInterval(tick);
-          tick = setInterval(() => { const f = 1 - Math.exp(-(Date.now() - t0) / per); ctx.progress(from + (to - from) * Math.min(0.95, f), msg); }, 1000);
+          tick = setInterval(() => { const f = 1 - Math.exp(-(Date.now() - t0) / per); ctx.progress(from + (to - from) * Math.min(0.95, f), label); }, 1000);
           const signal = ctx.signal ? AbortSignal.any([ctx.signal, AbortSignal.timeout(150_000)]) : AbortSignal.timeout(150_000);
-          try { scored.push(...await rerank(cfg, part, { title: project.title, count: part.length, signal })); } catch (e) {
+          try { (await rerank(cfg, part, { title: project.title, count: part.length, signal })).forEach(vote); } catch (e) {
             if (ctx.signal?.aborted) { clearInterval(tick); throw new Error('Cancelled'); }
             if (isUsageError(e)) { clearInterval(tick); throw e; }
             // One slow or confused batch: keep going with the rest.
           }
           per = per * 0.5 + (Date.now() - t0) * 0.5; // learn this Mac's pace
+          done++;
+        };
+        outer: for (const [pi, order] of orders.entries()) {
+          const batches = batchesOf(order);
+          for (const [bi, part] of batches.entries()) {
+            if (Date.now() - started > budget) { warning = `${PROVIDER_NAMES[cfg.llmProvider]} took a while, so the rest were picked locally.`; break outer; }
+            await runBatch(part, `${PROVIDER_NAMES[cfg.llmProvider]} is reading moments${orders.length > 1 ? ` (pass ${pi + 1} of ${orders.length})` : ''}: ${bi * size + 1}-${bi * size + part.length} of ${order.length}…`);
+          }
         }
+        // A second look at the finalists, side by side with each other, settles the order at the top.
+        if (finalists && Date.now() - started <= budget) {
+          const top = [...votes.keys()].sort((a, b) => avg(b) - avg(a)).slice(0, finalists).map((k) => cands.find((c) => keyOf(c) === k)).filter(Boolean);
+          for (const part of batchesOf(top)) {
+            if (Date.now() - started > budget) break;
+            await runBatch(part, `${PROVIDER_NAMES[cfg.llmProvider]} is taking a second look at the best ${top.length}…`);
+          }
+        }
+        const scored = [...votes.entries()].map(([k, v]) => ({ ...v.clip, score: Math.round(avg(k)) }));
         clearInterval(tick);
         const sortedAll = scored.sort((a, b) => b.score - a.score);
         ranked = sortedAll.slice(0, count);
@@ -100,6 +134,14 @@ export async function proposeClips(id, { prompt = '', count, min, max, replace =
         for (const h of heur) { if (ranked.length >= count) break; if (!ranked.some((r) => r.start === h.start && r.end === h.end)) ranked.push(h); }
       } else {
         ranked = await rerank(cfg, cands, { title: project.title, count, signal: ctx.signal });
+        // Best: a second, independent read in another order, averaged with the first.
+        if (effort === 'best' && ranked.length) {
+          ctx.progress(55, `${PROVIDER_NAMES[cfg.llmProvider] || cfg.llmProvider} is taking a second look…`);
+          const again = await rerank(cfg, [...cands].reverse(), { title: project.title, count: Math.min(cands.length, count * 2), signal: ctx.signal }).catch(() => []);
+          const second = new Map(again.map((r) => [`${r.start}-${r.end}`, r.score]));
+          for (const r of ranked) { const s2 = second.get(`${r.start}-${r.end}`); r.score = Math.round(s2 != null ? (r.score + s2) / 2 : r.score * 0.9); }
+          ranked.sort((a, b) => b.score - a.score);
+        }
       }
       if (ranked.length) { clips = ranked; method = cfg.llmProvider; } else warning = 'The AI returned no clips; kept the offline picks.';
     } catch (e) {

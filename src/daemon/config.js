@@ -25,6 +25,7 @@ export const DEFAULTS = {
   clipCount: 8,
   clipMin: 25,
   clipMax: 60,
+  clipEffort: 'auto', // how hard the AI helper looks for clips: auto, good, better or best
   exportFolder: '',
   exportPattern: '{date} - {title}',
   appearance: 'system', // light | dark | system

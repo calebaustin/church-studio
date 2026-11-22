@@ -12,11 +12,12 @@ strong power powerful free freedom chains enough worth worthy identity purpose c
 grace mercy forgive forgiven forgiveness hope faith trust believe doubt peace joy heaven hell eternal
 god god's jesus christ cross spirit holy savior lord kingdom gospel prayer pray scripture bible`.split(/\s+/));
 
-const STORY = [/\bi remember\b/i, /\bwhen i was\b/i, /\bthere was (a|this|an)\b/i, /\bone (day|time|night)\b/i,
+const STORY = [/\bi remember\b/i, /\bwhen i was\b/i, /\bthere was (a|this|an)\b/i, /\bone (day|time|night),? (i|we|my|when)\b/i,
   /\byears ago\b/i, /\blet me tell you\b/i, /\bi'll never forget\b/i, /\bstory\b/i, /\bmy (wife|husband|son|daughter|dad|mom|father|mother|kids?|grand\w+|brother|sister|friend)\b/i,
   // A personal moment told in the past: "I got a key chain", "that year", "growing up", "in elementary school".
-  /\b(i|we) (got|bought|went|had|saw|heard|asked|told|walked|drove|grew up|dropped|picked|found|lost|tried)\b/i,
-  /\b(that|this|one|last) (year|summer|christmas|thanksgiving|morning|evening|week)\b/i, /\bgrowing up\b/i,
+  // Only "I" (teaching says "we had" all the time) and only verbs that tell what happened.
+  /\bi (got|bought|walked|drove|grew up|dropped|picked up|found|lost|tried|ran|called|met|wore|kept)\b/i,
+  /\b(that|one|last) (year|summer|christmas|thanksgiving)\b/i, /\bgrowing up\b/i,
   /\b(elementary|middle|high) school\b/i, /\bwhen (my|our) (kids?|son|daughter)\b/i, /\bi was (\d+|a kid|little|young)\b/i];
 // The line a story or illustration lands on: why it matters.
 const PAYOFF = [/\bbecause of (who|why|what)\b/i, /\bthat's why\b/i, /\b(it|that) matters\b/i, /\bthe (point|reason) is\b/i,

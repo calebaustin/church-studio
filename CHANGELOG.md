@@ -15,8 +15,10 @@ Every update keeps your sermons, designs, drafts and settings. Before a new vers
 - **Clean up speech.** Light, Medium or Heavy in the Words tab cuts fillers, stumbles and long pauses in one go. Heavy also cuts "you know" and "I mean".
 - **Progress bar.** In a clip's Look tab, add a thin bar along the top or bottom that fills as the clip plays, in your brand color or any color.
 
+- **How hard to look.** Find clips has a new choice when an AI helper is on: Auto, Good, Better or Best. Auto reads the whole message, then takes a second look at the best moments. Good is quickest. Best reads every moment twice and checks the finalists again, for the steadiest picks. Your choice is remembered.
+
 ### Changed
-- **Better clip picks.** Clip finding notices personal stories and the line they land on, rhythm like "It's His love that…", and gives a story room to finish. The AI helper reads the start and end of each moment, looks across the whole message, and rates hook, stands alone, payoff and feeling, so scores spread out and each clip's reason names its own key line.
+- **Better clip picks.** Clip finding notices personal stories and the line they land on, rhythm like "It's His love that…", and gives a story room to finish. The AI helper reads the start and end of each moment, looks across the whole message, and rates hook, stands alone, payoff and feeling, so scores spread out and each clip's reason names its own key line. Moments read more than once are averaged, so one odd rating can't decide a clip, and the two best stories that land their point keep a place in the picks.
 
 ### Fixed
 - Pasting or typing a full hex code in a Brand kit color no longer closes the color picker right away. You see the color first and close it yourself.
