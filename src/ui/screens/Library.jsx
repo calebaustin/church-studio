@@ -9,6 +9,7 @@ import { api, desktop, fmt, media } from '../api.js';
 import Modal from '../components/Modal.jsx';
 import AddVideo from '../components/AddVideo.jsx';
 import SetupChecklist from '../components/SetupChecklist.jsx';
+import { useItemMenu } from '../components/ItemMenu.jsx';
 
 export default function Library({ openPicker = false }) {
   const { go, trackJob, onJobFinished, config } = useApp();
@@ -21,6 +22,7 @@ export default function Library({ openPicker = false }) {
   const [view, setView] = useState('projects');
 
   const load = () => api.get('/api/projects').then((r) => setProjects(r.projects));
+  const itemMenu = useItemMenu({ onChanged: () => load() });
   useEffect(() => { load(); }, []);
   useEffect(() => onJobFinished((j) => {
     if (['download', 'import'].includes(j.kind)) load();
@@ -89,7 +91,7 @@ export default function Library({ openPicker = false }) {
       )}
       {view === 'projects' && <div className="projects">
         {projects?.map((p) => (
-          <div key={p.id} className="glass card" onClick={() => go({ name: 'project', id: p.id })}>
+          <div key={p.id} className="glass card" onClick={() => go({ name: 'project', id: p.id })} onContextMenu={(e) => itemMenu.open(e, { key: `${p.isSermon ? 'video' : 'sermon'}:${p.id}`, name: p.title, type: 'video' })}>
             <div style={{ padding: 8 }}>
               <div className="thumb">
                 {p.thumbnail ? <img src={p.thumbnail} alt="" /> : p.audio ? <PreviewTile kind={p.isSermon ? 'sermon' : 'audio'} title={p.title} meta={p.duration ? fmt(p.duration) : null} /> : p.status !== 'downloading' ? <img src={media(p.id, 'poster.jpg')} alt="" onError={(e) => { e.currentTarget.style.display = 'none'; }} /> : 'Downloading…'}
@@ -107,6 +109,7 @@ export default function Library({ openPicker = false }) {
           </div>
         ))}
       </div>}
+      {itemMenu.menu}
       {picker && <ChannelPicker onClose={() => setPicker(false)} onAdd={(v) => { setPicker(false); setAdding({ url: v.url, title: v.title }); }} />}
       {cleaning && <CleanAudioDialog onClose={() => setCleaning(false)} />}
       {adding && <AddVideo url={adding.url} title={adding.title} onClose={() => setAdding(null)} onAdd={(body) => { setAdding(null); add(body); }} />}

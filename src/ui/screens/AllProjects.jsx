@@ -11,6 +11,7 @@ import { Masonry } from '../components/Masonry.jsx';
 import { api } from '../api.js';
 import Popover from '../components/Popover.jsx';
 import Modal, { ModalHead } from '../components/Modal.jsx';
+import { useItemMenu } from '../components/ItemMenu.jsx';
 
 export const TYPES = {
   sermon: { label: 'Sermon', plural: 'Sermons', icon: BookOpen },
@@ -72,11 +73,11 @@ function FolderTip() {
   );
 }
 
-function ItemCard({ item, folders, inFolder, onOpen, act }) {
+function ItemCard({ item, folders, inFolder, onOpen, act, onMenu }) {
   const [menu, setMenu] = useState(false);
   const [sub, setSub] = useState(false);
   return (
-    <div className="item-card glass" draggable onDragStart={(e) => { e.dataTransfer.setData('text/x-item', item.key); e.dataTransfer.effectAllowed = 'link'; }}>
+    <div className="item-card glass" onContextMenu={item.trashed ? undefined : (e) => onMenu?.(e, item)} draggable onDragStart={(e) => { e.dataTransfer.setData('text/x-item', item.key); e.dataTransfer.effectAllowed = 'link'; }}>
       <button className={`item-cover ${item.portrait ? 'portrait' : ''}`} onClick={onOpen}>
         {item.thumb ? <img src={item.thumb} alt="" loading="lazy" /> : <PreviewTile kind={item.type} title={item.name} excerpt={item.excerpt} palette={item.palette} meta={item.meta} />}
       </button>
@@ -134,6 +135,7 @@ export default function AllProjects() {
   const [naming, setNaming] = useState(null); // { id?, name, then? }
   const [tagging, setTagging] = useState(null); // the item whose tags are being edited
   const load = () => api.get('/api/finder').then(setData).catch((e) => toast({ kind: 'error', text: e.message }));
+  const itemMenu = useItemMenu({ onChanged: () => load() });
   useEffect(() => { load(); }, []);
 
   const open = (i) => {
@@ -287,11 +289,12 @@ export default function AllProjects() {
             </div>
           )}
           <Masonry className="item-grid">
-            {items.map((i) => <ItemCard key={i.key} item={i} folders={data.folders} inFolder={folder?.id} onOpen={() => open(i)} act={act} />)}
+            {items.map((i) => <ItemCard key={i.key} item={i} folders={data.folders} inFolder={folder?.id} onOpen={() => open(i)} act={act} onMenu={itemMenu.open} />)}
           </Masonry>
         </section>
       </div>
 
+      {itemMenu.menu}
       {tagging && <TagEditor item={tagging} all={allTags.map(([t]) => t)} onClose={() => setTagging(null)} onSaved={() => { setTagging(null); load(); }} />}
       {naming && createPortal(
         <div className="scrim" onMouseDown={(e) => e.target === e.currentTarget && setNaming(null)}>

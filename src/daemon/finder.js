@@ -6,7 +6,7 @@ import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promise
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { DATA_DIR } from './tools.js';
-import { getProject, listProjects, projectDir } from './projects.js';
+import { deleteProject, getProject, listProjects, projectDir, updateProject } from './projects.js';
 import { deleteDesign, getDesign, listDesigns, saveDesign } from './designs.js';
 import * as socialStore from './social/store.js';
 import { excerptOf } from './writing.js';
@@ -195,3 +195,65 @@ export async function archive(key, on) {
 
 export async function isTrashed(key) { return (await load()).trash.some((t) => t.key === key); }
 export { saveDesign };
+
+// ---------------------------------------------------------------- right-click actions on any item
+const split = (key) => { const [type, ...rest] = String(key).split(':'); return [type, rest.join(':')]; };
+
+/** Rename any item: a video or Sermon, a clip, a writing draft or a design. */
+export async function renameItem(key, name) {
+  const [type, id] = split(key);
+  const n = String(name || '').trim().slice(0, 160);
+  if (!n) throw new Error('Give it a name.');
+  if (type === 'sermon' || type === 'video') { if (!(await getProject(id))) throw new Error('Not found'); await updateProject(id, (p) => { p.title = n; }); return n; }
+  if (type === 'clip') { const [pid, cid] = id.split('/'); await updateProject(pid, (p) => { const c = p.clips.find((x) => x.id === cid); if (!c) throw new Error('Not found'); c.title = n; }); return n; }
+  if (type === 'writing') { const f = path.join(WRITING, `${id}.json`); const d = JSON.parse(await readFile(f, 'utf8')); d.title = n; await writeFile(f, JSON.stringify(d, null, 2)); return n; }
+  if (type === 'design') { const d = await getDesign(id); if (!d) throw new Error('Not found'); await saveDesign(id, { ...d, name: n }); return n; }
+  throw new Error('This can\'t be renamed.');
+}
+
+/** The file on this Mac an item is made from, if it has one: a project's video or recording, or a clip's export. */
+export async function sourceOf(key) {
+  const [type, id] = split(key);
+  if (type === 'sermon' || type === 'video') {
+    const p = await getProject(id);
+    const f = p?.sourceFile ? path.join(projectDir(id), p.sourceFile) : null;
+    return f && existsSync(f) ? f : null;
+  }
+  if (type === 'clip') {
+    const [pid, cid] = id.split('/');
+    const c = (await getProject(pid))?.clips.find((x) => x.id === cid);
+    return c?.export?.file && existsSync(c.export.file) ? c.export.file : null;
+  }
+  return null;
+}
+
+/** Erase an item's source file from this Mac. The project, transcript and clips stay; a video can be added back. */
+export async function deleteSource(key) {
+  const [type, id] = split(key);
+  const f = await sourceOf(key);
+  if (!f) throw new Error('There is no source file on this Mac for this.');
+  await rm(f, { force: true });
+  if (type === 'clip') { const [pid, cid] = id.split('/'); await updateProject(pid, (p) => { const c = p.clips.find((x) => x.id === cid); if (c) delete c.export; }); }
+  else await updateProject(id, (p) => { p.needsMedia = true; });
+  return path.basename(f);
+}
+
+/** Delete a video or Sermon project (its folder), or one clip from its project. Designs and writing use the trash. */
+export async function deleteItem(key) {
+  const [type, id] = split(key);
+  const s = await load();
+  if (type === 'sermon' || type === 'video') {
+    await deleteProject(id);
+    const gone = new Set([`sermon:${id}`, `video:${id}`]);
+    for (const k of [...(s.starred || [])]) if (gone.has(k) || k.startsWith(`clip:${id}/`)) s.starred = s.starred.filter((x) => x !== k);
+    for (const f of s.folders) f.items = f.items.filter((k) => !gone.has(k) && !k.startsWith(`clip:${id}/`));
+  } else if (type === 'clip') {
+    const [pid, cid] = id.split('/');
+    const f = await sourceOf(key);
+    if (f) await rm(f, { force: true });
+    await updateProject(pid, (p) => { p.clips = p.clips.filter((c) => c.id !== cid); });
+    s.starred = (s.starred || []).filter((k) => k !== key);
+    for (const fo of s.folders) fo.items = fo.items.filter((k) => k !== key);
+  } else throw new Error('Designs and writing go to the trash.');
+  await save(s);
+}

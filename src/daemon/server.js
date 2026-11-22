@@ -563,6 +563,8 @@ route('POST', '/api/library/reveal', async (_p, b) => {
   return { ok: true };
 });
 route('POST', '/api/library/save', async (_p, b) => { try { return await library.saveDataUrl(b.folder || 'Graphics', b.name, b.dataUrl); } catch (e) { throw new HttpError(400, e.message); } });
+route('POST', '/api/library/rename', async (_p, b) => { try { return { rel: await library.renameFile(String(b.rel || ''), b.name) }; } catch (e) { throw new HttpError(400, e.message); } });
+route('POST', '/api/library/erase', async (_p, b) => { try { return { removed: await library.eraseFile(String(b.rel || '')) }; } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/library/trash', async (_p, b) => { try { return await library.trashFile(String(b.rel || '')); } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/library/replace', async (_p, b) => { try { return await library.replaceFile(String(b.rel || ''), String(b.file || '')); } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/library/import', async (_p, b) => {
@@ -627,6 +629,10 @@ route('DELETE', '/api/finder/folders/:fid', async ({ fid }) => { await finder.de
 route('POST', '/api/finder/folders/:fid/items', async ({ fid }, b) => { await finder.addToFolder(fid, String(b.key)); return { ok: true }; });
 route('POST', '/api/finder/folders/:fid/remove', async ({ fid }, b) => { await finder.removeFromFolder(fid, String(b.key)); return { ok: true }; });
 route('POST', '/api/finder/reveal', async (_p, b) => { try { await revealInFinder(await finder.locate(String(b.key))); return { ok: true }; } catch (e) { throw new HttpError(404, e.message); } });
+route('POST', '/api/finder/rename', async (_p, b) => { try { return { name: await finder.renameItem(String(b.key), b.name) }; } catch (e) { throw new HttpError(400, e.message); } });
+route('POST', '/api/finder/source', async (_p, b) => { const f = await finder.sourceOf(String(b.key)); return { file: f ? f.split('/').pop() : null }; });
+route('POST', '/api/finder/delete-source', async (_p, b) => { try { return { removed: await finder.deleteSource(String(b.key)) }; } catch (e) { throw new HttpError(400, e.message); } });
+route('POST', '/api/finder/delete-item', async (_p, b) => { try { await finder.deleteItem(String(b.key)); return { ok: true }; } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/finder/star', async (_p, b) => { await finder.star(String(b.key), Boolean(b.on)); return { ok: true }; });
 route('POST', '/api/finder/trash', async (_p, b) => { try { await finder.trashItem(String(b.key)); return { ok: true }; } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/finder/restore', async (_p, b) => { await finder.restoreItem(String(b.key)); return { ok: true }; });

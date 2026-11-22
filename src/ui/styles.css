@@ -1863,3 +1863,7 @@ button.tp-tile:active .tp-orb { transform: scale(.92); transition-duration: 120m
 /* Social: your own pages, for a quick look while planning */
 .pages-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
 .page-tile { display: grid; gap: 6px; padding: 12px; border-radius: 14px; background: var(--field); box-shadow: inset 0 0 0 1px var(--line); }
+
+/* Right-click menu on files and projects */
+.item-menu { width: 230px; }
+.pop-sep { border: 0; height: 1px; margin: 4px 6px; background: var(--line); }

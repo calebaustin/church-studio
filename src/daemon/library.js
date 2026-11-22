@@ -1,11 +1,11 @@
 // Brand library: a normal folder in Documents (Photos, Logos, Graphics, Brand) that the app reads.
 // Drop files in with Finder; every tool can use them. Graphics made in the app are saved here too.
 import { existsSync } from 'node:fs';
-import { copyFile, mkdir, readdir, rename, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { APP_NAME, WORKSPACE } from './tools.js';
-import { loadConfig } from './config.js';
+import { loadConfig, saveConfig } from './config.js';
 
 export const FOLDERS = ['Photos', 'Logos', 'Graphics', 'Brand', 'Writing', 'Audio'];
 const KINDS = { image: /\.(png|jpe?g|webp|gif|heic|svg)$/i, video: /\.(mp4|mov|m4v)$/i, doc: /\.(pdf|md|txt|docx|pptx)$/i, audio: /\.(mp3|m4a|wav|aac|aiff?|flac|ogg)$/i };
@@ -140,4 +140,34 @@ export async function replaceFile(rel, source) {
   await copyFile(source, dest);
   const root = await libraryRoot();
   return { rel: path.relative(root, dest).split(path.sep).join('/') };
+}
+
+/** Rename a library file in place, keeping its folder and extension. Returns the new relative path. */
+export async function renameFile(rel, name) {
+  const f = await libraryFile(rel);
+  if (!f) throw new Error('File not found.');
+  const ext = path.extname(f);
+  const base = String(name || '').replace(new RegExp(`${ext.replace('.', '\\.')}$`, 'i'), '').replace(/[/\\:*?"<>|]+/g, '-').trim().slice(0, 120);
+  if (!base) throw new Error('Give it a name.');
+  const dest = path.join(path.dirname(f), base + ext);
+  if (dest === f) return rel;
+  if (existsSync(dest)) throw new Error('A file with that name is already in this folder.');
+  await rename(f, dest);
+  const root = await libraryRoot();
+  const next = path.relative(root, dest).split(path.sep).join('/');
+  const { moveNote } = await import('./photos.js');
+  await moveNote(rel, next);
+  const cfg = await loadConfig();
+  if (cfg.appLogo === rel) await saveConfig({ appLogo: next });
+  return next;
+}
+
+/** Erase a library file from this Mac for good (not to the Trash). */
+export async function eraseFile(rel) {
+  const f = await libraryFile(rel);
+  if (!f) throw new Error('File not found.');
+  await rm(f, { force: true });
+  const { moveNote } = await import('./photos.js');
+  await moveNote(rel, null);
+  return path.basename(f);
 }

@@ -96,3 +96,12 @@ export async function autoTag(rels, { untaggedOnly = true, ctx } = {}) {
   }
   return { tagged: done, looked: todo.length };
 }
+
+/** Keep a file's alt text and tags when it's renamed, and drop them when it's erased. */
+export async function moveNote(from, to) {
+  const notes = await loadNotes();
+  if (!notes[from]) return;
+  if (to) notes[to] = notes[from];
+  delete notes[from];
+  await writeFile(STORE, JSON.stringify(notes, null, 2));
+}

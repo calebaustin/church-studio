@@ -11,6 +11,7 @@ import BackgroundEraser from '../components/BackgroundEraser.jsx';
 import PhotoNotes, { TagBatch } from '../components/PhotoNotes.jsx';
 import SetupChecklist from '../components/SetupChecklist.jsx';
 import Popover from '../components/Popover.jsx';
+import { useItemMenu } from '../components/ItemMenu.jsx';
 
 /** Main colors in an image (a logo): bucket pixels, skip transparent ones, keep distinct colors. */
 async function colorsFrom(url, n = 4) {
@@ -229,6 +230,7 @@ export default function BrandLibrary({ section }) {
   const [folder, setFolder] = useState('All');
   const [q, setQ] = useState('');
   const load = () => api.get('/api/library').then(setLib);
+  const itemMenu = useItemMenu({ onChanged: () => load() });
   useEffect(() => { load(); }, []);
   usePoll(load, 30000); // files added in Finder show up; focus also refreshes
   useEffect(() => onJobFinished(() => load()), [onJobFinished]);
@@ -320,7 +322,7 @@ export default function BrandLibrary({ section }) {
         {items.map((i) => {
           const I = ICON[i.kind];
           return (
-            <div key={i.rel} className="glass lib-card">
+            <div key={i.rel} className="glass lib-card" onContextMenu={(e) => itemMenu.open(e, { type: 'file', rel: i.rel, name: i.name })}>
               <div className="lib-thumb">{i.kind === 'image' ? <img src={i.url} alt="" loading="lazy" /> : <I size={36} />}</div>
               <div className="stack" style={{ gap: 4, padding: '8px 10px 10px' }}>
                 <strong className="truncate small" title={i.name}>{i.name}</strong>
@@ -337,6 +339,7 @@ export default function BrandLibrary({ section }) {
           );
         })}
       </div>
+      {itemMenu.menu}
       </>)}
     </div>
   );
