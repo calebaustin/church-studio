@@ -10,6 +10,7 @@ import Modal from '../components/Modal.jsx';
 import AddVideo from '../components/AddVideo.jsx';
 import SetupChecklist from '../components/SetupChecklist.jsx';
 import { useItemMenu } from '../components/ItemMenu.jsx';
+import CombineVideos from '../components/CombineVideos.jsx';
 
 export default function Library({ openPicker = false }) {
   const { go, trackJob, onJobFinished, config } = useApp();
@@ -207,6 +208,7 @@ function MakeGroups({ openFile, onPick, projects }) {
   const { go, toast } = useApp();
   const [choosing, setChoosing] = useState(null); // { group, action }
   const [pickProject, setPickProject] = useState(false);
+  const [combining, setCombining] = useState(false);
   const groups = [
     {
       id: 'clips', title: 'Clips from a video', sub: 'Find the best moments in a sermon, class or podcast. Make vertical clips from widescreen videos.', steps: ['Trim', 'Transcribe', 'Clip'], tone: 1, icon: ScissorsLineDashed,
@@ -218,7 +220,7 @@ function MakeGroups({ openFile, onPick, projects }) {
     },
     {
       id: 'clip', title: 'Make a clip', sub: 'One short vertical clip for Reels, Shorts and stories.', steps: ['Open', 'Transcribe', 'Polish'], tone: 3, icon: Clapperboard,
-      actions: [{ label: 'From a short video', hint: 'The whole thing becomes the clip', kind: 'short', source: () => openFile('short') }, { label: 'Lyric clip', hint: 'Just audio, with captions on color', kind: 'lyric', source: () => openFile('lyric') }],
+      actions: [{ label: 'From a short video', hint: 'The whole thing becomes the clip', kind: 'short', source: () => openFile('short') }, { label: 'Combine videos', hint: 'One after another, or side by side', direct: () => setCombining(true) }, { label: 'Lyric clip', hint: 'Just audio, with captions on color', kind: 'lyric', source: () => openFile('lyric') }],
     },
   ];
   const usable = (projects || []).filter((p) => p.status === 'transcribed');
@@ -242,6 +244,7 @@ function MakeGroups({ openFile, onPick, projects }) {
   };
   return (
     <div className="make-groups">
+      {combining && <CombineVideos onClose={() => setCombining(false)} />}
       {groups.map((g) => (
         <section key={g.id} className="glass make-group">
           <div className="row between" style={{ alignItems: 'flex-start', gap: 8 }}>
@@ -251,7 +254,7 @@ function MakeGroups({ openFile, onPick, projects }) {
           <div className="stack" style={{ gap: 2 }}><h3 style={{ margin: 0 }}>{g.title}</h3><span className="small muted">{g.sub}</span></div>
           <div className="stack" style={{ gap: 6 }}>
             {g.actions.map((a) => (
-              <button key={a.label} className={`make-action ${choosing?.action === a ? 'on' : ''}`} onClick={() => { setPickProject(false); setChoosing(choosing?.action === a ? null : { group: g.id, action: a }); }}>
+              <button key={a.label} className={`make-action ${choosing?.action === a ? 'on' : ''}`} onClick={() => { if (a.direct) return a.direct(); setPickProject(false); setChoosing(choosing?.action === a ? null : { group: g.id, action: a }); }}>
                 <span className="stack" style={{ gap: 0 }}><strong>{a.label}</strong><span className="small muted">{a.hint}</span></span>
                 <ArrowRight size={15} />
               </button>

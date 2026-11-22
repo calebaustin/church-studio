@@ -13,7 +13,15 @@ grace mercy forgive forgiven forgiveness hope faith trust believe doubt peace jo
 god god's jesus christ cross spirit holy savior lord kingdom gospel prayer pray scripture bible`.split(/\s+/));
 
 const STORY = [/\bi remember\b/i, /\bwhen i was\b/i, /\bthere was (a|this|an)\b/i, /\bone (day|time|night)\b/i,
-  /\byears ago\b/i, /\blet me tell you\b/i, /\bi'll never forget\b/i, /\bstory\b/i, /\bmy (wife|husband|son|daughter|dad|mom|father|mother|kids?)\b/i];
+  /\byears ago\b/i, /\blet me tell you\b/i, /\bi'll never forget\b/i, /\bstory\b/i, /\bmy (wife|husband|son|daughter|dad|mom|father|mother|kids?|grand\w+|brother|sister|friend)\b/i,
+  // A personal moment told in the past: "I got a key chain", "that year", "growing up", "in elementary school".
+  /\b(i|we) (got|bought|went|had|saw|heard|asked|told|walked|drove|grew up|dropped|picked|found|lost|tried)\b/i,
+  /\b(that|this|one|last) (year|summer|christmas|thanksgiving|morning|evening|week)\b/i, /\bgrowing up\b/i,
+  /\b(elementary|middle|high) school\b/i, /\bwhen (my|our) (kids?|son|daughter)\b/i, /\bi was (\d+|a kid|little|young)\b/i];
+// The line a story or illustration lands on: why it matters.
+const PAYOFF = [/\bbecause of (who|why|what)\b/i, /\bthat's why\b/i, /\b(it|that) matters\b/i, /\bthe (point|reason) is\b/i,
+  /\bwhat (matters|makes)\b/i, /\bbecame (special|sacred|holy)\b/i, /\b(simple|ordinary|common)\b.*\b(sacred|extraordinary|holy)\b/i,
+  /\bnot (just|only)\b.*\bbut\b/i, /\bit's (not|never) about\b/i];
 const APPLY = [/\byou (need|have|get|can|don't have|are|were) to\b/i, /\bwhat if you\b/i, /\bthis week\b/i,
   /\bhere's (the thing|what)\b/i, /\bif you('re| are)\b/i, /\byou are\b/i, /\bgod (is|will|wants|loves|sees|knows)\b/i,
   /\bthe (truth|point|good news) is\b/i, /\bi want you to\b/i];
@@ -31,6 +39,7 @@ export function lineFeatures(text) {
     hook: toks.slice(0, 16).filter((t) => HOOK.has(t)).length,
     question: /\?/.test(text),
     story: STORY.some((r) => r.test(text)),
+    payoff: PAYOFF.some((r) => r.test(text)),
     apply: APPLY.some((r) => r.test(text)),
     quotable: QUOTABLE.some((r) => r.test(text)) && toks.length <= 22,
     scripture: SCRIPTURE.test(text),
@@ -49,6 +58,7 @@ export function lineScore(text) {
   let s = 1.6 * Math.min(f.hook, 4);
   if (f.question) s += 1.5;
   if (f.story) s += 2;
+  if (f.payoff) s += 2;
   if (f.apply) s += 2;
   if (f.quotable) s += 2.5;
   if (f.scripture) s += 1;
@@ -78,16 +88,21 @@ export function proposeHeuristic(words, { start, end, count = 8, min = 25, max =
   const bg = backgroundOf(sentences);
   const want = new Set(tokens(prompt).filter((t) => t.length > 2));
 
+  // Lines that start the same way ("It's His love that…", "We remember…") build rhythm, which carries a short clip.
+  const head = (t) => tokens(t).slice(0, 2).join(' ');
+  const rhythm = sentences.map((s, i) => (i > 0 && head(s.text).length > 3 && head(s.text) === head(sentences[i - 1].text) ? 1 : 0));
   const cands = [];
   for (let a = 0; a < n; a++) {
     let b = a;
-    while (b + 1 < n && sentences[b + 1].end - sentences[a].start <= max) b++;
+    // A story needs room for its setup and its point: windows that open on a story may run a quarter longer.
+    const room = feats[a].story || feats[Math.min(n - 1, a + 1)].story ? max * 1.25 : max;
+    while (b + 1 < n && sentences[b + 1].end - sentences[a].start <= room) b++;
     // Prefer to end on a finished sentence: walk back to the last one that ends with punctuation.
     let bEnd = b;
     while (bEnd > a && !sentences[bEnd].endsSentence && sentences[bEnd].end - sentences[a].start > min) bEnd--;
     for (const bb of new Set([b, bEnd])) {
       const dur = sentences[bb].end - sentences[a].start;
-      if (dur < min || dur > max + 1) continue;
+      if (dur < min || dur > room + 1) continue;
       const span = sentences.slice(a, bb + 1);
       const wordsN = span.reduce((acc, s) => acc + s.text.split(/\s+/).length, 0);
       const density = wordsN / dur; // preaching ≈ 2–3 words/s
@@ -98,8 +113,12 @@ export function proposeHeuristic(words, { start, end, count = 8, min = 25, max =
       const leadPause = a > 0 ? sentences[a - 1].pauseAfter : 1;
       const tailPause = sentences[bb].pauseAfter;
       const housekeeping = feats.slice(a, bb + 1).some((f) => f.housekeeping);
+      // A story that lands: a story early on and a payoff line later in the same window.
+      const storyAt = feats.slice(a, bb + 1).findIndex((f) => f.story);
+      const arc = storyAt >= 0 && feats.slice(a + storyAt + 1, bb + 1).some((f) => f.payoff || f.quotable || f.apply) ? 4 : 0;
+      const beat = Math.min(3, rhythm.slice(a + 1, bb + 1).reduce((x, y) => x + y, 0));
       let score = 3 * opener + 2 * body + 1.2 * peak + 2 * Math.min(density, 3.2) + closer
-        + 1.2 * Math.min(leadPause, 1.5) + 1.5 * Math.min(tailPause, 1.5) - (housekeeping ? 8 : 0);
+        + 1.2 * Math.min(leadPause, 1.5) + 1.5 * Math.min(tailPause, 1.5) - (housekeeping ? 8 : 0) + arc + 1.2 * beat;
       if (want.size) {
         const toks = new Set(tokens(span.map((s) => s.text).join(' ')));
         const hit = [...want].filter((t) => toks.has(t)).length;
@@ -140,7 +159,7 @@ function buildClip(sentences, feats, scores, { a, b, score }, top, bg, words) {
   const f = feats.slice(a, b + 1);
   const reasons = [];
   if (scores[a] > 2) reasons.push('Strong opening line');
-  if (f.some((x) => x.story)) reasons.push('Tells a story');
+  if (f.some((x) => x.story)) reasons.push(f.some((x) => x.payoff) ? 'A story that lands its point' : 'Tells a story');
   if (f.some((x) => x.apply)) reasons.push('Personal application');
   if (f.some((x) => x.quotable)) reasons.push('Quotable line');
   if (f.some((x) => x.scripture)) reasons.push('Cites scripture');

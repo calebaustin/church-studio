@@ -9,6 +9,21 @@ import { loadConfig } from './config.js';
 import { proposeHeuristic } from './clips.js';
 import { aiStatus, isUsageError, LOCAL_PROVIDERS, markUsageProblem, PROVIDER_NAMES, rerank } from './ai.js';
 
+/**
+ * The moments a helper reads: the best from each part of the message first, then the next best overall. A great
+ * story told in a quieter stretch still gets read, not just the highest offline scores (often from one section).
+ */
+export function spread(cands, n) {
+  if (cands.length <= n) return cands;
+  const t0 = Math.min(...cands.map((c) => c.start)); const t1 = Math.max(...cands.map((c) => c.end));
+  const bins = Math.max(2, Math.round(n / 2)); const size = (t1 - t0) / bins || 1;
+  const byScore = [...cands].sort((a, b) => b.score - a.score);
+  const picked = [];
+  for (let k = 0; k < bins; k++) { const best = byScore.find((c) => !picked.includes(c) && Math.floor((c.start - t0) / size) === k); if (best) picked.push(best); }
+  for (const c of byScore) { if (picked.length >= n) break; if (!picked.includes(c)) picked.push(c); }
+  return picked.sort((a, b) => b.score - a.score);
+}
+
 export async function proposeClips(id, { prompt = '', count, min, max, replace = true } = {}, ctx) {
   const project = await getProject(id);
   const transcript = await getTranscript(id);
@@ -22,7 +37,7 @@ export async function proposeClips(id, { prompt = '', count, min, max, replace =
   ctx.progress(4, 'Scoring every possible clip…');
   const useAI = aiStatus(cfg).active;
   // Ask the heuristic for extra candidates when an AI will choose among them.
-  const heur = proposeHeuristic(transcript.words, { start: range.start, end: range.end, count: useAI ? count * 3 : count, min, max, prompt });
+  const heur = proposeHeuristic(transcript.words, { start: range.start, end: range.end, count: useAI ? count * 4 : count, min, max, prompt });
   let clips = heur.slice(0, count);
   let method = 'heuristic';
   let warning = null;
@@ -39,7 +54,7 @@ export async function proposeClips(id, { prompt = '', count, min, max, replace =
       if (LOCAL_PROVIDERS.includes(cfg.llmProvider)) {
         // On-device helpers read a few moments at a time: each request stays small and quick, the bar moves after
         // every batch, and a slow Mac never waits on one giant request (that used to look like a freeze at 40%).
-        const pool = cands.slice(0, cfg.llmProvider === 'apple' ? 10 : 24);
+        const pool = spread(cands, cfg.llmProvider === 'apple' ? 10 : 24);
         const size = cfg.llmProvider === 'apple' ? 5 : 6;
         const started = Date.now(); const budget = 6 * 60_000; const scored = [];
         // The bar spans the helper's whole job (8% to 96%) and keeps moving inside each batch at the pace the
@@ -65,6 +80,9 @@ export async function proposeClips(id, { prompt = '', count, min, max, replace =
         }
         clearInterval(tick);
         ranked = scored.sort((a, b) => b.score - a.score).slice(0, count);
+        // Two clips with the same title: the lower one keeps its own offline title instead.
+        const titles = new Set();
+        for (const r of ranked) { const k = r.title.toLowerCase(); if (titles.has(k)) { const h = heur.find((x) => x.start === r.start && x.end === r.end); if (h) r.title = h.title; } titles.add(r.title.toLowerCase()); }
         // Short of picks? Top up with the offline picks the helper didn't get to.
         for (const h of heur) { if (ranked.length >= count) break; if (!ranked.some((r) => r.start === h.start && r.end === h.end)) ranked.push(h); }
       } else {

@@ -18,6 +18,7 @@ import { useChurchEvents } from '../components/ChurchEvents.jsx';
 import { LOOKS, hasLook, lookFilter } from '../studioLook.js';
 
 const FILLERS = new Set(['um', 'uh', 'uhm', 'umm', 'er', 'erm', 'ah']);
+const STUMBLE = new Set(['i', 'a', 'the', 'and', 'that', 'it', 'to', 'or', 'we', 'you', 'is', 'in', 'of', 'so', 'but', 'he', 'they', 'this', 'what', 'if', 'for', 'on', 'my', 'was', "it's", "i'm", "we're", "you're", "that's"]);
 const FRAME_W = 340;
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -215,7 +216,7 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
   // ---- words, cuts, playback
   const words = transcript.words;
   const len = clip.end - clip.start;
-  const keep = useMemo(() => keepSegments(words, clip), [words, clip.start, clip.end, clip.cutWords, clip.tightenPauses, clip.pauseMax]);
+  const keep = useMemo(() => keepSegments(words, clip, { fillers: transcript.fillers }), [words, transcript.fillers, clip.start, clip.end, clip.cutWords, clip.tightenPauses, clip.pauseMax, clip.cutFillers]);
   const outLen = keptLength(keep);
   const cut = useMemo(() => new Set(clip.cutWords || []), [clip.cutWords]);
   const capWords = useMemo(() => words
@@ -512,7 +513,7 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
             ))}
           </div>
 
-          {tab === 'words' && <WordsTab words={words} clip={clip} set={set} cut={cut} rel={rel} outLen={outLen} seek={(t) => { video.current.currentTime = t; }}
+          {tab === 'words' && <WordsTab words={words} fillersList={transcript.fillers} clip={clip} set={set} cut={cut} rel={rel} outLen={outLen} seek={(t) => { video.current.currentTime = t; }}
             fixWord={async (i, text) => {
               const r = await api.put(`/api/projects/${project.id}/transcript/word`, { index: i, text });
               onTranscript?.((t) => ({ ...t, words: t.words.map((w, k) => (k === i ? { ...w, ...r.word } : w)) }));
@@ -752,7 +753,7 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
   );
 }
 
-function WordsTab({ words, clip, set, cut, rel, outLen, seek, fixWord, replaceWords }) {
+function WordsTab({ words, fillersList, clip, set, cut, rel, outLen, seek, fixWord, replaceWords }) {
   // Select words (drag across them, or click one and shift-click another) for a small Cut / Replace bar.
   const [sel, setSel] = useState(null); // { a, b, show }
   const [replacing, setReplacing] = useState(null); // text being typed
@@ -816,11 +817,23 @@ function WordsTab({ words, clip, set, cut, rel, outLen, seek, fixWord, replaceWo
       set({ end: words[i].end + 0.3 });
     }
   };
+  // "um" and "uh": newer transcripts keep them apart from the words (cut by time); older ones have them as words.
+  const fillerCount = (fillersList || []).filter((f) => f.start >= clip.start && f.end <= clip.end).length
+    + words.slice(firstIn, lastIn + 1).filter((w) => FILLERS.has(w.w.toLowerCase().replace(/[^a-z]/g, ''))).length;
   const fillers = () => {
+    const on = !clip.cutFillers;
     const next = new Set(cut);
-    for (let i = firstIn; i <= lastIn; i++) if (FILLERS.has(words[i].w.toLowerCase().replace(/[^a-z]/g, ''))) next.add(i);
-    set({ cutWords: [...next].sort((a, b) => a - b) });
+    for (let i = firstIn; i <= lastIn; i++) if (FILLERS.has(words[i].w.toLowerCase().replace(/[^a-z]/g, ''))) { if (on) next.add(i); else next.delete(i); }
+    set({ cutFillers: on, cutWords: [...next].sort((a, b) => a - b) });
   };
+  // Stumbles: a small word said twice in a row ("that, that", "I, I"). The first one goes; repeats said on
+  // purpose ("many, many", "tough week, tough week") stay.
+  const stumbles = [];
+  for (let i = Math.max(firstIn, 1); i <= lastIn; i++) {
+    const a = words[i - 1].w.toLowerCase().replace(/[^a-z']/g, ''); const b = words[i].w.toLowerCase().replace(/[^a-z']/g, '');
+    if (a && a === b && STUMBLE.has(a) && !cut.has(i - 1) && words[i].start - words[i - 1].end < 1.2) stumbles.push(i - 1);
+  }
+  const cutStumbles = () => set({ cutWords: [...new Set([...cut, ...stumbles])].sort((x, y) => x - y) });
   const absNow = clip.start + rel;
   const pauseMax = clip.pauseMax ?? 0.45;
   return (
@@ -836,7 +849,8 @@ function WordsTab({ words, clip, set, cut, rel, outLen, seek, fixWord, replaceWo
             <input type="range" min="0.2" max="1.5" step="0.05" value={pauseMax} onChange={(e) => set({ pauseMax: Number(e.target.value) })} style={{ width: 120 }} aria-label="Shortest pause to trim" />
           </label>
         )}
-        <button className="btn sm" onClick={fillers}>Cut “um” and “uh”</button>
+        <Toggle checked={Boolean(clip.cutFillers)} onChange={fillers} icon={Scissors} label={`Cut “um” and “uh”${fillerCount ? ` (${fillerCount})` : ''}`} small />
+        <button className="btn sm" disabled={!stumbles.length} title="Cut a small word said twice in a row, like “that, that”" onClick={cutStumbles}>Cut stumbles{stumbles.length ? ` (${stumbles.length})` : ''}</button>
         <button className="btn ghost sm" disabled={!cut.size} onClick={() => set({ cutWords: [] })}>Restore all words</button>
         <span className="chip accent num">{fmt(outLen)} long</span>
       </div>

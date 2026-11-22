@@ -35,7 +35,7 @@ export function activeCaption(events, t) {
   return null;
 }
 
-export function keepSegments(words, clip, { maxPause = 0.45, pad = 0.08 } = {}) {
+export function keepSegments(words, clip, { maxPause = 0.45, pad = 0.08, fillers = null } = {}) {
   const len = clip.end - clip.start;
   const cut = new Set(clip.cutWords || []);
   const inClip = words.map((w, i) => ({ ...w, i })).filter((w) => w.end > clip.start && w.start < clip.end);
@@ -52,6 +52,17 @@ export function keepSegments(words, clip, { maxPause = 0.45, pad = 0.08 } = {}) 
     const to = next ? Math.max(next.start - LEAD, inClip[j].end) - clip.start : clip.end - clip.start; // at its end: cut to the end
     cuts.push([from, to]);
     k = j;
+  }
+  // "um" and "uh": each one goes with the air around it, keeping the tail of the word before and the start of the next.
+  if (clip.cutFillers && fillers?.length) {
+    for (const f of fillers) {
+      if (f.end <= clip.start || f.start >= clip.end) continue;
+      const prev = [...inClip].reverse().find((w) => w.end <= f.start + 0.01 && !cut.has(w.i));
+      const next = inClip.find((w) => w.start >= f.end - 0.01 && !cut.has(w.i));
+      const from = prev ? Math.min(prev.end + TAIL, f.start) : f.start;
+      const to = next ? Math.max(next.start - LEAD, f.end) : f.end;
+      cuts.push([from - clip.start, to - clip.start]);
+    }
   }
   if (clip.tightenPauses) {
     const kept = inClip.filter((w) => !cut.has(w.i));

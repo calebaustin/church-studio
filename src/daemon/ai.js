@@ -17,10 +17,15 @@ function looseJson(text) {
   return JSON.parse(t.slice(a, b + 1));
 }
 
-const SYSTEM = `You help a church media team pick short vertical clips (Reels, Shorts, TikTok) from a sermon.
-A good clip: a viewer who has seen nothing else understands it in the first two seconds, it stands on its own
-(no "as I said earlier"), it delivers a payoff (a truth, a story's point, an application), and it ends on a complete thought.
-Stay faithful to what the preacher actually said; never invent quotes or theology. Titles are short and honest, not clickbait.`;
+const SYSTEM = `You help a church media team pick short vertical clips (Reels, Shorts, TikTok) from a sermon, class or talk.
+Judge each candidate like a video editor, on four things:
+1. Hook: the first line pulls a viewer in with no other context.
+2. Stands alone: someone who saw nothing else can follow it (no "as I said earlier").
+3. Payoff: it lands on a clear, memorable takeaway or closing line.
+4. Feeling: a story with a point, a relatable or funny moment, or rhythm and contrast ("simple made sacred") make it worth sharing.
+A personal story or illustration that lands its point, or a relatable moment, usually beats dense teaching.
+Use the whole score range: 90+ is rare and exceptional, most good clips are 60 to 85, weak ones are under 50.
+Stay faithful to what the speaker said; never invent quotes or theology.`;
 
 const SCHEMA = {
   type: 'object',
@@ -35,12 +40,12 @@ const SCHEMA = {
         required: ['index', 'score', 'title', 'summary', 'hook', 'hashtags', 'reason'],
         properties: {
           index: { type: 'integer', description: 'Candidate index from the list' },
-          score: { type: 'integer', description: '0-100; 90+ is rare' },
-          title: { type: 'string', description: 'Max 70 characters' },
+          score: { type: 'integer', description: '0-100. 90+ is rare. Most good clips 60-85.' },
+          title: { type: 'string', description: 'A specific headline for the idea, under 60 characters, not a quote. Like: Thanksgiving: People You Like and People You Have To' },
           summary: { type: 'string', description: '1-2 sentence post caption' },
           hook: { type: 'string', description: '3-7 word on-screen hook' },
           hashtags: { type: 'array', items: { type: 'string' } },
-          reason: { type: 'string', description: 'One sentence on why it works' },
+          reason: { type: 'string', description: 'Why this clip works, naming its own story, line or idea. One or two sentences. Never generic.' },
         },
       },
     },
@@ -164,14 +169,17 @@ export function providerReady(cfg) {
   return Boolean(cfg[`${p}ApiKey`]);
 }
 
+const GENERIC = /a truth, a story|delivers a payoff \(|stays faithful|not clickbait|short and honest|strong candidate|stands on its own and|complete thought\.?$/i;
 /** Re-rank heuristic candidates. `cands` carry `.text`; returns the clips with AI fields merged in. */
 export async function rerank(cfg, cands, { title, count, signal }) {
   const ask = PROVIDERS[cfg.llmProvider];
   if (!ask) throw new Error(`Unknown AI provider "${cfg.llmProvider}"`);
   // On-device models have small memories: send the strongest candidates, trimmed. Indexes still match.
   const p = cfg.llmProvider;
-  const shown = p === 'apple' ? cands.slice(0, 10).map((c) => ({ ...c, text: c.text.slice(0, 380) }))
-    : p === 'cshelper' ? cands.slice(0, 24).map((c) => ({ ...c, text: c.text.slice(0, 600) })) : cands;
+  // A clip lives or dies on its first and last lines, so a trimmed candidate keeps both ends and drops the middle.
+  const ends = (t, n) => { if (t.length <= n) return t; const head = Math.round(n * 0.55); return `${t.slice(0, head).replace(/\s+\S*$/, '')} … ${t.slice(-(n - head)).replace(/^\S*\s+/, '')}`; };
+  const shown = p === 'apple' ? cands.slice(0, 10).map((c) => ({ ...c, text: ends(c.text, 420) }))
+    : p === 'cshelper' ? cands.slice(0, 24).map((c) => ({ ...c, text: ends(c.text, 760) })) : cands;
   const out = await ask(cfg, prompt(shown, title, count), signal);
   const seen = new Set();
   // Small local models sometimes score 1-10 instead of 0-100: put those on the same scale.
@@ -190,7 +198,8 @@ export async function rerank(cfg, cands, { title, count, signal }) {
         title: String(p.title).slice(0, 90),
         summary: p.summary, hook: shortHook(p.hook, c.hook),
         hashtags: (p.hashtags || []).map((h) => String(h).replace(/^#/, '').trim()).filter(Boolean).slice(0, 6),
-        reasons: [p.reason, ...c.reasons].filter(Boolean),
+        // A reason that only repeats the instructions says nothing about this clip: keep the app's own instead.
+        reasons: [GENERIC.test(String(p.reason || '')) ? null : String(p.reason || '').trim(), ...c.reasons].filter(Boolean),
         source: cfg.llmProvider,
       };
     });

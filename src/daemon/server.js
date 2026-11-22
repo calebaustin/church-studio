@@ -32,6 +32,7 @@ import * as voice from './voice.js';
 import * as designs from './designs.js';
 import * as updates from './updates.js';
 import * as finder from './finder.js';
+import * as combine from './combine.js';
 import { WORKSPACE } from './tools.js';
 import { toSentences, backgroundOf, keywords as topKeywords } from './text.js';
 import { listThemes, saveTheme, deleteTheme, refreshSystemFonts, bundledFontDir } from './themes.js';
@@ -191,6 +192,16 @@ route('POST', '/api/projects', async (_p, b) => {
     return { job: jobs.view(job) };
   }
   throw new HttpError(400, 'Send a YouTube url or a local file path.');
+});
+
+// Several videos made into one (one after another, side by side or stacked), then a project like any other.
+route('POST', '/api/projects/combine', async (_p, b) => {
+  const files = (b.files || []).map((f) => (typeof f === 'string' ? { path: f } : f)).filter((f) => f?.path);
+  if (files.length < 2) throw new HttpError(400, 'Pick at least two videos.');
+  const kind = b.kind || (b.shape === 'wide' ? 'wide' : 'short');
+  const job = jobs.enqueue({ kind: 'import', label: b.layout === 'sequence' ? `Combine ${files.length} videos` : `Put ${files.length} videos side by side` },
+    (ctx) => combine.combineFiles(files, { layout: b.layout, shape: b.shape, title: b.title, kind }, ctx));
+  return { job: jobs.view(job) };
 });
 
 // A project started from scratch: 30 seconds of silence, one clip, ready for text, color and pop-ups.

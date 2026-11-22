@@ -10,6 +10,12 @@ import { detectSermon } from './sermon.js';
 import { audioFilter } from './audio.js';
 import { normalizeWords, normalizeText, WHISPER_HINT } from './scripture.js';
 
+// A short, well-punctuated sample of natural speech, given to Whisper as the text "so far". It nudges Whisper to
+// write down fillers and stumbles (uh, um, "that, that") instead of tidying them away, while keeping punctuation.
+const VERBATIM = 'Well, um, good morning. Uh, I- I want to talk about, um, that, that verse today. So, you know, it\'s, uh, a really big deal. And, and God is good.';
+const FILLER = /^(uh+|um+|uhm|erm|hmm+|mm+)$/i;
+export const isFiller = (w) => FILLER.test(String(w).replace(/[^A-Za-z]/g, ''));
+
 export async function transcribeProject(id, { start = null, end = null, cleanup } = {}, ctx) {
   const project = await getProject(id);
   if (!project?.sourceFile) throw new Error('The video has not finished downloading.');
@@ -30,7 +36,7 @@ export async function transcribeProject(id, { start = null, end = null, cleanup 
   ctx.detail({ Model: `Whisper ${config.whisperModel}`, Audio: af ? 'Cleaned up first' : null });
   const began = Date.now();
   const clock = (t) => { t = Math.round(t); const h = Math.floor(t / 3600); const m = Math.floor((t % 3600) / 60); const x = String(t % 60).padStart(2, '0'); return h ? `${h}:${String(m).padStart(2, '0')}:${x}` : `${m}:${x}`; };
-  const { stdout } = await run(...pyCommand('transcribe', [wav, '--model', config.whisperModel, '--offset', String(start ?? 0), '--hotwords', WHISPER_HINT]), {
+  const { stdout } = await run(...pyCommand('transcribe', [wav, '--model', config.whisperModel, '--offset', String(start ?? 0), '--hotwords', WHISPER_HINT, '--prompt', VERBATIM]), {
     signal: ctx.signal,
     onStderr: (chunk) => {
       const dev = chunk.match(/DEVICE (\w+)/);
@@ -45,6 +51,11 @@ export async function transcribeProject(id, { start = null, end = null, cleanup 
     },
   });
   const transcript = jsonFrom(stdout);
+  // Whisper hears the "um"s and "uh"s now (so they can be cut), but they're kept apart from the words, so captions,
+  // writing and clip picking read clean text and every word keeps its place.
+  const all = transcript.words || [];
+  transcript.fillers = all.filter((w) => isFiller(w.w)).map((w) => ({ w: w.w.replace(/[^A-Za-z]/g, ''), start: w.start, end: w.end }));
+  transcript.words = all.filter((w) => !isFiller(w.w));
   // Write Bible references the way people read them: 1 Corinthians 10:16.
   transcript.words = normalizeWords(transcript.words);
   for (const s of transcript.segments || []) s.text = normalizeText(s.text);

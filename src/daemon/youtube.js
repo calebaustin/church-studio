@@ -242,7 +242,7 @@ export async function replaceSource(id, filePath, ctx) {
 
 const fmtDur = (t) => { t = Math.round(t); const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), x = t % 60; return h ? `${h}:${String(m).padStart(2, '0')}:${String(x).padStart(2, '0')}` : `${m}:${String(x).padStart(2, '0')}`; };
 
-async function finishIngest(id, source, ctx) {
+export async function finishIngest(id, source, ctx) {
   ctx.progress(96, 'Checking the video…');
   const media = await probe(source);
   await run(tool('ffmpeg'), ['-y', '-loglevel', 'error', '-ss', String(Math.min(60, media.duration * 0.1)), '-i', source,
