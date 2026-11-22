@@ -45,7 +45,8 @@ export function CardPreview({ cards, outTime, keep, capWords, theme, font, frame
   // Card time is output time; caption words are clip time. Map them across the cuts.
   const relToOut = (r) => { let acc = 0; for (const [s, en] of keep) { if (r < en) return acc + Math.max(0, r - s); acc += en - s; } return acc; };
   const words = c.text ? [] : capWords.filter((w) => { const o = relToOut(w.start); return o >= c.start - 0.05 && o <= c.end + 0.05; }).map((w) => ({ ...w, start: relToOut(w.start), end: relToOut(w.end) }));
-  const cardTheme = theme ? { ...theme, size: (theme.size || 78) * (c.scale || 1.35), position: 0.5, maxWidth: 0.84, words: c.words || 10, align: 'center' } : null;
+  const all = c.show === 'all';
+  const cardTheme = theme ? { ...theme, size: (theme.size || 78) * (c.scale || 1.35) * (all ? 0.82 : 1), position: 0.5, maxWidth: 0.84, words: all ? 9999 : c.words || 14, maxChars: 30, sentences: true, align: 'center' } : null;
   const type = c.bg?.type || 'mesh';
   return (
     <div className="clip-card-layer" style={style} aria-hidden="true">
@@ -54,6 +55,7 @@ export function CardPreview({ cards, outTime, keep, capWords, theme, font, frame
       {c.text
         ? <div className="clip-card-text" style={{ fontFamily: font?.css, color: theme?.color || '#FFFFFF', fontSize: Math.round(frameWidth * 0.075) }}>{c.text}</div>
         : cardTheme && <CaptionOverlay theme={cardTheme} font={font} words={words} t={outTime} frameWidth={frameWidth} />}
+      {c.label?.trim() && <div className={`clip-card-label ${c.labelPos === 'top' ? 'top' : ''}`} style={{ fontFamily: font?.css, color: theme?.color || '#FFFFFF', fontSize: Math.round(frameWidth * 0.045) }}>{c.label}</div>}
     </div>
   );
 }
@@ -94,7 +96,19 @@ export function CardsPanel({ clip, set, now, len, brand }) {
               <button className={c.text || c.custom ? 'on' : ''} onClick={() => up(c.id, { custom: true })}>My own text</button>
             </div>
             {(c.text || c.custom) && <textarea className="input" rows={3} value={c.text || ''} placeholder="“This is my body, which is given for you.” Luke 22:19" onChange={(e) => up(c.id, { text: e.target.value, custom: true })} />}
-            {!c.text && !c.custom && <span className="hint">Styled like your captions, larger and centered. Change the caption style in Captions.</span>}
+            {!c.text && !c.custom && (
+              <div className="row wrap" style={{ gap: 8 }}>
+                <div className="seg" role="group" aria-label="How the words show">
+                  <button className={c.show !== 'all' ? 'on' : ''} onClick={() => up(c.id, { show: 'phrase' })}>Phrase by phrase</button>
+                  <button className={c.show === 'all' ? 'on' : ''} onClick={() => up(c.id, { show: 'all' })}>All at once</button>
+                </div>
+                <span className="hint">Each word lights up as it's said, styled like your captions.</span>
+              </div>
+            )}
+            <div className="row wrap" style={{ gap: 8 }}>
+              <input className="input grow" style={{ minWidth: 160 }} value={c.label || ''} placeholder="Reference or label, like Luke 22:19" onChange={(e) => up(c.id, { label: e.target.value })} />
+              {c.label?.trim() && <div className="seg" role="group" aria-label="Label place">{[['top', 'Above'], ['bottom', 'Below']].map(([k, l]) => <button key={k} className={(c.labelPos || 'bottom') === k ? 'on' : ''} onClick={() => up(c.id, { labelPos: k })}>{l}</button>)}</div>}
+            </div>
             <div className="stack" style={{ gap: 6 }}>
               <span className="small" style={{ fontWeight: 600 }}>Background</span>
               <div className="seg" role="group" aria-label="Background">{BG_TYPES.map(([k, l]) => <button key={k} className={type === k ? 'on' : ''} onClick={() => upBg(c, { type: k })}>{l}</button>)}</div>

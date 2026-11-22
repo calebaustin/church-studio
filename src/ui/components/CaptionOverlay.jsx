@@ -73,7 +73,7 @@ function Hook({ theme, font, scale, text, onPlace }) {
 }
 
 export default function CaptionOverlay({ theme, font, hookFont, words, t, frameWidth, frameHeight, hook, showHook, editing = null, onPlace }) {
-  const events = useMemo(() => captionEvents(words, Number(theme.words || 3)), [words, theme.words]);
+  const events = useMemo(() => captionEvents(words, Number(theme.words || 3), Number(theme.maxChars || 22), Boolean(theme.sentences)), [words, theme.words, theme.maxChars, theme.sentences]);
   const ev = activeCaption(events, t);
   const scale = (frameHeight ? Math.min(frameWidth, frameHeight) : frameWidth) / 1080;
   const box = theme.highlight === 'box';

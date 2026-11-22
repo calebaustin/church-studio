@@ -295,16 +295,21 @@ def hex_rgba(h: str, a: int = 255):
     return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16), a)
 
 
-def group_words(words, max_words: int, max_chars: int = 22):
+def group_words(words, max_words: int, max_chars: int = 22, sentences: bool = False):
+    """Caption groups. Cards break only at the end of a sentence (sentences=True); a card showing the whole
+    passage (max_words 9999) is one group."""
+    if max_words >= 9999:
+        return [list(words)] if words else []
     groups, cur = [], []
+    ends = ".?!" if sentences else ".?!,;:"
     for w in words:
         chars = sum(len(x["w"]) for x in cur) + len(cur)
         gap = (w["start"] - cur[-1]["end"]) if cur else 0
-        if cur and (len(cur) >= max_words or chars + len(w["w"]) > max_chars * max(1, max_words / 3) or gap > 0.6):
+        if cur and (len(cur) >= max_words or chars + len(w["w"]) > max_chars * max(1, max_words / 3) or gap > (1.2 if sentences else 0.6)):
             groups.append(cur)
             cur = []
         cur.append(w)
-        if w["w"][-1:] in ".?!,;:":
+        if w["w"][-1:] in ends:
             groups.append(cur)
             cur = []
     if cur:
@@ -323,7 +328,7 @@ class Captions:
         self.font = load_font(theme["fontFile"], theme.get("fontStyle"), int(theme.get("size", 78) * self.k), theme.get("fontIndex"))
         self.cache: dict = {}
         self.events = []  # (start, end, group_idx, active_idx)
-        self.groups = group_words(words, int(theme.get("words", 3)), int(theme.get("maxChars", 22)))
+        self.groups = group_words(words, int(theme.get("words", 3)), int(theme.get("maxChars", 22)), bool(theme.get("sentences")))
         for gi, g in enumerate(self.groups):
             for wi, w in enumerate(g):
                 s = w["start"]
@@ -704,11 +709,11 @@ class StaticText:
         return [self.placed]
 
 
-def card_text_image(text: str, th: dict, W: int, H: int):
+def card_text_image(text: str, th: dict, W: int, H: int, scale: float = 1.5):
     """Your own words on a card: the caption font and color, as large as fits 84% of the width and 60% of the height."""
     k = min(W, H) / 1080
     lines_in = [ln.strip() for ln in str(text).split("\n") if ln.strip()]
-    size = int(float(th.get("size", 78)) * 1.5 * k)
+    size = int(float(th.get("size", 78)) * scale * k)
     for _ in range(14):
         font = load_font(th["fontFile"], th.get("fontStyle"), max(12, size), th.get("fontIndex"))
         maxw = W * 0.84
@@ -758,17 +763,25 @@ class Cards:
             if e <= s:
                 continue
             th = dict(theme)
-            th.update({"size": float(theme.get("size", 78)) * float(c.get("scale", 1.35)), "position": 0.5, "maxWidth": 0.84, "words": int(c.get("words", 10)), "maxChars": 70, "align": "center"})
+            th.update({"size": float(theme.get("size", 78)) * float(c.get("scale", 1.35)), "position": 0.5, "maxWidth": 0.84, "words": int(c.get("words", 14)), "maxChars": 30, "sentences": True, "align": "center"})
             text = str(c.get("text") or "").strip()
             if text:  # your own text, like a verse: one centered block, sized to fit, no word-by-word highlight
                 caps = StaticText(card_text_image(text, th, W, H))
             else:
                 ws = [w for w in words if w["start"] >= s - 0.05 and w["end"] <= e + 0.05]
+                if c.get("show") == "all":  # the whole passage at once, each word lighting up as it's said
+                    th.update({"words": 9999, "size": float(th["size"]) * 0.82})
                 caps = Captions(ws, th, W, H, None, e)
-            self.items.append((s, e, c.get("transition", "fade"), caps, CardBackground(c.get("bg") or {}, W, H, brand)))
+            label = None
+            if str(c.get("label") or "").strip():  # a reference or label, like "Luke 22:19", above or below
+                lt = dict(theme); lt["size"] = float(theme.get("size", 78)) * 0.62
+                arr, x, _, _ = card_text_image(str(c["label"]).strip(), lt, W, H, scale=1.0)
+                y = int(H * (0.16 if c.get("labelPos") == "top" else 0.84) - arr.shape[0] / 2)
+                label = (arr, x, y, 1.0)
+            self.items.append((s, e, c.get("transition", "fade"), caps, CardBackground(c.get("bg") or {}, W, H, brand), label))
 
     def apply(self, img, t: float):
-        for s, e, tr, caps, bg in self.items:
+        for s, e, tr, caps, bg, label in self.items:
             if t < s or t > e:
                 continue
             d = 0.45
@@ -777,6 +790,8 @@ class Cards:
             card = bg.frame(t - s).copy()
             for arr, x, y, op in caps.at(t):
                 blend(card, arr, x, y, op)
+            if label is not None:
+                blend(card, *label)
             if tr.startswith("slide"):
                 dx, dy = {"slide-left": (1, 0), "slide-right": (-1, 0), "slide-up": (0, 1), "slide-down": (0, -1)}.get(tr, (0, 1))
                 ox, oy = int(dx * (1 - ease) * self.W), int(dy * (1 - ease) * self.H)

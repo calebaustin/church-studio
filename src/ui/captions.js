@@ -1,25 +1,28 @@
 // Mirrors scripts/render_clip.py (group_words / events) and src/daemon/render.js (keepSegments)
 // so the live preview shows the same caption grouping and cuts as the export.
 
-export function groupWords(words, maxWords = 3, maxChars = 22) {
+export function groupWords(words, maxWords = 3, maxChars = 22, sentences = false) {
+  // A full-screen card showing the whole passage is one group; cards otherwise break only at sentence ends.
+  if (maxWords >= 9999) return words.length ? [words] : [];
   const groups = [];
   let cur = [];
+  const ends = sentences ? /[.?!]$/ : /[.?!,;:]$/;
   for (const w of words) {
     const chars = cur.reduce((a, x) => a + x.w.length, 0) + cur.length;
     const gap = cur.length ? w.start - cur.at(-1).end : 0;
-    if (cur.length && (cur.length >= maxWords || chars + w.w.length > maxChars * Math.max(1, maxWords / 3) || gap > 0.6)) {
+    if (cur.length && (cur.length >= maxWords || chars + w.w.length > maxChars * Math.max(1, maxWords / 3) || gap > (sentences ? 1.2 : 0.6))) {
       groups.push(cur);
       cur = [];
     }
     cur.push(w);
-    if (/[.?!,;:]$/.test(w.w)) { groups.push(cur); cur = []; }
+    if (ends.test(w.w)) { groups.push(cur); cur = []; }
   }
   if (cur.length) groups.push(cur);
   return groups;
 }
 
-export function captionEvents(words, maxWords) {
-  const groups = groupWords(words, maxWords);
+export function captionEvents(words, maxWords, maxChars = 22, sentences = false) {
+  const groups = groupWords(words, maxWords, maxChars, sentences);
   const events = [];
   groups.forEach((g, gi) => g.forEach((w, wi) => {
     let e = wi + 1 < g.length ? g[wi + 1].start : w.end + 0.15;
