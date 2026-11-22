@@ -48,6 +48,13 @@ editor-style rubric.
 | 4 | rating anchors, stretch bunched scores | 3 | no | no | 60-95 |
 | 5 | 60/40 blend with offline score, keep 2 best stories | 5 | no | yes | 65-95 |
 
+| 6 | Auto effort (averaged passes + finalist look), stricter story cues | 5 | yes | no | 60-95 |
+| 7 | Auto again (same settings) | 6 | yes | no | 60-95 |
+| 8 | Best effort (two passes + finalist look), 7.5 min | 7 | yes | yes | 67-91 |
+
+Runs 6 and 7 agree on 6 of 10 picks; Best agrees with Auto on 7 of 10. Auto takes about 4 minutes on this Mac with CS
+Helper, Best about 7.5.
+
 Reasons went from repeating the instructions to naming the clip ("Lands on 'You proclaim the Lord's death until He
 comes.'"). The picks vary a lot between runs: the 3B helper is noisy, so it shouldn't be the only judge. Ideas: run the
 helper twice and average, or let a bigger helper (Claude, ChatGPT) rank when one is connected. Stories detected by the
