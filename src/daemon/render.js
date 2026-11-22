@@ -136,7 +136,7 @@ export async function buildJob(project, clip, { preview = false, trackOnly = fal
     introCard: clip.introCard?.rel ? { ...clip.introCard, file: await libraryFile(clip.introCard.rel) } : null,
     keep: trackOnly ? null : keepSegments(words, clip, { fillers: transcript?.fillers }),
     words: clipWords,
-    hook: options.hook === false ? null : clip.hook || null,
+    hook: options.hook === false || clip.hideHook ? null : clip.hook || null,
     captions: options.captions === false ? false : clip.captions !== false,
     theme: { ...theme, fontFile: font?.file, fontStyle: font?.style, fontIndex: font?.index ?? null,
       ...(hookFontRec?.file ? { hookFontFile: hookFontRec.file, hookFontStyle: hookFontRec.style, hookFontIndex: hookFontRec.index ?? null } : {}) },

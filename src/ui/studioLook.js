@@ -31,8 +31,11 @@ export function lookFilter(look) {
   const k = look.strength ?? 1;
   const mix = (v, id) => 1 + (v - id) * k;
   const light = look.light || 0;
-  const f = `brightness(${(mix(p.b, 1) + light * 0.16).toFixed(3)}) contrast(${(mix(p.c, 1) - light * 0.08).toFixed(3)}) saturate(${mix(p.s, 1).toFixed(3)}) sepia(${(p.sepia * k).toFixed(3)}) hue-rotate(${(p.hue * k).toFixed(1)}deg)`;
+  // Quick color fixes, each -1..1 (Video tab).
+  const ex = look.exposure || 0; const co = look.contrast || 0; const sa = look.saturation || 0; const wa = look.warmth || 0;
+  const f = `brightness(${(mix(p.b, 1) + light * 0.16 + ex * 0.22).toFixed(3)}) contrast(${(mix(p.c, 1) - light * 0.08 + co * 0.3).toFixed(3)}) saturate(${(mix(p.s, 1) * (1 + sa * 0.6)).toFixed(3)}) sepia(${(p.sepia * k + Math.max(0, wa) * 0.25).toFixed(3)}) hue-rotate(${(p.hue * k + Math.min(0, wa) * -10).toFixed(1)}deg)`;
   return f === 'brightness(1.000) contrast(1.000) saturate(1.000) sepia(0.000) hue-rotate(0.0deg)' ? undefined : f;
 }
 
-export const hasLook = (look) => Boolean(look && ((look.preset && look.preset !== 'none') || look.light > 0 || look.blur > 0));
+export const hasLook = (look) => Boolean(look && ((look.preset && look.preset !== 'none') || look.light > 0 || look.blur > 0
+  || ['exposure', 'contrast', 'saturation', 'warmth'].some((k) => Math.abs(look[k] || 0) > 0.001) || look.wash?.amount > 0));

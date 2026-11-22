@@ -274,6 +274,7 @@ export async function finishIngest(id, source, ctx) {
     '-frames:v', '1', '-vf', 'scale=640:-2', file(id, 'poster.jpg')]).catch(() => {});
   const project = await updateProject(id, (p) => {
     p.sourceFile = path.basename(source);
+    delete p.proxy; // a new video needs a new preview copy
     p.media = media;
     p.poster = 'poster.jpg';
     p.status = 'ready';

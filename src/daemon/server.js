@@ -33,6 +33,7 @@ import * as designs from './designs.js';
 import * as updates from './updates.js';
 import * as finder from './finder.js';
 import * as combine from './combine.js';
+import { makeProxy } from './proxy.js';
 import { WORKSPACE } from './tools.js';
 import { toSentences, backgroundOf, keywords as topKeywords } from './text.js';
 import { listThemes, saveTheme, deleteTheme, refreshSystemFonts, bundledFontDir } from './themes.js';
@@ -276,6 +277,7 @@ route('POST', '/api/projects/:id/download', projectJob('download', 'Download', (
   if (!p.sourceUrl) throw new Error('This project came from a local file.');
   return downloadToProject(p.sourceUrl, ctx, p);
 }));
+route('POST', '/api/projects/:id/proxy', projectJob('proxy', 'Smooth preview', (id, _b, ctx) => makeProxy(id, ctx)));
 route('POST', '/api/projects/:id/thumbs', projectJob('thumbs', 'Scene strip', (id, _b, ctx) => makeThumbs(id, ctx)));
 // Audio cleanup: presets, a before/after sample, and a cleaned copy of any file.
 // Church calendar (Planning Center or a calendar link), refreshed weekly.

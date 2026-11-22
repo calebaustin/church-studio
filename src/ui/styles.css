@@ -1916,3 +1916,7 @@ button.tp-tile:active .tp-orb { transform: scale(.92); transition-duration: 120m
 .pop-select-row .pop-hint { text-align: right; }
 .taste-chip { display: inline-flex; align-items: center; gap: 4px; background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--text); }
 .taste-chip svg { color: var(--warn); }
+
+/* Clip editor: tab groups and the color wash preview */
+.tab-sep { width: 1px; align-self: center; height: 18px; background: var(--line-strong); margin: 0 4px; flex: none; }
+.look-wash { position: absolute; inset: 0; mix-blend-mode: color; pointer-events: none; z-index: 2; }

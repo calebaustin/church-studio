@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Toggle from '../components/Toggle.jsx';
-import { Undo2, Redo2, Download, Zap, Plus, Trash2, Crosshair, Play, Pause, Send, FolderOpen, Save, MousePointerClick, Bookmark, X, ScissorsLineDashed, CalendarDays, ChevronDown, AudioWaveform, Captions, CaseUpper, Scissors, PenLine, Gauge as GaugeIcon } from 'lucide-react';
+import { Undo2, Redo2, Download, Zap, Plus, Trash2, Crosshair, Play, Pause, Send, FolderOpen, Save, MousePointerClick, Bookmark, X, ScissorsLineDashed, CalendarDays, ChevronDown, AudioWaveform, Captions, CaseUpper, Scissors, PenLine, Gauge as GaugeIcon, Palette } from 'lucide-react';
 import { useApp, useHelperFocus } from '../App.jsx';
 import { api, fmt, media } from '../api.js';
 import CaptionOverlay, { findFont } from '../components/CaptionOverlay.jsx';
@@ -212,6 +212,18 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
   }, [project.id, clip?.id]);
   useEffect(() => { if (clip) loadTrack(); }, [clip?.id]);
   useEffect(() => onJobFinished((j) => { if (j.kind === 'track' && j.status === 'done') loadTrack(); }), [onJobFinished, loadTrack]);
+
+  // A small preview copy with frequent keyframes makes playback smooth across cuts. Made once, in the background.
+  const askedProxy = useRef(false);
+  useEffect(() => {
+    if (askedProxy.current || project.proxy || !project.media?.width) return;
+    askedProxy.current = true;
+    api.post(`/api/projects/${project.id}/proxy`, {}).then((r) => trackJob(r.job)).catch(() => {});
+  }, [project.id, project.proxy]);
+  // When the preview copy arrives, keep the playhead where it was.
+  const lastT = useRef(0);
+  useEffect(() => { const v = video.current; if (!v) return undefined; const keep = () => { lastT.current = v.currentTime; }; v.addEventListener('timeupdate', keep); return () => v.removeEventListener('timeupdate', keep); }, []);
+  useEffect(() => { const v = video.current; if (!v || !project.proxy) return; const back = () => { if (lastT.current) v.currentTime = lastT.current; }; v.addEventListener('loadedmetadata', back, { once: true }); }, [project.proxy]);
 
   // ---- words, cuts, playback
   const words = transcript.words;
@@ -465,10 +477,11 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
         <div className="stack sticky-col">
           <div className={`vframe ${canDrag ? 'draggable' : ''}`} style={{ width: FW, aspectRatio: wide ? '16 / 9' : undefined }} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
             title={canDrag ? 'Drag sideways to aim the frame. Click to play or pause.' : 'Click to play or pause'}>
-            <video ref={video} src={media(project.id, project.sourceFile)} preload="auto" playsInline
+            <video ref={video} src={media(project.id, project.proxy || project.sourceFile)} preload="auto" playsInline
               style={canvasMode && !(wide && project.media?.width) ? { opacity: 0, width: 2, height: 2 } : { ...(wide ? { height: FH, width: FW, left: 0, objectFit: 'contain' } : { height: FH, width: VW, left }), filter: lookFilter(clip.look) }} />
             {canvasMode && !(wide && project.media?.width) && <CanvasFrame video={video} mode={project.media?.width ? mode : 'lyric'} colors={config.brandColors} bg={crop.bg} gap={crop.gap} split={crop.split} width={FW} height={Math.round(FH)} filter={lookFilter(clip.look)} />}
             {clip.look?.blur > 0 && project.media?.width > 0 && (wide || ['auto', 'manual', 'cues'].includes(mode)) && <div className="look-blur" style={{ backdropFilter: `blur(${(2 + clip.look.blur * 8).toFixed(1)}px)`, WebkitBackdropFilter: `blur(${(2 + clip.look.blur * 8).toFixed(1)}px)` }} aria-hidden="true" />}
+            {clip.look?.wash?.amount > 0 && project.media?.width > 0 && <div className="look-wash" aria-hidden="true" style={{ background: clip.look.wash.color || '#2B7F5F', opacity: clip.look.wash.amount }} />}
             {(clip.popups || []).map((p) => <PopupPreview key={p.id} p={p} t={outTime} still={!playing} frameWidth={FW} accent={config.brandColors?.[1]} />)}
             {clip.progressBar?.on && (
               <div className={`prog-bar ${clip.progressBar.pos === 'top' ? 'top' : ''}`} aria-hidden="true">
@@ -477,7 +490,7 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
             )}
             {themeDraft && (
               <CaptionOverlay theme={placed} font={font} hookFont={hookFont} words={clip.captions !== false ? capWords : []} t={rel} frameWidth={FW}
-                hook={clip.hook} showHook={outTime < (themeDraft.hookDuration ?? 3.5) || tab === 'text'}
+                hook={clip.hideHook ? '' : clip.hook} showHook={!clip.hideHook && (outTime < (themeDraft.hookDuration ?? 3.5) || tab === 'text')}
                 editing={tab === 'text' ? 'hook' : tab === 'look' && clip.captions !== false ? 'captions' : null} onPlace={setPlaced} />
             )}
             {clip.overlay?.rel && (
@@ -513,9 +526,10 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
 
         <section className={`glass strong panel ${aiWorking === 'clip' ? 'ai-wave' : ''}`}>
           <div className="tabs">
-            {[['words', 'Words & trim'], ['text', 'Title & hook'], ['look', 'Captions'], ['crop', 'Framing'], ['popups', 'Pop-ups'], ['gfx', 'Graphics'], ['sound', 'Sound']].map(([k, l]) => (
-              <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>
-            ))}
+            {/* Grouped: the words, then everything you see, then the sound. */}
+            {[['words', 'Words & trim'], '|', ['text', 'Title & hook'], ['look', 'Captions'], ['crop', 'Framing'], ...(project.media?.width > 0 ? [['video', 'Video']] : []), ['popups', 'Pop-ups'], ['gfx', 'Graphics'], '|', ['sound', 'Sound']].map((t, i) => (t === '|'
+              ? <span key={`sep${i}`} className="tab-sep" aria-hidden="true" />
+              : <button key={t[0]} className={tab === t[0] ? 'on' : ''} onClick={() => setTab(t[0])}>{t[1]}</button>))}
           </div>
 
           {tab === 'words' && <WordsTab words={words} fillersList={transcript.fillers} clip={clip} set={set} cut={cut} rel={rel} outLen={outLen} seek={(t) => { video.current.currentTime = t; }}
@@ -531,10 +545,13 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
           {tab === 'text' && (
             <div className="stack" style={{ gap: 14 }}>
               <label className="field">Title<input className="input" value={clip.title} onChange={(e) => set({ title: e.target.value })} /></label>
-              <label className="field">On-screen hook <span className="hint">Shown at the start. Drag it in the preview to move it.</span>
+              <Toggle checked={!clip.hideHook} onChange={(e) => set({ hideHook: !e.target.checked })} icon={CaseUpper} label="On-screen hook" />
+              {!clip.hideHook && (
+              <label className="field">Hook text <span className="hint">Shown at the start. Drag it in the preview to move it.</span>
                 <input className="input" value={clip.hook || ''} placeholder="You can't earn this." onChange={(e) => set({ hook: e.target.value })} />
               </label>
-              {clip.hook && themeDraft && (
+              )}
+              {!clip.hideHook && clip.hook && themeDraft && (
                 <>
                   <div className="row between"><h3>Hook style</h3><span className="muted small">Part of the “{themeDraft.name}” caption theme</span></div>
                   <HookStyleFields draft={placed} set={setPlaced} />
@@ -667,7 +684,7 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
                   ['fit', 'Whole frame', 'Full shot on a background.'],
                   ['stack3', 'Three stack', 'The full shot, three times.'],
                   ['split', 'Two speakers', 'One person on top, one below.'],
-                  ['lyric', 'Moving color', 'No video. Captions on your brand colors.']].filter(([m]) => project.media?.width || m === 'lyric').map(([m, t, d]) => (
+                  ['lyric', 'Moving color', 'No video. Captions on your brand colors.']].filter(([m]) => (project.media?.width ? m !== 'lyric' || mode === 'lyric' : m === 'lyric')).map(([m, t, d]) => (
                   <button key={m} className={`choice ${mode === m ? 'on' : ''}`} onClick={() => setCrop({ mode: m, ...(m === 'manual' && crop.x == null ? { x } : {}) })}>
                     <span className="t"><span className="radio" />{t}</span><span className="d">{d}</span>
                   </button>
@@ -760,8 +777,11 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
                 </div>
               )}
               </>)}
-              {project.media?.width > 0 && mode !== 'lyric' && <StudioLook look={clip.look} blurOk={wide || ['auto', 'manual', 'cues'].includes(mode)} onChange={(look) => set({ look })} />}
             </div>
+          )}
+
+          {tab === 'video' && project.media?.width > 0 && (
+            <VideoTab look={clip.look} blurOk={wide || ['auto', 'manual', 'cues'].includes(mode)} brand={config.brandColors || []} onChange={(look) => set({ look })} />
           )}
         </section>
       </div>
@@ -954,8 +974,46 @@ function WordsTab({ words, fillersList, clip, set, cut, rel, outLen, seek, fixWo
 
 // ---------------------------------------------------------------- studio look
 /** A quick lighting pass, tucked in one card so the Framing tab stays simple. */
-function StudioLook({ look, blurOk, onChange }) {
-  const [open, setOpen] = useState(hasLook(look));
+/** The Video tab: a studio look, quick color fixes and a color wash, all applied under captions and graphics. */
+function VideoTab({ look, blurOk, brand, onChange }) {
+  const l = { preset: 'none', strength: 1, light: 0, blur: 0, exposure: 0, contrast: 0, saturation: 0, warmth: 0, ...(look || {}) };
+  const set = (p) => { const n = { ...l, ...p }; onChange(hasLook(n) ? n : null); };
+  const fix = (k, label, lo, hi) => (
+    <label className="field small">{label} · {l[k] > 0 ? '+' : ''}{Math.round(l[k] * 100)}
+      <input type="range" min="-1" max="1" step="0.05" value={l[k]} onChange={(e) => set({ [k]: Number(e.target.value) })} onDoubleClick={() => set({ [k]: 0 })} />
+      <span className="row between small muted"><span>{lo}</span><span>{hi}</span></span>
+    </label>
+  );
+  const wash = l.wash || null;
+  return (
+    <div className="stack" style={{ gap: 14 }}>
+      <StudioLook look={look} blurOk={blurOk} onChange={onChange} startOpen />
+      <div className="keycard stack" style={{ gap: 10 }}>
+        <div className="row between"><strong className="small">Quick fixes</strong>{['exposure', 'contrast', 'saturation', 'warmth'].some((k) => l[k]) && <button className="btn ghost sm" onClick={() => set({ exposure: 0, contrast: 0, saturation: 0, warmth: 0 })}>Reset</button>}</div>
+        <div className="grid2" style={{ gap: 10 }}>
+          {fix('exposure', 'Exposure', 'Darker', 'Brighter')}
+          {fix('contrast', 'Contrast', 'Flatter', 'Punchier')}
+          {fix('saturation', 'Saturation', 'Muted', 'Vivid')}
+          {fix('warmth', 'Warmth', 'Cooler', 'Warmer')}
+        </div>
+        <span className="hint">Double-click a slider to set it back to the middle.</span>
+      </div>
+      <div className="keycard stack" style={{ gap: 10 }}>
+        <Toggle checked={Boolean(wash?.amount)} onChange={(e) => set({ wash: e.target.checked ? { color: wash?.color || brand[0] || '#2B7F5F', amount: wash?.amount || 0.45 } : null })} icon={Palette} label="Color wash" />
+        <span className="hint">Tints the whole picture one color, like a duotone. Good behind scripture, quotes or a series look.</span>
+        {wash?.amount > 0 && (
+          <div className="row wrap" style={{ gap: 12 }}>
+            <ColorField value={wash.color} swatches={brand} onChange={(c) => set({ wash: { ...wash, color: c } })} />
+            <label className="field small grow">Amount · {Math.round(wash.amount * 100)}%<input type="range" min="0.1" max="1" step="0.05" value={wash.amount} onChange={(e) => set({ wash: { ...wash, amount: Number(e.target.value) } })} /></label>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StudioLook({ look, blurOk, onChange, startOpen = false }) {
+  const [open, setOpen] = useState(startOpen || hasLook(look));
   const l = { preset: 'none', strength: 1, light: 0, blur: 0, ...(look || {}) };
   const set = (p) => { const n = { ...l, ...p }; onChange(hasLook(n) ? n : null); };
   const summary = [LOOKS.find(([k]) => k === l.preset)?.[1], l.light > 0 && 'lighting lift', l.blur > 0 && 'background blur'].filter((x) => x && x !== 'Original').join(' · ');

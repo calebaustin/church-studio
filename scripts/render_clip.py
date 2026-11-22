@@ -661,7 +661,12 @@ def look_tables(look):
     spec = LOOKS.get(look.get("preset") or "none", {})
     k = max(0.0, min(1.0, float(look.get("strength", 1.0))))
     lift_amt = max(0.0, min(1.0, float(look.get("light", 0.0))))
-    if not spec and lift_amt <= 0:
+    # Quick color fixes, each -1..1: exposure, contrast, saturation and warmth.
+    expo = float(look.get("exposure", 0.0)); con = float(look.get("contrast", 0.0))
+    satx = float(look.get("saturation", 0.0)); warmx = float(look.get("warmth", 0.0))
+    wash = look.get("wash") or None
+    fixes = any(abs(v) > 0.001 for v in (expo, con, satx, warmx))
+    if not spec and lift_amt <= 0 and not fixes and not (wash and float(wash.get("amount", 0)) > 0):
         return None
     x = np.linspace(0, 1, 256, dtype=np.float32)
     y = spec.get("lift", 0.0) + (spec.get("gain", 1.0) - spec.get("lift", 0.0)) * x
@@ -669,22 +674,36 @@ def look_tables(look):
     y = (y - 0.5) * spec.get("contrast", 1.0) + 0.5
     if lift_amt > 0:  # lighting lift: brighten shadows and midtones, keep highlights from clipping
         y = 1 - (1 - np.clip(y, 0, 1)) ** (1 + lift_amt * 0.9)
-    warm = spec.get("warm", 0.0)
+    if spec:
+        y = x + (np.clip(y, 0, 1) - x) * k  # strength mixes the preset toward the original
+    if abs(expo) > 0.001:  # exposure: a gentle gain that rolls off before white
+        y = 1 - (1 - np.clip(y, 0, 1)) ** (1 + expo * 0.8) if expo > 0 else np.clip(y, 0, 1) ** (1 - expo * 0.8)
+    if abs(con) > 0.001:
+        y = (y - 0.5) * (1 + con * 0.5) + 0.5
+    warm = spec.get("warm", 0.0) * k + warmx * 0.06
     chans = []
     for c, w in (("b", -warm), ("g", warm * 0.25), ("r", warm)):
         t = np.clip(y + w * (1 - np.abs(2 * y - 1)) * 1.6, 0, 1)
-        t = x + (t - x) * (k if spec else 1.0)  # strength mixes toward the original
         chans.append(np.clip(t * 255 + 0.5, 0, 255).astype(np.uint8))
-    sat = 1.0 + (spec.get("sat", 1.0) - 1.0) * k
-    return np.dstack(chans).reshape(1, 256, 3), sat
+    sat = (1.0 + (spec.get("sat", 1.0) - 1.0) * k) * (1 + satx * 0.6)
+    wash_t = None
+    if wash and float(wash.get("amount", 0)) > 0:
+        wash_t = (hex_bgr(wash.get("color", "#2B7F5F")), max(0.0, min(1.0, float(wash["amount"]))))
+    return np.dstack(chans).reshape(1, 256, 3), sat, wash_t
 
 
 def apply_look(img, tables):
-    lut, sat = tables
+    lut, sat, wash = tables
     out = cv2.LUT(img, lut)
     if abs(sat - 1.0) > 0.01:
         gray = cv2.cvtColor(cv2.cvtColor(out, cv2.COLOR_BGR2GRAY), cv2.COLOR_GRAY2BGR)
         out = cv2.addWeighted(out, sat, gray, 1.0 - sat, 0)
+    if wash is not None:
+        # Color wash: the picture's light and shade, tinted one color (like a duotone), mixed in by amount.
+        color, amt = wash
+        g = cv2.cvtColor(out, cv2.COLOR_BGR2GRAY).astype(np.float32)[:, :, None] / 255.0
+        tinted = np.clip(g * color[None, None, :] * 1.25 + g * 40, 0, 255)
+        out = (out.astype(np.float32) * (1 - amt) + tinted * amt).astype(np.uint8)
     return out
 
 
