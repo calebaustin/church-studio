@@ -1,10 +1,11 @@
 import { ShareProject } from '../components/Backups.jsx';
+import PopSelect from '../components/PopSelect.jsx';
 import { jobSpeed, jobSummary } from '../components/JobDetails.jsx';
 import Toggle from '../components/Toggle.jsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp, useHelperFocus } from '../App.jsx';
 import { api, fmt, fmtEta, media } from '../api.js';
-import { ArrowLeft, ArrowRight, Check, Square, Wand2, Download, Trash2, Plus, Send, FolderOpen, Copy, ScissorsLineDashed, Scissors, AudioLines, ChevronDown, FileText, PenLine, Quote, Share2, Clock, BookOpen, Clapperboard } from 'lucide-react';
+import { Star, ArrowLeft, ArrowRight, Check, Square, Wand2, Download, Trash2, Plus, Send, FolderOpen, Copy, ScissorsLineDashed, Scissors, AudioLines, ChevronDown, FileText, PenLine, Quote, Share2, Clock, BookOpen, Clapperboard } from 'lucide-react';
 import AudioCleanup from '../components/AudioCleanup.jsx';
 import ContentPlan from '../components/ContentPlan.jsx';
 import ClipEditor from './ClipEditor.jsx';
@@ -405,6 +406,19 @@ function ClipPreview({ player, src, clip, words, onStop }) {
   );
 }
 
+// How long each level takes, from timings on a 33-minute sermon: CS Helper reads about one batch of six moments
+// every 40 seconds. Online helpers read everything in one go.
+const EFFORT_BATCHES = { good: 2, better: 4, auto: 6, best: 12 };
+const EFFORT_LOOKS = { good: '1 look', better: '1 look', auto: '2 looks', best: '3 looks' };
+function effortOptions(provider) {
+  const local = provider === 'cshelper' || provider === 'apple';
+  const time = (k) => {
+    if (!local) return k === 'best' ? 'About 1 min' : 'Under a min';
+    const min = Math.max(1, Math.round((EFFORT_BATCHES[k] * (provider === 'apple' ? 25 : 40)) / 60));
+    return `About ${min} min`;
+  };
+  return ['auto', 'good', 'better', 'best'].map((k) => ({ value: k, label: k[0].toUpperCase() + k.slice(1), info: `${time(k)} · ${EFFORT_LOOKS[k]}` }));
+}
 const EFFORT_HINT = {
   auto: 'Your helper reads the whole message, then takes a second look at the best ones.',
   good: 'Quickest. Reads the strongest moments once.',
@@ -457,14 +471,10 @@ function ClipsStep({ project, transcript, src, player, patch, busy, job, start, 
             <label className="field grow">Max sec<input className="input" type="number" value={opts.max} onChange={(e) => setOpts({ ...opts, max: e.target.value })} /></label>
           </div>
           {helperOn && (
-            <label className="field">How hard to look <span className="hint">{EFFORT_HINT[effort]}</span>
-              <select className="input" value={effort} onChange={(e) => saveConfig({ clipEffort: e.target.value })}>
-                <option value="auto">Auto</option>
-                <option value="good">Good</option>
-                <option value="better">Better</option>
-                <option value="best">Best</option>
-              </select>
-            </label>
+            <div className="stack" style={{ gap: 4 }}>
+              <PopSelect label="How hard to look" value={effort} onChange={(v) => saveConfig({ clipEffort: v })} options={effortOptions(config.llmProvider)} />
+              <span className="hint">{EFFORT_HINT[effort]}</span>
+            </div>
           )}
           <div className="row between">
             <span className="muted small">Kept clips stay put.</span>
@@ -501,8 +511,8 @@ function ClipsStep({ project, transcript, src, player, patch, busy, job, start, 
                   <span className="chip accent">{c.category}</span>
                   <span className="chip">{fmt(c.start)} · {Math.round(c.end - c.start)}s</span>
                   {c.status === 'exported' && <span className="chip ok">Exported</span>}
+                  {c.taste && <span className="chip taste-chip" title={`Based on the clips you keep${c.tasteWhy ? `, especially ones with “${c.tasteWhy}”` : ''}. It doesn't change the score.`}><Star size={11} fill="currentColor" />You often keep clips like this</span>}
                   {c.flags?.includes('slide') && <span className="chip warn" title={`A slide fills the screen for part of this clip${c.slideAt?.length ? ` (around ${c.slideAt.map((t) => `${Math.round(t)}s`).join(', ')} in)` : ''}. It may still be a good clip. You can trim that part in the editor.`}>Full-screen slide</span>}
-                  {c.source && c.source !== 'heuristic' && c.source !== 'manual' && <span className="chip">{c.source}</span>}
                 </div>
                 {c.summary && <p className="muted small">{c.summary}</p>}
                 {c.startPhrase && <p className="phrase"><b>Starts:</b> “{c.startPhrase}” &nbsp; <b>Ends:</b> “{c.endPhrase}”</p>}

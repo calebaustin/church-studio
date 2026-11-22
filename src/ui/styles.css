@@ -1829,8 +1829,17 @@ button.tp-tile:active .tp-orb { transform: scale(.92); transition-duration: 120m
 /* Setup checklists: check a step off by hand (hover tints the circle, first click asks "Done?", second checks it) */
 .check-btn { cursor: pointer; background: transparent; padding: 0; color: transparent; transition: background-color 160ms var(--ease), color 160ms var(--ease), width 260ms var(--spring-snappy); }
 .check-btn:hover { background: var(--accent-soft); color: var(--accent-text); border-color: var(--accent); }
-.check-btn.asking { width: auto; min-width: 26px; padding: 0 8px; border-radius: 999px; background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-.check-ask { font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+.check-btn { position: relative; }
+.check-btn.asking { background: var(--accent-soft); color: var(--accent-text); border-color: var(--accent); }
+/* "Done?": a small bubble above the circle with a tail pointing at it. Click the circle again to check it off. */
+.check-ask {
+  position: absolute; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%); z-index: 2;
+  padding: 3px 9px; border-radius: 999px; background: var(--accent); color: var(--on-accent);
+  font-size: 11.5px; font-weight: 700; white-space: nowrap; pointer-events: none; box-shadow: var(--shadow-sm, 0 2px 6px rgba(var(--shade-rgb), .15));
+  animation: check-ask-in var(--d-snappy, 220ms) var(--spring-snappy, ease-out);
+}
+.check-ask::after { content: ''; position: absolute; left: 50%; top: 100%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: var(--accent); }
+@keyframes check-ask-in { from { opacity: 0; transform: translate(-50%, 4px) scale(.9); } }
 
 /* Sermon index: each illustration carries a grade like the clip finder's */
 .story-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px; align-items: start; }
@@ -1893,3 +1902,17 @@ button.tp-tile:active .tp-orb { transform: scale(.92); transition-duration: 120m
 .prog-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 1.1%; min-height: 3px; background: rgba(var(--shade-rgb), .45); pointer-events: none; z-index: 4; overflow: hidden; }
 .prog-bar.top { top: 0; bottom: auto; }
 .prog-bar i { position: absolute; inset: 0; transform-origin: left center; }
+
+/* YouTube preview before downloading */
+.yt-peek { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; background: var(--ink); }
+.yt-peek iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.yt-peek-time { position: absolute; right: 10px; bottom: 10px; padding: 2px 8px; border-radius: 999px; background: var(--overlay); color: var(--on-accent); font-size: 12px; pointer-events: none; }
+
+/* Themed dropdown with a note on the right of each choice */
+.pop-select { display: flex; align-items: center; gap: 8px; }
+.pop-select > .truncate:first-child { flex: 1; text-align: left; }
+.pop-select-info { color: var(--muted); font-size: 12.5px; }
+.pop-select-row { grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; }
+.pop-select-row .pop-hint { text-align: right; }
+.taste-chip { display: inline-flex; align-items: center; gap: 4px; background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--text); }
+.taste-chip svg { color: var(--warn); }

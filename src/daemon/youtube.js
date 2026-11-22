@@ -122,6 +122,25 @@ export function json3Words(data) {
  * Look at a video before downloading it: title, length, chapters, and (from YouTube's own
  * captions) where the sermon probably is. Nothing big is downloaded.
  */
+/**
+ * When a livestream has no captions yet, how long until YouTube likely adds them. YouTube makes automatic captions
+ * after a stream ends, usually within a few hours (longer streams take longer).
+ */
+export function captionWait(info, hasCaptions, now = Date.now()) {
+  if (hasCaptions) return {};
+  if (info.live_status === 'is_live' || info.is_live) return { live: true, captionNote: 'This stream is still live. YouTube adds captions after it ends.' };
+  const wasLive = info.live_status === 'was_live' || info.live_status === 'post_live' || info.was_live;
+  if (!wasLive) return { captionNote: 'This video has no captions, so the sermon can\'t be found ahead of time. Set the start and end yourself, or download it all.' };
+  const started = Number(info.release_timestamp || info.timestamp || 0) * 1000;
+  const ended = started ? started + Number(info.duration || 0) * 1000 : 0;
+  const since = ended ? (now - ended) / 3600000 : null;
+  // Roughly 2 hours, plus an hour for every hour of stream; past that it may not get captions at all.
+  const expect = 2 + Math.ceil(Number(info.duration || 0) / 3600);
+  const left = since == null ? null : Math.max(0, Math.ceil(expect - since));
+  if (left === 0) return { captionWait: 0, captionNote: 'YouTube hasn\'t added captions to this stream yet. They usually come within a few hours, so try again later, or set the start and end yourself.' };
+  return { captionWait: left, captionNote: `This stream ended ${since != null ? (since < 1 ? 'less than an hour' : `about ${Math.round(since)} hour${Math.round(since) === 1 ? '' : 's'}`) + ' ago' : 'recently'}. YouTube usually adds captions within a few hours. Try again in about ${left ?? 3} hour${left === 1 ? '' : 's'}, or set the start and end yourself.` };
+}
+
 export async function scoutVideo(url) {
   const dir = await mkdtemp(path.join(tmpdir(), 'sc-scout-'));
   try {
@@ -146,7 +165,7 @@ export async function scoutVideo(url) {
     return {
       id: info.id, title: info.title, duration: info.duration, thumb: info.thumbnail,
       chapters: (info.chapters || []).map((c) => ({ title: c.title, start: c.start_time, end: c.end_time })),
-      sermon, captions: words.length > 0,
+      sermon, captions: words.length > 0, ...captionWait(info, words.length > 0),
     };
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -178,18 +197,24 @@ export async function downloadToProject(url, ctx, existingProject = null, range 
     if (/Destination: .*\.(m4a|webm|mp3|opus)\s*$/m.test(chunk) || /\[download\] Destination: .*\.f\d+\.(m4a|webm)/.test(chunk)) phase = 1;
     const m = [...chunk.matchAll(/PROGRESS\s+([\d.]+)%(?:\|(\S*)\|(\S*)\|(\S*)\|(\S*))?/g)].pop();
     if (m) {
-      const p = Number(m[1]);
-      if (phase === 0) report(3 + p * (part ? 0.78 : 0.82), 'Downloading video');
-      else report((part ? 81 : 85) + p * 0.1, 'Downloading audio');
-      // Bytes, total and speed from yt-dlp ("NA" when it doesn't know yet).
+      // Bytes, total and speed from yt-dlp ("NA" when it doesn't know yet). The bar follows the bytes, so it
+      // always matches "10.5 MB of 371.7 MB"; yt-dlp's own percent can drift on livestream recordings.
       const n = (x) => (x && x !== 'NA' && Number.isFinite(Number(x)) ? Number(x) : 0);
-      if (m[2] !== undefined) ctx.transfer(n(m[2]), n(m[3]) || n(m[4]), n(m[5]));
+      const got = n(m[2]); const total = n(m[3]) || n(m[4]);
+      const p = total > 0 ? Math.min(100, (got / total) * 100) : Number(m[1]) || 0;
+      // The video is nearly all of the size, so it gets nearly all of the bar; the audio is the last sliver.
+      if (phase === 0) report(p * (part ? 0.88 : 0.93), 'Downloading video');
+      else report((part ? 88 : 93) + p * 0.04, 'Downloading audio');
+      if (m[2] !== undefined) ctx.transfer(got, total, n(m[5]));
       ctx.detail({ Part: phase === 0 ? 'Video (1 of 2)' : 'Audio (2 of 2)', From: 'YouTube' });
     }
     if (/\[Merger\]|Merging formats/.test(chunk)) report(part ? 91 : 96, 'Putting video and audio together');
   };
   try { await ytdlp([
     '--no-playlist', '--no-warnings', '--newline', '--ffmpeg-location', tool('ffmpeg'),
+    // YouTube slows each connection down, so fetch several pieces at once (livestream recordings come in
+    // many small pieces) and ask for whole files in 10 MB chunks, which it serves at full speed.
+    '--concurrent-fragments', '4', '--http-chunk-size', '10M',
     '-f', 'bv*[height<=1080][vcodec^=avc1]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]/b',
     '--merge-output-format', 'mp4',
     '--progress-template', 'download:PROGRESS %(progress._percent_str)s|%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s',

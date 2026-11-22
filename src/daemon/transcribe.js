@@ -28,13 +28,13 @@ export async function transcribeProject(id, { start = null, end = null, cleanup 
   // Cleanup chosen here is remembered for the clips too.
   if (cleanup !== undefined) await updateProject(id, (p) => { p.audioCleanup = cleanup?.preset && cleanup.preset !== 'none' ? { preset: cleanup.preset, amount: Number(cleanup.amount ?? 0.5) } : null; });
   const af = audioFilter(cleanup !== undefined ? cleanup : project.audioCleanup);
-  ctx.progress(2, af ? 'Extracting and cleaning up the audio…' : 'Extracting audio…');
+  ctx.progress(0, af ? 'Extracting and cleaning up the audio…' : 'Extracting audio…');
   const range = [];
   if (start != null) range.push('-ss', String(start));
   if (end != null) range.push('-t', String(end - (start ?? 0)));
   await run(tool('ffmpeg'), ['-y', '-loglevel', 'error', ...range, '-i', source, '-vn', ...(af ? ['-af', af] : []), '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', wav], { signal: ctx.signal });
 
-  ctx.progress(6, `Transcribing with Whisper (${config.whisperModel})… the first run downloads the model.`);
+  ctx.progress(0, `Transcribing with Whisper (${config.whisperModel})… the first run downloads the model.`);
   ctx.detail({ Model: `Whisper ${config.whisperModel}`, Audio: af ? 'Cleaned up first' : null });
   const began = Date.now();
   const clock = (t) => { t = Math.round(t); const h = Math.floor(t / 3600); const m = Math.floor((t % 3600) / 60); const x = String(t % 60).padStart(2, '0'); return h ? `${h}:${String(m).padStart(2, '0')}:${x}` : `${m}:${x}`; };
@@ -45,7 +45,8 @@ export async function transcribeProject(id, { start = null, end = null, cleanup 
       if (dev) ctx.detail({ 'Runs on': dev[1] === 'cuda' ? 'Graphics card' : dev[1] === 'cpu' ? 'This Mac’s processor' : dev[1] });
       const m = [...chunk.matchAll(/PROGRESS (\d+)(?: ([\d.]+) ([\d.]+) (\d+))?/g)].pop();
       if (!m) return;
-      ctx.progress(6 + Number(m[1]) * 0.9, `Transcribing… ${m[1]}%`);
+      // The bar is how much of the audio has been transcribed, nothing else.
+      ctx.progress(Math.max(1, Math.min(99, Number(m[1]))), `Transcribing… ${m[1]}%`);
       if (m[2]) {
         const at = Number(m[2]); const len = Number(m[3]); const secs = (Date.now() - began) / 1000;
         ctx.detail({ Position: `${clock(at)} of ${clock(len)}`, 'Words so far': Number(m[4]).toLocaleString(), Pace: secs > 5 && at > 0 ? `${(at / secs).toFixed(1)}× real time` : null });
@@ -66,7 +67,7 @@ export async function transcribeProject(id, { start = null, end = null, cleanup 
   await writeFile(file(id, 'transcript.json'), JSON.stringify(transcript));
   await rm(wav, { force: true });
 
-  ctx.progress(97, 'Finding the sermon…');
+  ctx.progress(99, 'Finding the sermon…');
   const total = project.media?.duration ?? transcript.duration;
   const sermon = transcript.range
     ? { start: transcript.range.start, end: transcript.range.end, confidence: 1, method: 'manual', confirmed: true, reasons: ['You set this range before transcribing.'] }

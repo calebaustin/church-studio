@@ -1,5 +1,6 @@
 // Clip proposal orchestration: heuristic first (always), optional AI re-rank on top.
 import { existsSync } from 'node:fs';
+import { markTaste, tasteProfile } from './taste.js';
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -156,6 +157,9 @@ export async function proposeClips(id, { prompt = '', count, min, max, replace =
     ctx.progress(97, 'Checking for full-screen slides…');
     clips = await flagSlides(file(id, project.sourceFile), clips, ctx.signal).catch(() => clips);
   }
+
+  // A star on the picks that look like the ones this church usually keeps.
+  clips = markTaste(clips, await tasteProfile().catch(() => null));
 
   await updateProject(id, (p) => {
     const keep = replace ? p.clips.filter((c) => c.status !== 'proposed') : p.clips;

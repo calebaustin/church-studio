@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
-import { Download, Scissors, Film } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Download, Scissors, Film, Clock } from 'lucide-react';
 import { api, fmt } from '../api.js';
 import { parseTime } from '../screens/Project.jsx';
 import Modal from './Modal.jsx';
+import YouTubePeek from './YouTubePeek.jsx';
 
 function Time({ value, onChange }) {
   const [text, setText] = useState(fmt(value));
@@ -28,6 +29,8 @@ export default function AddVideo({ url, title, onClose, onAdd }) {
     }).catch((e) => setError(e.message));
   }, [url]);
 
+  const peek = useRef(null);
+  const [now, setNow] = useState(0);
   const len = mode === 'all' ? info?.duration : range.end - range.start;
   const nudge = (k, d) => setRange((r) => ({ ...r, [k]: Math.max(0, Math.min(info.duration, r[k] + d)) }));
 
@@ -44,6 +47,7 @@ export default function AddVideo({ url, title, onClose, onAdd }) {
       {info && (
         <>
           <div className="row muted small"><Film size={14} />{fmt(info.duration)} long{info.captions ? '' : ' · no captions to scan'}</div>
+          {info.captionNote && <div className="banner small row" style={{ gap: 8 }}><Clock size={14} /><span>{info.captionNote}</span></div>}
           <div className="choices">
             <button className={`choice ${mode === 'sermon' ? 'on' : ''}`} onClick={() => setMode('sermon')}>
               <span className="t"><span className="radio" />Just the sermon</span>
@@ -56,14 +60,22 @@ export default function AddVideo({ url, title, onClose, onAdd }) {
           </div>
           {mode === 'sermon' && (
             <div className="keycard">
+              {info.id && <YouTubePeek ref={peek} id={info.id} start={range.start} onTime={setNow} />}
+              {info.id && (
+                <div className="row wrap" style={{ gap: 6 }}>
+                  <button className="btn sm" onClick={() => setRange((r) => ({ ...r, start: now, end: r.end > now ? r.end : Math.min(info.duration, now + 1800) }))}>Start here</button>
+                  <button className="btn sm" disabled={now <= range.start} onClick={() => setRange((r) => ({ ...r, end: now }))}>End here</button>
+                  <span className="small muted">Play or scrub the video, then set the start and end where you are. Click a time to jump to it.</span>
+                </div>
+              )}
               {info.sermon && <span className={`chip ${info.sermon.confidence > 0.7 ? 'ok' : 'warn'}`} style={{ justifySelf: 'start' }}>{Math.round(info.sermon.confidence * 100)}% sure</span>}
               <div className="row wrap">
-                <strong style={{ width: 40 }}>Start</strong><Time value={range.start} onChange={(v) => setRange({ ...range, start: v })} />
+                <button className="btn ghost sm" style={{ minWidth: 52 }} title="Jump the video here" onClick={() => peek.current?.seek(range.start)}>Start</button><Time value={range.start} onChange={(v) => setRange({ ...range, start: v })} />
                 <button className="btn sm" onClick={() => nudge('start', -60)}>−1 min</button><button className="btn sm" onClick={() => nudge('start', 60)}>+1 min</button>
               </div>
               {info.sermon?.startText && <p className="phrase">“{info.sermon.startText}…”</p>}
               <div className="row wrap">
-                <strong style={{ width: 40 }}>End</strong><Time value={range.end} onChange={(v) => setRange({ ...range, end: v })} />
+                <button className="btn ghost sm" style={{ minWidth: 52 }} title="Jump the video here" onClick={() => peek.current?.seek(Math.max(0, range.end - 10))}>End</button><Time value={range.end} onChange={(v) => setRange({ ...range, end: v })} />
                 <button className="btn sm" onClick={() => nudge('end', -60)}>−1 min</button><button className="btn sm" onClick={() => nudge('end', 60)}>+1 min</button>
               </div>
               {info.sermon?.endText && <p className="phrase">“…{info.sermon.endText}”</p>}

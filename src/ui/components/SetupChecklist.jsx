@@ -27,7 +27,8 @@ export default function SetupChecklist({ id, eyebrow = 'Getting started', title,
         <button type="button" className={`check check-btn${asking === s.label ? ' asking' : ''}`} aria-label={asking === s.label ? `Mark “${s.label}” done` : `Already did “${s.label}”? Check it off`}
           title={asking === s.label ? 'Click again to check it off' : 'Already done? Check it off'}
           onClick={() => (asking === s.label ? markDone(s) : setAsking(s.label))} onBlur={() => setAsking((a) => (a === s.label ? null : a))}>
-          {asking === s.label ? <span className="check-ask">Done?</span> : <Check size={13} className="check-hint" />}
+          <Check size={13} className="check-hint" />
+          {asking === s.label && <span className="check-ask" role="status">Done?</span>}
         </button>
       )}
       <div className="stack" style={{ gap: 0 }}><strong className="label">{s.label}</strong><span className="muted small">{s.help}</span></div>
