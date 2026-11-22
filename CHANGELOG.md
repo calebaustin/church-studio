@@ -9,6 +9,15 @@ Every update keeps your sermons, designs, drafts and settings. Before a new vers
 - **Move to and Link to campaign.** Move to puts the item in one of your folders, or makes a new folder for it. Brand library files move between Photos, Logos and the other library folders. Link to campaign ties the item to a campaign, and campaign cards in Social list what's linked, with a click to open it.
 - **Shuffle brand colors in Design.** Shuffle (under Design colors) swaps the page's colors for your brand colors. Colors that matched still match, so all the gray text turns the same new color together, and text stays readable on its background. On a multi-page design, a toast asks "Apply to all pages?" to use the same color swap everywhere. Shuffle again for another look, and Undo puts it back.
 
+- **Combine videos.** Videos › Make a clip › Combine videos puts a few videos together: one after another like a Reel, side by side, or top and bottom for two people talking. Pick vertical, square or wide, and skip a few seconds at the start of any video to line up two cameras. The result is a project like any other, ready to caption, clip and export.
+- **Hears "um" and "uh" now.** Transcripts keep filler words (apart from the text, so captions and writing stay clean). They show faintly underlined in the clip editor's Words tab, and "Cut um and uh" is a switch with a count that takes them out with the air around them.
+- **Cut stumbles.** One click cuts a small word said twice in a row, like "that, that", and leaves repeats said on purpose.
+- **Clean up speech.** Light, Medium or Heavy in the Words tab cuts fillers, stumbles and long pauses in one go. Heavy also cuts "you know" and "I mean".
+- **Progress bar.** In a clip's Look tab, add a thin bar along the top or bottom that fills as the clip plays, in your brand color or any color.
+
+### Changed
+- **Better clip picks.** Clip finding notices personal stories and the line they land on, rhythm like "It's His love that…", and gives a story room to finish. The AI helper reads the start and end of each moment, looks across the whole message, and rates hook, stands alone, payoff and feeling, so scores spread out and each clip's reason names its own key line.
+
 ### Fixed
 - Pasting or typing a full hex code in a Brand kit color no longer closes the color picker right away. You see the color first and close it yourself.
 

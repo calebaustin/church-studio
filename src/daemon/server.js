@@ -199,7 +199,7 @@ route('POST', '/api/projects/combine', async (_p, b) => {
   const files = (b.files || []).map((f) => (typeof f === 'string' ? { path: f } : f)).filter((f) => f?.path);
   if (files.length < 2) throw new HttpError(400, 'Pick at least two videos.');
   const kind = b.kind || (b.shape === 'wide' ? 'wide' : 'short');
-  const job = jobs.enqueue({ kind: 'import', label: b.layout === 'sequence' ? `Combine ${files.length} videos` : `Put ${files.length} videos side by side` },
+  const job = jobs.enqueue({ kind: 'import', label: b.layout === 'sequence' ? `Combine ${files.length} videos` : b.layout === 'stack' ? `Stack ${files.length} videos` : `Put ${files.length} videos side by side` },
     (ctx) => combine.combineFiles(files, { layout: b.layout, shape: b.shape, title: b.title, kind }, ctx));
   return { job: jobs.view(job) };
 });

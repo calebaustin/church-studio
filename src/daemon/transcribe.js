@@ -10,9 +10,11 @@ import { detectSermon } from './sermon.js';
 import { audioFilter } from './audio.js';
 import { normalizeWords, normalizeText, WHISPER_HINT } from './scripture.js';
 
-// A short, well-punctuated sample of natural speech, given to Whisper as the text "so far". It nudges Whisper to
-// write down fillers and stumbles (uh, um, "that, that") instead of tidying them away, while keeping punctuation.
-const VERBATIM = 'Well, um, good morning. Uh, I- I want to talk about, um, that, that verse today. So, you know, it\'s, uh, a really big deal. And, and God is good.';
+// A short, well-punctuated sample of natural speech. Whisper reads it before every 30-second window (as "hotwords";
+// a starting prompt only reaches the first window), so it writes down fillers and stumbles (uh, um, "that, that")
+// instead of tidying them away, and keeps its punctuation. On a test sermon it heard the same 28 fillers in three
+// minutes that Descript did.
+const VERBATIM = 'Well, um, good morning. Uh, I- I want to talk about, um, that, that verse.';
 const FILLER = /^(uh+|um+|uhm|erm|hmm+|mm+)$/i;
 export const isFiller = (w) => FILLER.test(String(w).replace(/[^A-Za-z]/g, ''));
 
@@ -36,7 +38,7 @@ export async function transcribeProject(id, { start = null, end = null, cleanup 
   ctx.detail({ Model: `Whisper ${config.whisperModel}`, Audio: af ? 'Cleaned up first' : null });
   const began = Date.now();
   const clock = (t) => { t = Math.round(t); const h = Math.floor(t / 3600); const m = Math.floor((t % 3600) / 60); const x = String(t % 60).padStart(2, '0'); return h ? `${h}:${String(m).padStart(2, '0')}:${x}` : `${m}:${x}`; };
-  const { stdout } = await run(...pyCommand('transcribe', [wav, '--model', config.whisperModel, '--offset', String(start ?? 0), '--hotwords', WHISPER_HINT, '--prompt', VERBATIM]), {
+  const { stdout } = await run(...pyCommand('transcribe', [wav, '--model', config.whisperModel, '--offset', String(start ?? 0), '--hotwords', `${VERBATIM} ${WHISPER_HINT}`]), {
     signal: ctx.signal,
     onStderr: (chunk) => {
       const dev = chunk.match(/DEVICE (\w+)/);

@@ -79,7 +79,20 @@ export async function proposeClips(id, { prompt = '', count, min, max, replace =
           per = per * 0.5 + (Date.now() - t0) * 0.5; // learn this Mac's pace
         }
         clearInterval(tick);
-        ranked = scored.sort((a, b) => b.score - a.score).slice(0, count);
+        const sortedAll = scored.sort((a, b) => b.score - a.score);
+        ranked = sortedAll.slice(0, count);
+        // Stories that land their point are often the best clips in a sermon: keep the best two in the picks.
+        const isStory = (r) => (r.reasons || []).includes('A story that lands its point');
+        for (const st of sortedAll.filter(isStory).slice(0, 2)) {
+          if (ranked.includes(st) || ranked.length < count) { if (!ranked.includes(st)) ranked.push(st); continue; }
+          const drop = [...ranked].reverse().find((r) => !isStory(r));
+          if (drop) ranked.splice(ranked.indexOf(drop), 1, st);
+        }
+        ranked.sort((a, b) => b.score - a.score);
+        // Helpers tend to rate everything well. When the scores bunch up, spread them out (keeping the order) so the
+        // best clip stands apart from the rest.
+        const hi = ranked[0]?.score ?? 0; const lo = ranked.at(-1)?.score ?? 0;
+        if (ranked.length > 2 && hi - lo < 20) for (const r of ranked) r.score = Math.round(60 + 35 * (r.score - lo) / Math.max(1, hi - lo));
         // Two clips with the same title: the lower one keeps its own offline title instead.
         const titles = new Set();
         for (const r of ranked) { const k = r.title.toLowerCase(); if (titles.has(k)) { const h = heur.find((x) => x.start === r.start && x.end === r.end); if (h) r.title = h.title; } titles.add(r.title.toLowerCase()); }

@@ -1883,3 +1883,13 @@ button.tp-tile:active .tp-orb { transform: scale(.92); transition-duration: 120m
 .combine-n { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; background: var(--accent-soft); color: var(--accent-text); flex: none; }
 .combine-trim { width: 70px; min-height: 30px; padding: 0 8px; }
 @media (max-width: 600px) { .combine-layouts { grid-template-columns: 1fr; } }
+
+/* Words tab: fillers and stumbles, underlined like a spell check */
+.wd.filler { color: var(--muted); text-decoration: underline dotted var(--muted); text-underline-offset: 3px; font-style: italic; }
+.wd.filler.cut { text-decoration: line-through; opacity: .5; }
+.wd.stumble:not(.cut) { text-decoration: underline dashed var(--warn, var(--accent)); text-underline-offset: 3px; }
+
+/* Clip preview: playback progress bar */
+.prog-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 1.1%; min-height: 3px; background: rgba(var(--shade-rgb), .45); pointer-events: none; z-index: 4; overflow: hidden; }
+.prog-bar.top { top: 0; bottom: auto; }
+.prog-bar i { position: absolute; inset: 0; transform-origin: left center; }

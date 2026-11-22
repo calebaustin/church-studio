@@ -29,12 +29,41 @@ pool was the top 24 by offline score, often from one stretch. Changed: story/pay
 clips.js, room for longer story clips, `spread()` pool across the sermon, head + tail text for the helper, an
 editor-style rubric.
 
+## Second pass (same day)
+- CS Helper now rates hook, stands alone, payoff and feeling 1-5 and copies the clip's key line; the score is computed
+  from the ratings (85%) plus the offline score (15%). A reason that only repeats the rubric is replaced with
+  "Lands on <key line>" (the key line must really be in the clip).
+- Combine videos run end to end: sequence (vertical, wide video on a blurred copy of itself), side by side (wide) and
+  stacked (vertical) all render with the right size, trims and a silent track for a video with no sound.
+- Words tab: fillers shown inline (dotted underline, crossed out when cut), stumbles marked, Clean up speech
+  (Light/Medium/Heavy). Look tab: progress bar (top or bottom, any color), checked in a real render.
+- Highlight reel: already possible by joining clips in the export dialog.
+
+## Runs on the full sermon (overlap with Descript's 9)
+| Run | Change | Overlap | Socks story | Thanksgiving | Scores |
+|---|---|---|---|---|---|
+| 1 | baseline | 5 | no | no | 70-90 |
+| 2 | story/payoff/rhythm, spread pool, head+tail text | 4 | yes | no | 79-83 |
+| 3 | 1-5 ratings, computed score | 5 | yes (lowest) | no | 80-97 |
+| 4 | rating anchors, stretch bunched scores | 3 | no | no | 60-95 |
+| 5 | 60/40 blend with offline score, keep 2 best stories | 5 | no | yes | 65-95 |
+
+Reasons went from repeating the instructions to naming the clip ("Lands on 'You proclaim the Lord's death until He
+comes.'"). The picks vary a lot between runs: the 3B helper is noisy, so it shouldn't be the only judge. Ideas: run the
+helper twice and average, or let a bigger helper (Claude, ChatGPT) rank when one is connected. Stories detected by the
+loose past-tense patterns sometimes beat the real one; tighten them (needs a named object or person plus "I" and a
+past verb).
+
+Fillers: a starting prompt only reaches Whisper's first 30-second window. Passing the verbatim sample as `hotwords`
+(read before every window) heard 28 fillers in the first three minutes, the same as Descript. Not yet run on the full
+sermon.
+
 ## Next
 1. Reasons and scores from CS Helper: ask for a 1-5 rating per rubric item (hook, stands alone, payoff, feeling) and
    compute the score ourselves; ask the reason to quote the clip's key line. Likely fixes bunching and generic text.
 2. Relatable humor (Thanksgiving) needs the helper to see it: consider a second pass over the "spread" pool only.
 3. Run the verbatim transcriber on the full sermon; check captions and the Cut stumbles button.
-4. Combine videos: engine + dialog built, not yet run end to end.
+4. Combine videos: try the dialog in the desktop app (the picker needs it). Side by side crops each video's center; a face-aware crop per video would frame people better.
 5. Descript editor ideas (screenshots): filler words underlined in the transcript, Edit for clarity with an intensity
    slider, Remove retakes, Shorten word gaps (we have Trim pauses), waveform and progress-bar elements, audio effects,
    a timeline with word labels and Split, highlight reel from the best clips.

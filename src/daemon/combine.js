@@ -62,7 +62,7 @@ export async function combineFiles(files, { layout = 'sequence', shape = 'vertic
     inputs.push({ ...m, trim: Math.max(0, Number(f.trim) || 0), length: Number(f.length) || 0 });
   }
   const { filter, duration } = combineFilter(inputs, { layout, shape });
-  const name = String(title || '').trim() || (layout === 'sequence' ? `${files.length} videos together` : `${files.length} videos side by side`);
+  const name = String(title || '').trim() || (layout === 'sequence' ? `${files.length} videos together` : layout === 'stack' ? `${files.length} videos stacked` : `${files.length} videos side by side`);
   const project = await createProject({ title: name.slice(0, 120), kind: ['short', 'wide', 'sermon'].includes(kind) ? kind : 'short' });
   const out = file(project.id, 'source.mp4');
   const args = ['-y', '-loglevel', 'error', '-progress', 'pipe:2', '-nostats'];

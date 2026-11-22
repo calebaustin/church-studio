@@ -129,6 +129,8 @@ export async function buildJob(project, clip, { preview = false, trackOnly = fal
     look: clip.look || null, // studio look: color preset, strength, lighting lift, background blur
     speakerPrior: (await speakerPrior()).x != null ? { x: (await speakerPrior()).x } : null,
     hookY: clip.hookY ?? null,
+    // A thin bar that fills as the clip plays, so viewers see how much is left.
+    progressBar: clip.progressBar?.on ? { pos: clip.progressBar.pos === 'top' ? 'top' : 'bottom', color: clip.progressBar.color || (await loadConfig()).brandColors?.[1] || '#FFFFFF' } : null,
     overlay: clip.overlay?.rel ? { ...clip.overlay, file: await libraryFile(clip.overlay.rel) } : null,
     endCard: clip.endCard?.rel ? { ...clip.endCard, file: await libraryFile(clip.endCard.rel) } : null,
     introCard: clip.introCard?.rel ? { ...clip.introCard, file: await libraryFile(clip.introCard.rel) } : null,

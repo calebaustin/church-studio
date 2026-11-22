@@ -24,7 +24,11 @@ Judge each candidate like a video editor, on four things:
 3. Payoff: it lands on a clear, memorable takeaway or closing line.
 4. Feeling: a story with a point, a relatable or funny moment, or rhythm and contrast ("simple made sacred") make it worth sharing.
 A personal story or illustration that lands its point, or a relatable moment, usually beats dense teaching.
-Use the whole score range: 90+ is rare and exceptional, most good clips are 60 to 85, weak ones are under 50.
+Rate each from 1 to 5 with these anchors, and be strict (most clips get some 3s):
+- Hook: 5 a question, surprise or vivid image in the first sentence; 3 a plain statement; 1 starts mid-thought.
+- Stands alone: 5 needs no context; 3 small gaps; 1 depends on earlier parts.
+- Payoff: 5 ends on a line people would quote; 3 ends on a complete thought; 1 trails off.
+- Feeling: 5 a personal story, humor or a moving moment; 3 clear teaching; 1 dry or technical.
 Stay faithful to what the speaker said; never invent quotes or theology.`;
 
 const SCHEMA = {
@@ -37,15 +41,19 @@ const SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['index', 'score', 'title', 'summary', 'hook', 'hashtags', 'reason'],
+        required: ['index', 'keyLine', 'hookRating', 'standsAlone', 'payoff', 'feeling', 'title', 'summary', 'hook', 'hashtags', 'reason'],
         properties: {
           index: { type: 'integer', description: 'Candidate index from the list' },
-          score: { type: 'integer', description: '0-100. 90+ is rare. Most good clips 60-85.' },
+          keyLine: { type: 'string', description: 'The most memorable sentence in the clip, copied exactly' },
+          hookRating: { type: 'integer', minimum: 1, maximum: 5 },
+          standsAlone: { type: 'integer', minimum: 1, maximum: 5 },
+          payoff: { type: 'integer', minimum: 1, maximum: 5 },
+          feeling: { type: 'integer', minimum: 1, maximum: 5 },
           title: { type: 'string', description: 'A specific headline for the idea, under 60 characters, not a quote. Like: Thanksgiving: People You Like and People You Have To' },
           summary: { type: 'string', description: '1-2 sentence post caption' },
           hook: { type: 'string', description: '3-7 word on-screen hook' },
           hashtags: { type: 'array', items: { type: 'string' } },
-          reason: { type: 'string', description: 'Why this clip works, naming its own story, line or idea. One or two sentences. Never generic.' },
+          reason: { type: 'string', description: 'One sentence on what happens in this clip and why it works, naming its story or idea' },
         },
       },
     },
@@ -122,7 +130,7 @@ async function askApple(cfg, text) {
   return looseJson(await appleAsk({ system: SYSTEM, prompt: `${text}\n\nAnswer with JSON only, exactly in this shape: ${shape}`, temperature: 0.2 }));
 }
 async function askLlama(cfg, text, signal) {
-  return llamaChat({ system: SYSTEM, messages: [{ role: 'user', content: text }], schema: SCHEMA, temperature: 0.2, maxTokens: 1400, signal });
+  return llamaChat({ system: SYSTEM, messages: [{ role: 'user', content: text }], schema: SCHEMA, temperature: 0.2, maxTokens: 2200, signal });
 }
 
 const PROVIDERS = { anthropic: askAnthropic, openai: askOpenAI, gemini: askGemini, ollama: askOllama, apple: askApple, cshelper: askLlama };
@@ -169,7 +177,8 @@ export function providerReady(cfg) {
   return Boolean(cfg[`${p}ApiKey`]);
 }
 
-const GENERIC = /a truth, a story|delivers a payoff \(|stays faithful|not clickbait|short and honest|strong candidate|stands on its own and|complete thought\.?$/i;
+const RUBRIC = /\b(stands alone|clear (hook|takeaway|payoff)|memorable takeaway|relatable moment|the feeling is|strong hook)\b/i;
+const GENERIC = /stands out (for|because)|great representation|clear and concise|the sermon's message|a truth, a story|delivers a payoff \(|stays faithful|not clickbait|short and honest|strong candidate|stands on its own and|complete thought\.?$/i;
 /** Re-rank heuristic candidates. `cands` carry `.text`; returns the clips with AI fields merged in. */
 export async function rerank(cfg, cands, { title, count, signal }) {
   const ask = PROVIDERS[cfg.llmProvider];
@@ -182,9 +191,16 @@ export async function rerank(cfg, cands, { title, count, signal }) {
     : p === 'cshelper' ? cands.slice(0, 24).map((c) => ({ ...c, text: ends(c.text, 760) })) : cands;
   const out = await ask(cfg, prompt(shown, title, count), signal);
   const seen = new Set();
-  // Small local models sometimes score 1-10 instead of 0-100: put those on the same scale.
+  // The score comes from the four ratings (payoff and hook count most), not a number the model guesses, so it
+  // spreads out. A model that still sends a plain score (older prompt, other helpers) is put on the same scale.
   const raw = (out.clips || []).map((x) => Number(x.score) || 0);
   const scale = raw.length && Math.max(...raw) <= 10 ? 10 : 1;
+  const r5 = (v) => Math.max(1, Math.min(5, Number(v) || 3));
+  const rated = (x) => (x.hookRating != null || x.payoff != null
+    ? Math.round(((r5(x.hookRating) * 1.2 + r5(x.standsAlone) + r5(x.payoff) * 1.3 + r5(x.feeling) * 1.1) / 4.6 - 1) / 4 * 70 + 28)
+    : Math.round((Number(x.score) || 0) * scale));
+  // A line only counts as the clip's key line if it's really in the clip.
+  const inClip = (line, text) => { const t = String(text).toLowerCase().replace(/[^a-z0-9 ]/g, ''); const w = String(line || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').split(/\s+/).filter(Boolean); return w.length >= 4 && t.includes(w.slice(0, 4).join(' ')); };
   // A hook is a few words on screen. If the model wrote a whole sentence, keep the app's own short hook.
   const shortHook = (h, fallback) => { const w = String(h || '').trim().split(/\s+/).filter(Boolean); return w.length && w.length <= 8 ? String(h).trim() : fallback || w.slice(0, 7).join(' ').replace(/[,;:]$/, ''); };
   return (out.clips || [])
@@ -192,14 +208,22 @@ export async function rerank(cfg, cands, { title, count, signal }) {
     .slice(0, count)
     .map((p) => {
       const { text, ...c } = cands[p.index];
+      const key = inClip(p.keyLine, text) ? String(p.keyLine).trim().replace(/^["“]|["”]$/g, '') : '';
+      // A small helper's ratings move around from run to run, so the offline score keeps a real say.
+      const score = Math.round(rated(p) * 0.6 + (Number(c.score) || 60) * 0.4);
+      const reason = String(p.reason || '').trim();
+      const specific = reason && !GENERIC.test(reason) && !RUBRIC.test(reason);
       return {
         ...c,
-        score: Math.max(0, Math.min(100, Math.round((Number(p.score) || 0) * scale))),
+        score: Math.max(0, Math.min(100, score)),
+        ratings: p.hookRating != null ? { hook: r5(p.hookRating), alone: r5(p.standsAlone), payoff: r5(p.payoff), feeling: r5(p.feeling) } : undefined,
+        keyLine: key || undefined,
         title: String(p.title).slice(0, 90),
         summary: p.summary, hook: shortHook(p.hook, c.hook),
         hashtags: (p.hashtags || []).map((h) => String(h).replace(/^#/, '').trim()).filter(Boolean).slice(0, 6),
         // A reason that only repeats the instructions says nothing about this clip: keep the app's own instead.
-        reasons: [GENERIC.test(String(p.reason || '')) ? null : String(p.reason || '').trim(), ...c.reasons].filter(Boolean),
+        // A reason that only repeats the instructions says nothing: show the clip's own key line instead.
+        reasons: [specific ? reason : key ? `Lands on “${key.length > 90 ? `${key.slice(0, 87)}…` : key}”` : null, ...c.reasons].filter(Boolean),
         source: cfg.llmProvider,
       };
     });

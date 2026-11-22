@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Toggle from '../components/Toggle.jsx';
-import { Undo2, Redo2, Download, Zap, Plus, Trash2, Crosshair, Play, Pause, Send, FolderOpen, Save, MousePointerClick, Bookmark, X, ScissorsLineDashed, CalendarDays, ChevronDown, AudioWaveform, Captions, CaseUpper, Scissors, PenLine } from 'lucide-react';
+import { Undo2, Redo2, Download, Zap, Plus, Trash2, Crosshair, Play, Pause, Send, FolderOpen, Save, MousePointerClick, Bookmark, X, ScissorsLineDashed, CalendarDays, ChevronDown, AudioWaveform, Captions, CaseUpper, Scissors, PenLine, Gauge as GaugeIcon } from 'lucide-react';
 import { useApp, useHelperFocus } from '../App.jsx';
 import { api, fmt, media } from '../api.js';
 import CaptionOverlay, { findFont } from '../components/CaptionOverlay.jsx';
@@ -470,6 +470,11 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
             {canvasMode && !(wide && project.media?.width) && <CanvasFrame video={video} mode={project.media?.width ? mode : 'lyric'} colors={config.brandColors} bg={crop.bg} gap={crop.gap} split={crop.split} width={FW} height={Math.round(FH)} filter={lookFilter(clip.look)} />}
             {clip.look?.blur > 0 && project.media?.width > 0 && (wide || ['auto', 'manual', 'cues'].includes(mode)) && <div className="look-blur" style={{ backdropFilter: `blur(${(2 + clip.look.blur * 8).toFixed(1)}px)`, WebkitBackdropFilter: `blur(${(2 + clip.look.blur * 8).toFixed(1)}px)` }} aria-hidden="true" />}
             {(clip.popups || []).map((p) => <PopupPreview key={p.id} p={p} t={outTime} still={!playing} frameWidth={FW} accent={config.brandColors?.[1]} />)}
+            {clip.progressBar?.on && (
+              <div className={`prog-bar ${clip.progressBar.pos === 'top' ? 'top' : ''}`} aria-hidden="true">
+                <i style={{ transform: `scaleX(${Math.min(1, Math.max(0, outTime / Math.max(outLen, 0.01)))})`, background: clip.progressBar.color || config.brandColors?.[1] || '#FFFFFF' }} />
+              </div>
+            )}
             {themeDraft && (
               <CaptionOverlay theme={placed} font={font} hookFont={hookFont} words={clip.captions !== false ? capWords : []} t={rel} frameWidth={FW}
                 hook={clip.hook} showHook={outTime < (themeDraft.hookDuration ?? 3.5) || tab === 'text'}
@@ -552,6 +557,17 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
                   <option value="">Default theme ({themes.video.find((t) => t.id === (project.videoTheme || config.videoTheme))?.name})</option>
                   {themes.video.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                 </select>
+              </div>
+              <div className="row wrap" style={{ gap: 10 }}>
+                <Toggle checked={Boolean(clip.progressBar?.on)} onChange={(e) => set({ progressBar: { pos: 'bottom', ...(clip.progressBar || {}), on: e.target.checked } })} icon={GaugeIcon} label="Progress bar" />
+                {clip.progressBar?.on && (
+                  <>
+                    <div className="seg" role="group" aria-label="Progress bar position">
+                      {[['top', 'Top'], ['bottom', 'Bottom']].map(([v, l]) => <button key={v} className={(clip.progressBar.pos || 'bottom') === v ? 'on' : ''} onClick={() => set({ progressBar: { ...clip.progressBar, pos: v } })}>{l}</button>)}
+                    </div>
+                    <ColorField value={clip.progressBar.color || config.brandColors?.[1] || '#FFFFFF'} swatches={config.brandColors || []} onChange={(c) => set({ progressBar: { ...clip.progressBar, color: c } })} />
+                  </>
+                )}
               </div>
               {clip.captions !== false && themeDraft && (
                 <>
@@ -833,6 +849,21 @@ function WordsTab({ words, fillersList, clip, set, cut, rel, outLen, seek, fixWo
     const a = words[i - 1].w.toLowerCase().replace(/[^a-z']/g, ''); const b = words[i].w.toLowerCase().replace(/[^a-z']/g, '');
     if (a && a === b && STUMBLE.has(a) && !cut.has(i - 1) && words[i].start - words[i - 1].end < 1.2) stumbles.push(i - 1);
   }
+  const stumbleSet = new Set(stumbles);
+  // Clean up speech in one go, like an editor would: light trims long pauses and cuts fillers; medium also cuts
+  // stumbles and tightens pauses more; heavy also cuts "you know" and "I mean" and keeps pauses short.
+  const cleanUp = (level) => {
+    const next = new Set(cut);
+    if (level !== 'light') stumbles.forEach((i) => next.add(i));
+    if (level === 'heavy') {
+      for (let i = firstIn; i < lastIn; i++) {
+        const pair = `${words[i].w} ${words[i + 1].w}`.toLowerCase().replace(/[^a-z ]/g, '');
+        if (pair === 'you know' || pair === 'i mean') { next.add(i); next.add(i + 1); }
+      }
+    }
+    for (let i = firstIn; i <= lastIn; i++) if (FILLERS.has(words[i].w.toLowerCase().replace(/[^a-z]/g, ''))) next.add(i);
+    set({ cutFillers: true, tightenPauses: true, pauseMax: { light: 0.8, medium: 0.5, heavy: 0.3 }[level], cutWords: [...next].sort((x, y) => x - y) });
+  };
   const cutStumbles = () => set({ cutWords: [...new Set([...cut, ...stumbles])].sort((x, y) => x - y) });
   const absNow = clip.start + rel;
   const pauseMax = clip.pauseMax ?? 0.45;
@@ -841,6 +872,13 @@ function WordsTab({ words, fillersList, clip, set, cut, rel, outLen, seek, fixWo
       <div className="nudge-bar">
         <div className="row"><span className="small" style={{ fontWeight: 600 }}>Start</span><button className="btn sm" onClick={() => nudge('start', -1)}>◀ Earlier</button><button className="btn sm" onClick={() => nudge('start', 1)}>Later ▶</button></div>
         <div className="row"><span className="small" style={{ fontWeight: 600 }}>End</span><button className="btn sm" onClick={() => nudge('end', -1)}>◀ Earlier</button><button className="btn sm" onClick={() => nudge('end', 1)}>Later ▶</button></div>
+      </div>
+      <div className="row wrap" style={{ gap: 8 }}>
+        <span className="small" style={{ fontWeight: 600 }}>Clean up speech</span>
+        <div className="seg" role="group" aria-label="How much to clean up">
+          {[['light', 'Light'], ['medium', 'Medium'], ['heavy', 'Heavy']].map(([v, l]) => <button key={v} title={{ light: 'Cut fillers and long pauses', medium: 'Also cut stumbles and shorten pauses', heavy: 'Also cut “you know” and “I mean”, and keep pauses short' }[v]} onClick={() => cleanUp(v)}>{l}</button>)}
+        </div>
+        <span className="small muted">Undo puts it back.</span>
       </div>
       <div className="row wrap">
         <Toggle checked={Boolean(clip.tightenPauses)} onChange={(e) => set({ tightenPauses: e.target.checked })} icon={AudioWaveform} label="Trim pauses" small />
@@ -859,6 +897,9 @@ function WordsTab({ words, fillersList, clip, set, cut, rel, outLen, seek, fixWo
       <div className="words" ref={wordsRef}>
         {words.slice(lo, hi + 1).map((w, k) => {
           const i = lo + k;
+          // The "um"s and "uh"s heard just before this word: shown faintly, crossed out once they're cut.
+          const before = (fillersList || []).filter((f) => f.start < w.start && f.start >= (words[i - 1]?.end ?? -1) - 0.05);
+          const ums = before.map((f, n) => <span key={`f${i}-${n}`} className={`wd filler ${clip.cutFillers && !out ? 'cut' : ''}`} title={clip.cutFillers ? 'Cut. Turn off “Cut um and uh” to keep it.' : 'A filler word. “Cut um and uh” takes them all out.'} onClick={fillers}>{f.w} </span>);
           const out = i < firstIn || i > lastIn;
           const now = absNow >= w.start && absNow < w.end;
           if (fixing?.i === i) {
@@ -871,7 +912,7 @@ function WordsTab({ words, fillersList, clip, set, cut, rel, outLen, seek, fixWo
             );
           }
           return (
-            <span key={i} data-i={i} className={`wd ${out ? 'out' : ''} ${cut.has(i) ? 'cut' : ''} ${now ? 'now' : ''} ${w.fixed ? 'fixed' : ''} ${i >= selLo && i <= selHi ? 'sel' : ''}`}
+            <Fragment key={i}>{ums}<span data-i={i} className={`wd ${out ? 'out' : ''} ${cut.has(i) ? 'cut' : ''} ${now ? 'now' : ''} ${w.fixed ? 'fixed' : ''} ${i >= selLo && i <= selHi ? 'sel' : ''} ${stumbleSet.has(i) ? 'stumble' : ''}`}
               onPointerDown={(e) => {
                 startHold(i);
                 const d = drag.current; d.moved = false;
@@ -886,7 +927,7 @@ function WordsTab({ words, fillersList, clip, set, cut, rel, outLen, seek, fixWo
                 if (sel) { clearSel(); return; }
                 if (i < firstIn) set({ start: Math.max(0, w.start - 0.12) }); else if (i > lastIn) set({ end: w.end + 0.3 }); else toggleCut(i);
               }}
-              onDoubleClick={() => seek(w.start)}>{w.w ? `${w.w} ` : ''}</span>
+              onDoubleClick={() => seek(w.start)}>{w.w ? `${w.w} ` : ''}</span></Fragment>
           );
         })}
         {sel?.show && barPos && (

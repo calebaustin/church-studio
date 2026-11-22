@@ -790,6 +790,11 @@ def main() -> None:
     words = remap_words(job.get("words", []), start, keep)
     theme = job["theme"]
     caps = Captions(words, theme, W, H, job.get("hook"), out_len, job.get("hookY")) if (job.get("captions", True) or job.get("hook")) else None
+    pb = job.get("progressBar")
+    prog_bar = None
+    if pb:
+        ph = max(4, int(round(min(W, H) / 1080 * 12)))
+        prog_bar = (ph, 0 if pb.get("pos") == "top" else H - ph, hex_bgr(pb.get("color", "#FFFFFF")).astype(np.uint8))
     if caps and not job.get("captions", True):
         caps.events = []  # hook only
 
@@ -947,6 +952,12 @@ def main() -> None:
                 blend(img, arr, x, y, op)
             if overlay:
                 blend(img, overlay[0], overlay[1], overlay[2], overlay[3])
+            if prog_bar is not None:
+                # Playback progress: a dim track the full width, filled with the color up to where the clip is.
+                ph, py, pc = prog_bar
+                band = img[py:py + ph]
+                band[:] = (band.astype(np.float32) * 0.55).astype(np.uint8)
+                band[:, :int(W * min(1.0, t_out / max(out_len, 0.01)))] = pc
             if intro_card and t_out < intro_card[1]:
                 # Shows from the start, then moves out over its last 0.4 seconds.
                 arr, x, y, op = card_at(intro_card, (intro_card[1] - t_out) / 0.4, False)
