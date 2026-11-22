@@ -4,6 +4,13 @@ Every update keeps your sermons, designs, drafts and settings. Before a new vers
 
 ## Unreleased
 
+### New
+- **Select words to cut or replace.** In the transcript, drag across words (or click one and shift-click another) and a small bar offers Cut and Replace. Replace fixes a phrase the transcription heard wrong, and captions use your words.
+
+### Fixed
+- **Smoother cuts.** Cutting a word or a whole sentence used to leave the little pauses around it, so clips felt jumpy. Now the clip goes straight from the last kept word to the next one.
+- **CS Helper no longer seems stuck at 40% when finding clips.** It now reads the moments a few at a time and the bar moves as it goes. If it's slow on your Mac, it keeps the app's own picks for the rest instead of waiting.
+
 ### Changed
 - **More of your fonts.** Font menus already list the fonts installed on your Mac, including ones you've added yourself. They now also include fonts you turned on in Adobe Fonts and the extra Apple fonts you downloaded in Font Book. Fonts you install while Church Studio is open show up the next time you open a font menu, with no refresh needed.
 

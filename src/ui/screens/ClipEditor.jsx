@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Toggle from '../components/Toggle.jsx';
-import { Undo2, Redo2, Download, Zap, Plus, Trash2, Crosshair, Play, Pause, Send, FolderOpen, Save, MousePointerClick, Bookmark, X, ScissorsLineDashed, CalendarDays, ChevronDown, AudioWaveform, Captions, CaseUpper } from 'lucide-react';
+import { Undo2, Redo2, Download, Zap, Plus, Trash2, Crosshair, Play, Pause, Send, FolderOpen, Save, MousePointerClick, Bookmark, X, ScissorsLineDashed, CalendarDays, ChevronDown, AudioWaveform, Captions, CaseUpper, Scissors, PenLine } from 'lucide-react';
 import { useApp, useHelperFocus } from '../App.jsx';
 import { api, fmt, media } from '../api.js';
 import CaptionOverlay, { findFont } from '../components/CaptionOverlay.jsx';
@@ -219,7 +219,7 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
   const cut = useMemo(() => new Set(clip.cutWords || []), [clip.cutWords]);
   const capWords = useMemo(() => words
     .map((w, i) => ({ ...w, i }))
-    .filter((w) => w.end > clip.start && w.start < clip.end && !cut.has(w.i))
+    .filter((w) => w.end > clip.start && w.start < clip.end && !cut.has(w.i) && w.w)
     .map((w) => ({ w: w.w, start: w.start - clip.start, end: w.end - clip.start })), [words, clip.start, clip.end, cut]);
 
   useEffect(() => {
@@ -490,6 +490,10 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
             fixWord={async (i, text) => {
               const r = await api.put(`/api/projects/${project.id}/transcript/word`, { index: i, text });
               onTranscript?.((t) => ({ ...t, words: t.words.map((w, k) => (k === i ? { ...w, ...r.word } : w)) }));
+            }}
+            replaceWords={async (from, to, text) => {
+              const r = await api.put(`/api/projects/${project.id}/transcript/words`, { from, to, text });
+              onTranscript?.((t) => ({ ...t, words: t.words.map((w, k) => (k >= r.from && k < r.from + r.words.length ? r.words[k - r.from] : w)) }));
             }} />}
 
           {tab === 'text' && (
@@ -722,7 +726,29 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
   );
 }
 
-function WordsTab({ words, clip, set, cut, rel, outLen, seek, fixWord }) {
+function WordsTab({ words, clip, set, cut, rel, outLen, seek, fixWord, replaceWords }) {
+  // Select words (drag across them, or click one and shift-click another) for a small Cut / Replace bar.
+  const [sel, setSel] = useState(null); // { a, b, show }
+  const [replacing, setReplacing] = useState(null); // text being typed
+  const [barPos, setBarPos] = useState(null);
+  const drag = useRef({ anchor: null, moved: false, last: null });
+  const wordsRef = useRef(null);
+  const selLo = sel ? Math.min(sel.a, sel.b) : -1; const selHi = sel ? Math.max(sel.a, sel.b) : -1;
+  useEffect(() => {
+    const up = () => { const d = drag.current; if (d.anchor == null) return; if (d.moved) setSel((x) => (x ? { ...x, show: true } : x)); d.anchor = null; };
+    const key = (e) => { if (e.key === 'Escape') { setSel(null); setReplacing(null); } };
+    window.addEventListener('pointerup', up); window.addEventListener('keydown', key);
+    return () => { window.removeEventListener('pointerup', up); window.removeEventListener('keydown', key); };
+  }, []);
+  // Place the bar just above the first selected word.
+  useLayoutEffect(() => {
+    if (!sel?.show || !wordsRef.current) { setBarPos(null); return; }
+    const box = wordsRef.current; const first = box.querySelector(`[data-i="${selLo}"]`);
+    if (!first) return;
+    const r = first.getBoundingClientRect(); const b = box.getBoundingClientRect();
+    setBarPos({ left: Math.max(0, Math.min(r.left - b.left, b.width - 260)), top: r.top - b.top + box.scrollTop - 44 });
+  }, [sel?.show, selLo, selHi]);
+  const clearSel = () => { setSel(null); setReplacing(null); };
   // Click and hold a word to fix its spelling (for words the transcription heard wrong).
   const [fixing, setFixing] = useState(null); // { i, text }
   const hold = useRef({ timer: 0, fired: false });
@@ -738,6 +764,18 @@ function WordsTab({ words, clip, set, cut, rel, outLen, seek, fixWord }) {
   lastIn = lastIn < 0 ? words.length - 1 : lastIn - 1;
   const lo = Math.max(0, firstIn - 30);
   const hi = Math.min(words.length - 1, lastIn + 30);
+  const cutSelection = () => {
+    const ids = []; for (let i = Math.max(selLo, firstIn); i <= Math.min(selHi, lastIn); i++) ids.push(i);
+    const next = new Set(cut); const all = ids.length && ids.every((i) => next.has(i));
+    for (const i of ids) { if (all) next.delete(i); else next.add(i); }
+    set({ cutWords: [...next].sort((a, b) => a - b) });
+    clearSel();
+  };
+  const saveReplace = async () => {
+    const text = replacing; const a = selLo; const b = selHi; clearSel();
+    if (!text?.trim() || text.trim() === words.slice(a, b + 1).map((w) => w.w).filter(Boolean).join(' ')) return;
+    try { await replaceWords(a, b, text); } catch (e) { alert(e.message); }
+  };
   const toggleCut = (i) => {
     const next = new Set(cut);
     if (next.has(i)) next.delete(i); else next.add(i);
@@ -777,8 +815,8 @@ function WordsTab({ words, clip, set, cut, rel, outLen, seek, fixWord }) {
         <span className="chip accent num">{fmt(outLen)} long</span>
       </div>
       <hr className="hairline" />
-      <p className="muted small">Click a word to cut it. Click a gray word to add it back. Click and hold a word to fix it.</p>
-      <div className="words">
+      <p className="muted small">Click a word to cut it. Click a gray word to add it back. Click and hold a word to fix it. Drag across words to cut or replace them together.</p>
+      <div className="words" ref={wordsRef}>
         {words.slice(lo, hi + 1).map((w, k) => {
           const i = lo + k;
           const out = i < firstIn || i > lastIn;
@@ -793,12 +831,41 @@ function WordsTab({ words, clip, set, cut, rel, outLen, seek, fixWord }) {
             );
           }
           return (
-            <span key={i} className={`wd ${out ? 'out' : ''} ${cut.has(i) ? 'cut' : ''} ${now ? 'now' : ''} ${w.fixed ? 'fixed' : ''}`}
-              onPointerDown={() => startHold(i)} onPointerUp={endHold} onPointerLeave={endHold}
-              onClick={() => { if (hold.current.fired) { hold.current.fired = false; return; } if (i < firstIn) set({ start: Math.max(0, w.start - 0.12) }); else if (i > lastIn) set({ end: w.end + 0.3 }); else toggleCut(i); }}
-              onDoubleClick={() => seek(w.start)}>{w.w} </span>
+            <span key={i} data-i={i} className={`wd ${out ? 'out' : ''} ${cut.has(i) ? 'cut' : ''} ${now ? 'now' : ''} ${w.fixed ? 'fixed' : ''} ${i >= selLo && i <= selHi ? 'sel' : ''}`}
+              onPointerDown={(e) => {
+                startHold(i);
+                const d = drag.current; d.moved = false;
+                if (e.shiftKey && d.last != null) { endHold(); d.moved = true; setSel({ a: d.last, b: i, show: false }); d.anchor = i; return; }
+                d.anchor = i; d.last = i;
+              }}
+              onPointerEnter={(e) => { const d = drag.current; if (d.anchor == null || !(e.buttons & 1) || i === d.anchor) return; endHold(); d.moved = true; setSel({ a: d.anchor, b: i, show: false }); }}
+              onPointerUp={endHold} onPointerLeave={endHold}
+              onClick={() => {
+                if (hold.current.fired) { hold.current.fired = false; return; }
+                if (drag.current.moved) { drag.current.moved = false; return; }
+                if (sel) { clearSel(); return; }
+                if (i < firstIn) set({ start: Math.max(0, w.start - 0.12) }); else if (i > lastIn) set({ end: w.end + 0.3 }); else toggleCut(i);
+              }}
+              onDoubleClick={() => seek(w.start)}>{w.w ? `${w.w} ` : ''}</span>
           );
         })}
+        {sel?.show && barPos && (
+          <div className="wd-bar" role="toolbar" aria-label="Edit the selected words" style={{ left: barPos.left, top: Math.max(0, barPos.top) }} onPointerDown={(e) => e.stopPropagation()}>
+            {replacing == null ? (
+              <>
+                <button className="btn sm" onClick={cutSelection}><Scissors size={13} />{(() => { const ids = []; for (let i = Math.max(selLo, firstIn); i <= Math.min(selHi, lastIn); i++) ids.push(i); return ids.length && ids.every((i) => cut.has(i)) ? 'Add back' : 'Cut'; })()}</button>
+                <button className="btn sm" onClick={() => setReplacing(words.slice(selLo, selHi + 1).map((w) => w.w).filter(Boolean).join(' '))}><PenLine size={13} />Replace</button>
+                <button className="rt-btn" aria-label="Close" title="Close" onClick={clearSel}><X size={14} /></button>
+              </>
+            ) : (
+              <>
+                <input className="input wd-bar-input" autoFocus value={replacing} aria-label="Replace with"
+                  onChange={(e) => setReplacing(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') saveReplace(); else if (e.key === 'Escape') clearSel(); }} />
+                <button className="btn sm primary" onClick={saveReplace}>Save</button>
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

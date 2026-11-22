@@ -39,7 +39,19 @@ export function keepSegments(words, clip, { maxPause = 0.45, pad = 0.08 } = {}) 
   const len = clip.end - clip.start;
   const cut = new Set(clip.cutWords || []);
   const inClip = words.map((w, i) => ({ ...w, i })).filter((w) => w.end > clip.start && w.start < clip.end);
-  const cuts = inClip.filter((w) => cut.has(w.i)).map((w) => [w.start - clip.start, w.end - clip.start]);
+  // Each run of cut words goes from the end of the last kept word to the start of the next kept one, so the
+  // pauses around cut words go too and the clip jumps straight to the next word (no little gaps of air).
+  const EDGE = 0.03; // keep a breath of each neighbor so its first or last sound isn't clipped
+  const cuts = [];
+  for (let k = 0; k < inClip.length; k++) {
+    if (!cut.has(inClip[k].i)) continue;
+    let j = k; while (j + 1 < inClip.length && cut.has(inClip[j + 1].i)) j++;
+    const prev = inClip[k - 1]; const next = inClip[j + 1];
+    const from = prev ? Math.min(prev.end + EDGE, inClip[k].start) - clip.start : 0; // at the clip's start: cut from 0
+    const to = next ? Math.max(next.start - EDGE, inClip[j].end) - clip.start : clip.end - clip.start; // at its end: cut to the end
+    cuts.push([from, to]);
+    k = j;
+  }
   if (clip.tightenPauses) {
     const kept = inClip.filter((w) => !cut.has(w.i));
     for (let k = 1; k < kept.length; k++) {

@@ -1799,3 +1799,13 @@ button.tp-tile:active .tp-orb { transform: scale(.92); transition-duration: 120m
 .settings-side nav { position: static; }
 .settings-fresh { padding: 8px; }
 .settings-fresh .btn.on { background: color-mix(in srgb, var(--bad) 12%, transparent); }
+
+/* Transcript: selected words and the small Cut / Replace bar above them */
+.words { position: relative; }
+.words .wd.sel { background: color-mix(in srgb, var(--accent) 22%, transparent); border-radius: 4px; }
+.wd-bar { position: absolute; z-index: 5; display: flex; align-items: center; gap: 6px; padding: 5px; border-radius: 14px;
+  background: var(--surface-solid); box-shadow: var(--shadow-lg), inset 0 0 0 1px var(--line); line-height: 1.2;
+  transform-origin: bottom left; animation: wd-bar-in 240ms var(--spring-snappy); }
+.wd-bar-input { width: 200px; min-height: 30px; padding: 4px 10px; }
+@keyframes wd-bar-in { from { opacity: 0; transform: translateY(4px) scale(.96); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .wd-bar { animation: none; } }

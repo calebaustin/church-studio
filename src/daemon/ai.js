@@ -116,8 +116,8 @@ async function askApple(cfg, text) {
   const shape = '{"clips":[{"index":0,"score":80,"title":"...","summary":"...","hook":"...","hashtags":["..."],"reason":"..."}]}';
   return looseJson(await appleAsk({ system: SYSTEM, prompt: `${text}\n\nAnswer with JSON only, exactly in this shape: ${shape}`, temperature: 0.2 }));
 }
-async function askLlama(cfg, text) {
-  return llamaChat({ system: SYSTEM, messages: [{ role: 'user', content: text }], schema: SCHEMA, temperature: 0.2, maxTokens: 2000 });
+async function askLlama(cfg, text, signal) {
+  return llamaChat({ system: SYSTEM, messages: [{ role: 'user', content: text }], schema: SCHEMA, temperature: 0.2, maxTokens: 1400, signal });
 }
 
 const PROVIDERS = { anthropic: askAnthropic, openai: askOpenAI, gemini: askGemini, ollama: askOllama, apple: askApple, cshelper: askLlama };
@@ -165,14 +165,14 @@ export function providerReady(cfg) {
 }
 
 /** Re-rank heuristic candidates. `cands` carry `.text`; returns the clips with AI fields merged in. */
-export async function rerank(cfg, cands, { title, count }) {
+export async function rerank(cfg, cands, { title, count, signal }) {
   const ask = PROVIDERS[cfg.llmProvider];
   if (!ask) throw new Error(`Unknown AI provider "${cfg.llmProvider}"`);
   // On-device models have small memories: send the strongest candidates, trimmed. Indexes still match.
   const p = cfg.llmProvider;
   const shown = p === 'apple' ? cands.slice(0, 10).map((c) => ({ ...c, text: c.text.slice(0, 380) }))
     : p === 'cshelper' ? cands.slice(0, 24).map((c) => ({ ...c, text: c.text.slice(0, 600) })) : cands;
-  const out = await ask(cfg, prompt(shown, title, count));
+  const out = await ask(cfg, prompt(shown, title, count), signal);
   const seen = new Set();
   // Small local models sometimes score 1-10 instead of 0-100: put those on the same scale.
   const raw = (out.clips || []).map((x) => Number(x.score) || 0);

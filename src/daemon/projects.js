@@ -97,6 +97,25 @@ export async function setTranscriptWord(id, index, text) {
   return t.words[index];
 }
 
+/**
+ * Replace a run of words with typed text (a phrase the transcription got wrong). Typed words fill the run in
+ * order; extra typed words join the last one, and any left-over words in the run go blank (captions skip them).
+ */
+export async function replaceTranscriptWords(id, from, to, text) {
+  const t = await getTranscript(id);
+  const a = Math.min(from, to); const b = Math.max(from, to);
+  if (!t?.words?.[a] || !t.words[b] || b - a > 60) throw new Error('Pick the words to replace again.');
+  const typed = String(text || '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean).map((w) => w.slice(0, 60));
+  if (!typed.length) throw new Error('Type the words.');
+  const n = b - a + 1;
+  const parts = typed.length <= n ? typed : [...typed.slice(0, n - 1), typed.slice(n - 1).join(' ')];
+  for (let k = 0; k < n; k++) t.words[a + k] = { ...t.words[a + k], w: parts[k] || '', fixed: true };
+  const f = file(id, 'transcript.json');
+  await writeFile(`${f}.tmp`, JSON.stringify(t));
+  await rename(`${f}.tmp`, f);
+  return t.words.slice(a, b + 1);
+}
+
 export async function getTranscript(id) {
   const f = file(id, 'transcript.json');
   if (!existsSync(f)) return null;
