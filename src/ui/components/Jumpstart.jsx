@@ -82,6 +82,9 @@ export function WebsiteSetup({ onClose, stayHere = false }) {
     setError(null); setStep('scan');
     try {
       const { found: f } = await api.post('/api/jumpstart/scan', { website: site });
+      // A picture logo's own colors lead the palette (an SVG logo's colors are read by the engine).
+      const fromLogo = await logoColors(f.logos?.find((l) => l.ext !== 'svg')?.dataUrl);
+      if (fromLogo.length) f.colors = mergeColors(fromLogo, f.colors || []);
       // Fonts the site uses that are on this Mac. Others fall back to what's picked now.
       const has = (n) => families.find((x) => x.value.toLowerCase() === String(n || '').toLowerCase() || x.value.toLowerCase() === String(n || '').toLowerCase().replace(/[-\s](book|regular|light|bold|ssm a)$/i, ''));
       const heading = has(f.fonts.heading)?.value || f.fonts.all.map(has).find(Boolean)?.value || null;
@@ -401,4 +404,33 @@ function ImportSettings({ onClose }) {
       )}
     </Modal>
   );
+}
+
+/** The main colors in a logo picture: colorful pixels only (no white, black or see-through), most common first. */
+async function logoColors(dataUrl) {
+  if (!dataUrl) return [];
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataUrl; });
+    const c = document.createElement('canvas'); const k = Math.min(1, 160 / Math.max(img.naturalWidth || 160, img.naturalHeight || 160));
+    c.width = Math.max(1, Math.round(img.naturalWidth * k)); c.height = Math.max(1, Math.round(img.naturalHeight * k));
+    const g = c.getContext('2d'); g.drawImage(img, 0, 0, c.width, c.height);
+    const px = g.getImageData(0, 0, c.width, c.height).data; const tally = new Map();
+    for (let i = 0; i < px.length; i += 4) {
+      const [r, gg, b, a] = [px[i], px[i + 1], px[i + 2], px[i + 3]];
+      if (a < 200) continue;
+      const max = Math.max(r, gg, b); const min = Math.min(r, gg, b);
+      if (max - min < 40 || max < 35 || min > 225) continue; // grays, near-black, near-white
+      const key = [r, gg, b].map((v) => Math.round(v / 24) * 24).join(',');
+      tally.set(key, (tally.get(key) || 0) + 1);
+    }
+    return [...tally.entries()].sort((x, y) => y[1] - x[1]).slice(0, 6)
+      .map(([key]) => `#${key.split(',').map((v) => Math.min(255, Number(v)).toString(16).padStart(2, '0')).join('')}`.toUpperCase());
+  } catch { return []; }
+}
+/** Logo colors first, then the site's, skipping near duplicates; keeps the dark and light slots from the site. */
+function mergeColors(logo, site) {
+  const near = (a, b) => [1, 3, 5].reduce((s, i) => s + Math.abs(parseInt(a.slice(i, i + 2), 16) - parseInt(b.slice(i, i + 2), 16)), 0) < 70;
+  const picks = [];
+  for (const h of [...logo, site[0], site[1], site[4]].filter(Boolean)) if (!picks.some((p) => near(p, h))) picks.push(h);
+  return [picks[0] || site[0], picks[1] || site[1], site[2], site[3], picks[2] || site[4]];
 }

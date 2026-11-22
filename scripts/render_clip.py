@@ -422,9 +422,13 @@ class Captions:
 
     def _render_hook(self):
         th = self.theme
-        font = load_font(th["fontFile"], th.get("fontStyle"), int(float(th.get("hookSize", 58)) * self.k), th.get("fontIndex"))
+        if th.get("hookFontFile"):  # the hook can have its own font
+            font = load_font(th["hookFontFile"], th.get("hookFontStyle"), int(float(th.get("hookSize", 58)) * self.k), th.get("hookFontIndex"))
+        else:
+            font = load_font(th["fontFile"], th.get("fontStyle"), int(float(th.get("hookSize", 58)) * self.k), th.get("fontIndex"))
         text = self.hook.upper() if th.get("hookUppercase") else self.hook
-        maxw = self.W * 0.8
+        pad0 = int(28 * self.k)
+        maxw = self.W * float(th.get("hookWidth", 0.8) or 0.8) - 2 * pad0
         words, lines, cur = text.split(), [], ""
         for w in words:
             t = f"{cur} {w}".strip()

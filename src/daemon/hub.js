@@ -2,11 +2,19 @@
 // One source, many pieces: clips, writing, designs, audio and posts, all linked back to the sermon.
 import { getProject } from './projects.js';
 import { loadConfig } from './config.js';
-import { loadDraft, outline } from './writing.js';
+import { loadDraft, outline, savedDigest } from './writing.js';
 import { forProject } from './insights.js';
 import { postSermon, sermonLinks } from './links.js';
 import { listDesigns } from './designs.js';
 import * as socialStore from './social/store.js';
+
+// "This week, we can apply this by praying daily." -> "Pray daily." style: the plain action, short.
+const step = (t) => {
+  let x = String(t || '').trim().replace(/^this week,?\s*/i, '').replace(/^(we|you|believers|christians|they)( can| should| could)? apply this( principle| truth| lesson)? by\s+/i, '');
+  if (!x) return '';
+  x = x.replace(/^./, (c) => c.toUpperCase());
+  return x.length > 150 ? `${x.slice(0, 147).replace(/[\s,;:]+\S*$/, '')}…` : x;
+};
 
 export async function contentPlan(projectId) {
   const project = await getProject(projectId);
@@ -40,12 +48,17 @@ export async function contentPlan(projectId) {
   // The sermon at a glance, for the top of the Sermon page.
   const facts = project.status === 'transcribed' ? await forProject(projectId).catch(() => null) : null;
   const sum = project.status === 'transcribed' ? await outline(projectId).catch(() => null) : null;
+  // With a helper's digest, the main points and next steps are its short claims, not lines lifted from the talk.
+  const digest = project.status === 'transcribed' ? await savedDigest(projectId) : null;
   const refs = [];
   for (const r of facts?.refs || []) if (!refs.some((x) => x.ref === r.ref)) refs.push(r);
   const sermon = {
     date: project.created, duration: project.media?.duration ?? null, watch: project.sourceUrl || null, poster: project.poster || null,
     refs: refs.slice(0, 8), themes: (facts?.themes || []).slice(0, 8), stories: facts?.stories?.length || 0,
-    bigIdea: sum?.quotes?.[0] || null, points: (sum?.points || []).slice(0, 4).map((p) => p.heading).filter(Boolean),
+    bigIdea: sum?.quotes?.[0] || null,
+    points: digest ? digest.map((d) => d.point).filter(Boolean).slice(0, 5) : (sum?.points || []).slice(0, 4).map((p) => p.heading).filter(Boolean),
+    steps: digest ? [...new Set(digest.map((d) => step(d.apply)).filter(Boolean))].slice(0, 3) : (sum?.steps || []).slice(0, 2),
+    digest: Boolean(digest),
   };
   return {
     project: { id: project.id, title: project.title, thumbnail: project.thumbnail, series: project.series || null, refs: draft?.refs || [] },

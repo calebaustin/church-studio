@@ -1822,3 +1822,44 @@ button.tp-tile:active .tp-orb { transform: scale(.92); transition-duration: 120m
 .job-details dt { color: var(--muted); }
 .job-details dd { margin: 0; color: var(--ink); font-weight: 600; text-align: right; }
 @media (prefers-reduced-motion: reduce) { .job-details { transition: opacity 120ms linear; transform: none; } }
+
+/* Clip finder: long reasons wrap onto a second line instead of running past the card */
+.clip-reasons .chip { white-space: normal; max-width: 100%; text-align: left; line-height: 1.35; }
+
+/* Setup checklists: check a step off by hand (hover tints the circle, first click asks "Done?", second checks it) */
+.check-btn { cursor: pointer; background: transparent; padding: 0; color: transparent; transition: background-color 160ms var(--ease), color 160ms var(--ease), width 260ms var(--spring-snappy); }
+.check-btn:hover { background: var(--accent-soft); color: var(--accent-text); border-color: var(--accent); }
+.check-btn.asking { width: auto; min-width: 26px; padding: 0 8px; border-radius: 999px; background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.check-ask { font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+
+/* Sermon index: each illustration carries a grade like the clip finder's */
+.story-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px; align-items: start; }
+.story-grade { flex: none; }
+
+/* Pick clips: a picked suggestion loops in the player with simple captions and the seconds left */
+.clip-preview { position: relative; }
+.clip-preview-left { position: absolute; top: 10px; right: 10px; padding: 3px 9px; border-radius: 999px; font-size: 13px; font-weight: 700;
+  color: var(--white); background: color-mix(in srgb, var(--black) 55%, transparent); pointer-events: none; }
+.clip-preview-cap { position: absolute; left: 8%; right: 8%; bottom: 22%; text-align: center; pointer-events: none;
+  font-family: Montserrat, var(--font-sans); font-weight: 700; font-size: clamp(15px, 3.6vw, 22px); line-height: 1.25; color: var(--white);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, .7), 0 0 2px rgba(0, 0, 0, .8); }
+.clip-preview-cap .now { color: var(--accent-2); }
+.clip-preview-stop { position: absolute; top: 10px; left: 10px; border: 0; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 650; cursor: pointer;
+  color: var(--white); background: color-mix(in srgb, var(--black) 45%, transparent); }
+.clip-preview-stop:hover { background: color-mix(in srgb, var(--black) 65%, transparent); }
+.clip-card.previewing { box-shadow: var(--shadow-lg), inset 0 0 0 2px var(--accent); }
+
+/* Clip editor preview: place the hook and captions directly (drag to move, sides for width, corner for size) */
+.cap-layer { position: absolute; inset: 0; pointer-events: none; }
+.cap-layer .placing { pointer-events: auto; cursor: grab; outline: 1.5px dashed color-mix(in srgb, var(--white) 75%, transparent); outline-offset: 4px; }
+.cap-layer .placing:active { cursor: grabbing; }
+.place-h { position: absolute; width: 12px; height: 12px; border-radius: 50%; background: var(--white); box-shadow: 0 0 0 2px var(--accent), 0 2px 6px rgba(0, 0, 0, .35); }
+.place-h.side { top: 50%; margin-top: -6px; cursor: ew-resize; }
+.place-h.side.l { left: -12px; }
+.place-h.side.r { right: -12px; }
+.place-h.corner { right: -12px; bottom: -12px; cursor: nwse-resize; border-radius: 3px; }
+.cap.placing { transform: translateY(-50%); }
+
+/* Social: your own pages, for a quick look while planning */
+.pages-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.page-tile { display: grid; gap: 6px; padding: 12px; border-radius: 14px; background: var(--field); box-shadow: inset 0 0 0 1px var(--line); }

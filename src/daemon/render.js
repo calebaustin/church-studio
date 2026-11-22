@@ -22,13 +22,14 @@ export function keepSegments(words, clip, { maxPause = clip?.pauseMax ?? 0.45, p
   const inClip = words.map((w, i) => ({ ...w, i })).filter((w) => w.end > clip.start && w.start < clip.end);
   // Each run of cut words goes from the end of the last kept word to the start of the next kept one, so the
   // pauses around cut words go too and the clip jumps straight to the next word (no little gaps of air).
-  const EDGE = 0.03; // keep a breath of each neighbor so its first or last sound isn't clipped
+  // Keep the tail of the last kept word and the start of the next one so neither sounds clipped.
+  const TAIL = 0.12; const LEAD = 0.06;
   for (let k = 0; k < inClip.length; k++) {
     if (!cut.has(inClip[k].i)) continue;
     let j = k; while (j + 1 < inClip.length && cut.has(inClip[j + 1].i)) j++;
     const prev = inClip[k - 1]; const next = inClip[j + 1];
-    const from = prev ? Math.min(prev.end + EDGE, inClip[k].start) - clip.start : 0; // at the clip's start: cut from 0
-    const to = next ? Math.max(next.start - EDGE, inClip[j].end) - clip.start : clip.end - clip.start; // at its end: cut to the end
+    const from = prev ? Math.min(prev.end + TAIL, inClip[k].start) - clip.start : 0; // at the clip's start: cut from 0
+    const to = next ? Math.max(next.start - LEAD, inClip[j].end) - clip.start : clip.end - clip.start; // at its end: cut to the end
     cuts.push([from, to]);
     k = j;
   }
@@ -102,8 +103,12 @@ export async function buildJob(project, clip, { preview = false, trackOnly = fal
     .map((w, i) => ({ ...w, i }))
     .filter((w) => w.end > clip.start && w.start < clip.end && !cut.has(w.i) && w.w)
     .map(({ w, start, end }) => ({ w, start, end }));
-  const theme = await getVideoTheme(clip.videoTheme || project.videoTheme || (await loadConfig()).videoTheme);
+  const base = await getVideoTheme(clip.videoTheme || project.videoTheme || (await loadConfig()).videoTheme);
+  // This clip's own placement of the hook and captions (set by dragging in the preview or with the sliders).
+  const pick = (v, d) => (v != null ? v : d);
+  const theme = { ...base, hookSize: pick(clip.hookSize, base.hookSize), hookWidth: pick(clip.hookWidth, base.hookWidth), position: pick(clip.capY, base.position), maxWidth: pick(clip.capWidth, base.maxWidth), size: pick(clip.capSize, base.size) };
   const font = await fontFile(theme.font);
+  const hookFontRec = clip.hookFont || base.hookFont ? await fontFile(clip.hookFont || base.hookFont) : null;
   // Wide clips render wide, quick renders included, unless an export picks another shape.
   const out = exportSettings({ ...options, preset: options.preset || (clip.format === 'wide' ? 'landscape' : undefined) });
   return {
@@ -120,7 +125,8 @@ export async function buildJob(project, clip, { preview = false, trackOnly = fal
     words: clipWords,
     hook: options.hook === false ? null : clip.hook || null,
     captions: options.captions === false ? false : clip.captions !== false,
-    theme: { ...theme, fontFile: font?.file, fontStyle: font?.style, fontIndex: font?.index ?? null },
+    theme: { ...theme, fontFile: font?.file, fontStyle: font?.style, fontIndex: font?.index ?? null,
+      ...(hookFontRec?.file ? { hookFontFile: hookFontRec.file, hookFontStyle: hookFontRec.style, hookFontIndex: hookFontRec.index ?? null } : {}) },
     // Audio cleanup: the clip's own setting, else the sermon's.
     audioFilter: audioFilter(clip.audioCleanup !== undefined ? clip.audioCleanup : project.audioCleanup),
     // Text pop-ups (times are in the finished clip) and colors for clips with no picture.

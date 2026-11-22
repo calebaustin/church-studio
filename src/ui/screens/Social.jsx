@@ -59,6 +59,7 @@ export default function Social({ compose: initialCompose, caption: initialCaptio
         <span className="muted small">Scheduled posts go out while the app is open.</span>
       </div>
       {tab === 'posts' && <Posts s={s} plat={plat} onEdit={(p) => setComposer({ post: p })} onConnect={() => setTab('accounts')} onShareAgain={(p) => setComposer({ caption: p.caption, media: p.media, title: p.title, hashtags: p.hashtags })} />}
+      {tab === 'accounts' && <YourPages />}
       {tab === 'accounts' && <Accounts s={s} />}
       {tab === 'messages' && <Messages s={s} plat={plat} />}
       {composer && <Composer key={composer.post?.id || 'new'} s={s} plat={plat} init={{ ...composer, onOpenPost: (p) => setComposer({ post: p }) }} onClose={() => { setComposer(null); s.load(); }} onConnect={() => { setComposer(null); setTab('accounts'); }} />}
@@ -632,5 +633,49 @@ export function Composer({ s, plat, init, onClose, onConnect }) {
           </div>
         </div>
     </Modal>
+  );
+}
+
+// ------------------------------------------------------------------ your pages
+const PAGES = [['instagram', 'Instagram', 'instagram.com/'], ['facebook', 'Facebook', 'facebook.com/'], ['youtube', 'YouTube', 'youtube.com/@'], ['tiktok', 'TikTok', 'tiktok.com/@']];
+/**
+ * The church's own social pages for a quick look while planning, no developer account needed. They open in a
+ * Church Studio window that remembers sign-ins, so a feed that needs one shows after signing in once.
+ */
+function YourPages() {
+  const { config, saveConfig } = useApp();
+  const links = config.socialLinks || {};
+  const [editing, setEditing] = useState(null);
+  const [val, setVal] = useState('');
+  const url = (k) => { const v = String(links[k] || '').trim(); if (!v) return ''; return /^https?:/.test(v) ? v.replace(/^http:/, 'https:') : `https://www.${PAGES.find((p) => p[0] === k)[2]}${v.replace(/^@/, '')}`; };
+  const view = (k, label) => { const u = url(k); if (!u) return; if (desktop?.openWeb) desktop.openWeb(u, `${label} · ${config.churchInfo?.name || 'Your page'}`); else openLink(u); };
+  return (
+    <section className="glass panel stack" style={{ gap: 10 }}>
+      <div className="stack" style={{ gap: 2 }}>
+        <h3>Your pages</h3>
+        <span className="small muted">Take a quick look at your feeds while you plan. They open in a Church Studio window. If a page asks you to sign in, sign in once there and it remembers.</span>
+      </div>
+      <div className="pages-grid">
+        {PAGES.map(([k, label]) => (
+          <div key={k} className="page-tile">
+            <strong className="small">{label}</strong>
+            {editing === k ? (
+              <form className="row" style={{ gap: 6 }} onSubmit={(e) => { e.preventDefault(); saveConfig({ socialLinks: { ...links, [k]: val.trim() } }); setEditing(null); }}>
+                <input className="input" autoFocus value={val} placeholder={`${label} link or @name`} onChange={(e) => setVal(e.target.value)} />
+                <button className="btn sm primary">Save</button>
+              </form>
+            ) : links[k] ? (
+              <div className="row between" style={{ gap: 6 }}>
+                <span className="small muted truncate" title={url(k)}>{url(k).replace(/^https:\/\/(www\.)?/, '')}</span>
+                <span className="row" style={{ gap: 4 }}>
+                  <button className="btn sm" onClick={() => view(k, label)}>View</button>
+                  <button className="rt-btn" title="Change link" aria-label={`Change ${label} link`} onClick={() => { setVal(links[k]); setEditing(k); }}>✎</button>
+                </span>
+              </div>
+            ) : <button className="btn ghost sm" onClick={() => { setVal(''); setEditing(k); }}>Add your {label} link</button>}
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }

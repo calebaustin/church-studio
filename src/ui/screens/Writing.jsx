@@ -126,8 +126,32 @@ function WritingEditor({ pid, onBack, startKind }) {
   const rewrite = async () => {
     setBusy(true);
     try {
-      const r = await api.post(`/api/writing/${pid}/rewrite`, { title: draft.title, keyphrase: draft.keyphrase, slug: draft.slug, metaDescription: draft.metaDescription, angle, ai: useAi });
-      setUndoBlog(draft.blog);
+      const body = { title: draft.title, keyphrase: draft.keyphrase, slug: draft.slug, metaDescription: draft.metaDescription, angle, ai: useAi };
+      let r;
+      if (useAi && config.llmProvider !== 'none') {
+        // Streamed: each section shows up as the helper finishes it, under the working wave.
+        setUndoBlog(draft.blog);
+        const res = await fetch(`/api/writing/${pid}/rewrite-stream`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+        const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = '';
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          let i;
+          while ((i = buf.indexOf('\n')) >= 0) {
+            const lineText = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+            if (!lineText) continue;
+            const m = JSON.parse(lineText);
+            if (m.partial) set({ blog: m.partial });
+            if (m.error) throw new Error(m.error);
+            if (m.done) r = m;
+          }
+        }
+        if (!r) throw new Error('The helper stopped before finishing.');
+      } else {
+        r = await api.post(`/api/writing/${pid}/rewrite`, body);
+        setUndoBlog(draft.blog);
+      }
       set({ blog: r.text, angle });
       toast({ text: r.notice || `Rewritten as “${ANGLES.find((a) => a[0] === angle)[1]}”. Read it over, then save.` });
     } catch (e) { toast({ kind: 'error', text: e.message }); }
@@ -151,6 +175,16 @@ function WritingEditor({ pid, onBack, startKind }) {
     set({ title: value });
     return true;
   });
+  // Email, discussion guide and devotional, written by the AI helper from the whole sermon.
+  const aiWriteKind = async () => {
+    setBusy(true);
+    try {
+      const r = await api.post(`/api/writing/${pid}/ai-write`, { kind, days: devoDays });
+      set({ [kind]: r.text });
+      toast({ text: r.notice || 'Written from the whole sermon. Read it over, then save.' });
+    } catch (e) { toast({ kind: 'error', text: e.message }); }
+    setBusy(false);
+  };
   const polish = async () => {
     setBusy(true);
     try { const r = await api.post(`/api/writing/${pid}/polish`, { kind, text: draft[kind] }); set({ [kind]: r.text }); toast({ text: r.notice || 'Polished. Read it over before using it.' }); } catch (e) { toast({ kind: 'error', text: e.message }); }
@@ -228,6 +262,9 @@ function WritingEditor({ pid, onBack, startKind }) {
                   <PopList items={AUDIENCE_LIST.map(([id, label, about]) => ({ label, hint: about, value: id }))} onPick={(id) => { setRewriteMenu(false); rewriteForAudience(id); }} />
                 </Popover>
               </div>
+              {!standalone && config.llmProvider !== 'none' && ['email', 'group', 'devotional'].includes(kind) && (
+                <button className="btn sm" disabled={busy} onClick={aiWriteKind} title="Writes it from the whole sermon with your AI helper"><Sparkles size={13} className={busy ? 'spin' : ''} />{busy ? 'Writing…' : 'Write with AI helper'}</button>
+              )}
               <div style={{ position: 'relative' }}>
                 <button className="btn sm" data-pop-trigger onClick={() => setMoreMenu(!moreMenu)}>More<ChevronDown size={13} /></button>
                 <Popover open={moreMenu} onClose={() => setMoreMenu(false)} align="right" width={240}>

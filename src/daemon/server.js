@@ -42,7 +42,7 @@ import { exportPodcast } from './podcast.js';
 import { contentPlan } from './hub.js';
 import * as insights from './insights.js';
 import * as churchCal from './calendar.js';
-import { aiStatus, resetAiStatus, testProvider } from './ai.js';
+import { aiStatus, providerReady, resetAiStatus, testProvider } from './ai.js';
 import { appleStatus, csHelperStatus, deleteCsModel, downloadCsModel, imagePlayground } from './localai.js';
 import { deleteChat, getChat, helperChat, helperContext, listChats, runPass, saveChat, whatToday } from './helper.js';
 import { binTranscript } from './sermon.js';
@@ -284,7 +284,30 @@ route('PUT', '/api/projects/:id/audio', async ({ id }, b) => {
 route('GET', '/api/projects/:id/transcript/text', async ({ id }, _b, url) => { await requireProject(id); try { return { text: await transcripts.transcriptText(id, url.searchParams.get('format') || 'txt') }; } catch (e) { throw new HttpError(400, e.message); } });
 route('GET', '/api/projects/:id/transcript/paragraphs', async ({ id }, _b, url) => { await requireProject(id); try { return await transcripts.transcriptParagraphs(id, url.searchParams.get('whole') === '1'); } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/projects/:id/transcript/save', async ({ id }, b) => { await requireProject(id); try { return await transcripts.saveTranscript(id, b.format); } catch (e) { throw new HttpError(400, e.message); } });
-route('POST', '/api/projects/:id/transcribe', projectJob('transcribe', 'Transcribe', (id, b, ctx) => transcribeProject(id, b, ctx)));
+route('POST', '/api/projects/:id/transcribe', projectJob('transcribe', 'Transcribe', async (id, b, ctx) => {
+  const r = await transcribeProject(id, b, ctx);
+  queueDigest(id).catch(() => {});
+  return r;
+}));
+// With an AI helper on, a sermon's digest is made right after it's transcribed, so the Sermon page and writing have it early.
+async function queueDigest(id) {
+  const cfg = await loadConfig();
+  const p = await getProject(id);
+  if (!p || !providerReady(cfg) || ['short', 'lyric', 'wide'].includes(p.kind) || await writing.savedDigest(id)) return;
+  jobs.enqueue({ kind: 'digest', label: `Sermon summary: ${p.title}`, projectId: id, key: `digest:${id}` }, async (ctx) => {
+    ctx.progress(2, 'Reading the sermon…');
+    await writing.makeDigest(id, { signal: ctx.signal, onProgress: (k, n) => { ctx.progress(4 + (k / n) * 94, `Summing up part ${k + 1} of ${n}…`); ctx.detail({ Part: `${k + 1} of ${n}` }); } });
+    ctx.progress(100, 'Sermon summary ready');
+    return {};
+  });
+}
+route('POST', '/api/projects/:id/digest', async ({ id }) => {
+  await requireProject(id);
+  const cfg = await loadConfig();
+  if (!providerReady(cfg)) throw new HttpError(400, 'Turn on an AI helper in Settings first.');
+  await queueDigest(id);
+  return { ok: true };
+});
 route('POST', '/api/projects/:id/propose', projectJob('propose', 'Find clips', (id, b, ctx) => proposeClips(id, b, ctx)));
 
 route('POST', '/api/projects/:id/clips', async ({ id }, b) => {
@@ -545,7 +568,15 @@ route('POST', '/api/library/replace', async (_p, b) => { try { return await libr
 route('POST', '/api/library/import', async (_p, b) => {
   const files = await library.importFiles(Array.isArray(b.paths) ? b.paths : [], b.folder);
   const root = await library.libraryRoot();
-  return { files, rels: files.map((f) => path.relative(root, f).split(path.sep).join('/')) };
+  const rels = files.map((f) => path.relative(root, f).split(path.sep).join('/'));
+  // With the AI helper on, new pictures get a few searchable tags right away (worked out on this Mac).
+  if ((await loadConfig()).llmProvider !== 'none' && b.folder !== 'Logos') photos.autoTag(rels).catch(() => {});
+  return { files, rels };
+});
+// Add tags to pictures in bulk (all untagged ones, or the ones named).
+route('POST', '/api/library/auto-tag', async (_p, b) => {
+  const rels = Array.isArray(b.rels) && b.rels.length ? b.rels : (await library.listLibrary()).items.filter((i) => i.kind === 'image' && i.folder !== 'Logos').map((i) => i.rel);
+  return { job: jobs.view(jobs.enqueue({ kind: 'tag', label: 'Tag brand photos', key: 'auto-tag' }, (ctx) => photos.autoTag(rels, { untaggedOnly: b.all !== true, ctx }))) };
 });
 
 // ---------------------------------------------------------------- writing
@@ -563,7 +594,20 @@ route('GET', '/api/writing/:id', async ({ id }) => ({ draft: await writing.loadD
 route('POST', '/api/writing/:id/generate', async ({ id }) => { try { return { draft: await writing.saveDraft(id, await writing.generate(id)) }; } catch (e) { throw new HttpError(400, e.message); } });
 route('PUT', '/api/writing/:id', async ({ id }, b) => ({ draft: await writing.saveDraft(id, b) }));
 route('POST', '/api/writing/:id/suggest', async ({ id }, b) => { try { return await writing.suggest(id, b || {}); } catch (e) { throw new HttpError(400, e.message); } });
+route('POST', '/api/writing/:id/ai-write', async ({ id }, b) => { try { return await writing.aiWrite(id, String(b.kind || ''), { days: b.days }); } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/writing/:id/rewrite', async ({ id }, b) => { try { return await writing.rewriteBlog(id, b || {}); } catch (e) { throw new HttpError(400, e.message); } });
+// The same rewrite, streamed: each section as it is written, then the finished post.
+streamRoute('POST', '/api/writing/:id/rewrite-stream', async ({ id }, b, res, req) => {
+  res.writeHead(200, { 'content-type': 'application/x-ndjson', 'cache-control': 'no-store' });
+  const ac = new AbortController();
+  req.on('close', () => { if (!res.writableEnded) ac.abort(); });
+  const line = (o) => { if (!res.writableEnded) res.write(`${JSON.stringify(o)}\n`); };
+  try {
+    const r = await writing.rewriteBlog(id, { ...(b || {}), signal: ac.signal, onPartial: (md) => line({ partial: md }) });
+    line({ done: true, ...r });
+  } catch (e) { line({ error: e.message }); }
+  res.end();
+});
 route('POST', '/api/writing/:id/devotional', async ({ id }, b) => { try { return await writing.devotional(id, b.days); } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/writing/:id/polish', async ({ id }, b) => { try { return await writing.polish(id, b.kind, b.text); } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/writing/:id/save-file', async ({ id }, b) => {

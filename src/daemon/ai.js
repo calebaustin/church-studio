@@ -209,7 +209,13 @@ export async function testProvider(cfg) {
  * for JSON and the first object in the reply is used.
  */
 export async function completeJSON(cfg, system, user, schema, { signal, maxTokens = 900 } = {}) {
-  if (cfg.llmProvider === 'cshelper') return llamaChat({ system, messages: [{ role: 'user', content: user }], schema, maxTokens, temperature: 0.3, signal });
+  if (cfg.llmProvider === 'cshelper') {
+    // A cut-off or garbled answer gets one more try, a little cooler.
+    try { return await llamaChat({ system, messages: [{ role: 'user', content: user }], schema, maxTokens, temperature: 0.3, signal }); } catch (e) {
+      if (signal?.aborted || !(e instanceof SyntaxError)) throw e;
+      return llamaChat({ system, messages: [{ role: 'user', content: user }], schema, maxTokens, temperature: 0.15, signal });
+    }
+  }
   const keys = Object.keys(schema.properties || {}).join(', ');
   const text = await complete(cfg, system, `${user}\n\nAnswer with only a JSON object with these keys: ${keys}.`);
   const m = String(text).match(/\{[\s\S]*\}/);

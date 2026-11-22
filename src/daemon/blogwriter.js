@@ -75,16 +75,16 @@ export function structure(sentences, { target = 4 } = {}) {
 const SECTION_SCHEMA = {
   type: 'object', additionalProperties: false, required: ['heading', 'paragraphs', 'keyLine'],
   properties: {
-    heading: { type: 'string' },
-    paragraphs: { type: 'array', minItems: 1, maxItems: 3, items: { type: 'string' } },
-    keyLine: { type: 'string' },
+    heading: { type: 'string', maxLength: 80 },
+    paragraphs: { type: 'array', minItems: 1, maxItems: 3, items: { type: 'string', maxLength: 900 } },
+    keyLine: { type: 'string', maxLength: 200 },
   },
 };
 const FRAME_SCHEMA = {
   type: 'object', additionalProperties: false, required: ['title', 'intro', 'meta', 'takeaways'],
   properties: {
-    title: { type: 'string' }, intro: { type: 'string' }, closing: { type: 'string' }, meta: { type: 'string' },
-    takeaways: { type: 'array', minItems: 3, maxItems: 4, items: { type: 'string' } },
+    title: { type: 'string', maxLength: 90 }, intro: { type: 'string', maxLength: 700 }, closing: { type: 'string', maxLength: 500 }, meta: { type: 'string', maxLength: 180 },
+    takeaways: { type: 'array', minItems: 3, maxItems: 4, items: { type: 'string', maxLength: 160 } },
   },
 };
 FRAME_SCHEMA.required.push('closing');
@@ -142,7 +142,7 @@ const SCALE = { apple: 2400, cshelper: 5200 };
  * Write the blog with the AI helper, section by section. a: the analysis (parts, refs, all), opts: { title,
  * keyphrase, angle note, voice guide, church }. onProgress(n, of) after each section. Returns markdown, or throws.
  */
-export async function writeBlogWithAI(cfg, a, { title = '', keyphrase = '', angleNote = '', guide = '', example = '', signal, onProgress } = {}) {
+export async function writeBlogWithAI(cfg, a, { title = '', keyphrase = '', angleNote = '', guide = '', example = '', signal, onProgress, onSection } = {}) {
   const max = SCALE[cfg.llmProvider] || 9000;
   // On-device helpers get a shorter example so the sermon excerpt still fits.
   const ex = exampleBlock(cfg.llmProvider === 'apple' ? example.slice(0, 450) : example);
@@ -166,6 +166,7 @@ or Scripture, and one key line (a sentence a reader could remember).\n\nExcerpt:
       } catch (e) { if (signal?.aborted) throw e; }
     }
     sections.push(done); // null: this part is written locally
+    if (done) onSection?.(sections.filter(Boolean));
   }
   if (!sections.some(Boolean)) throw new Error('The helper could not write this one.');
   onProgress?.(a.parts.length, a.parts.length);
@@ -200,4 +201,90 @@ export function assembleBlog({ title, intro, sections, closing, invite }) {
   const body = sections.map((s) => ({ ...s, paras: s.paras.map(once).filter(Boolean) })).filter((s) => s.paras.length)
     .map((s) => `## ${s.heading}\n\n${s.paras.join('\n\n')}`);
   return [`# ${title}`, intro, ...body, closing, invite].filter(Boolean).join('\n\n').replace(/\n{3,}/g, '\n\n');
+}
+
+// ---------------------------------------------------------------- email, discussion guide and devotional
+// All three start from a digest of the whole message (each part's point, a short summary, its Scripture, its
+// illustration and how to live it), written once per sermon, so they reflect the full sermon rather than a few lines.
+const DIGEST_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['point', 'summary', 'illustration', 'apply'],
+  properties: { point: { type: 'string', maxLength: 90 }, summary: { type: 'string', maxLength: 600 }, illustration: { type: 'string', maxLength: 300 }, apply: { type: 'string', maxLength: 250 } },
+};
+export async function sermonDigest(cfg, a, { title = '', signal, onProgress } = {}) {
+  const max = SCALE[cfg.llmProvider] || 9000;
+  const system = `You summarize one part of a sermon for a church's own notes.\n${RULES}`;
+  const out = [];
+  for (let k = 0; k < a.parts.length; k++) {
+    onProgress?.(k, a.parts.length);
+    const text = a.parts[k].map((s) => s.text).join(' ').slice(0, max);
+    let d = null;
+    for (let attempt = 0; attempt < 2 && !d; attempt++) {
+      try {
+        const r = await completeJSON(cfg, system, `Sermon: "${title}". Part ${k + 1} of ${a.parts.length}.
+Give: this part's point as one short claim (under 9 words); a summary in two or three sentences; the story or example it uses, in one
+sentence (or "" if none); and one way to live it this week, as a short instruction that starts with a verb (under 16 words).\n\nExcerpt:\n${text}`, DIGEST_SCHEMA, { signal, maxTokens: 450 });
+        if (r.summary) d = { point: String(r.point || '').replace(/[.?!:]+$/, ''), summary: grounded(r.summary, a.all, 3), illustration: grounded(r.illustration, a.all, 1), apply: grounded(r.apply, a.all, 1), refs: extractRefs(text, 3) };
+      } catch (e) { if (signal?.aborted) throw e; }
+    }
+    if (d?.summary) out.push(d);
+  }
+  if (!out.length) throw new Error('The helper could not read this sermon.');
+  return out;
+}
+const digestText = (digest) => digest.map((d, k) => `${k + 1}. ${d.point}${d.refs?.length ? ` (${d.refs.join(', ')})` : ''}: ${d.summary}${d.illustration ? ` Example: ${d.illustration}` : ''}${d.apply ? ` Live it: ${d.apply}` : ''}`).join('\n');
+
+const EMAIL_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['subject', 'preview', 'opening', 'points', 'closing'],
+  properties: { subject: { type: 'string', maxLength: 70 }, preview: { type: 'string', maxLength: 110 }, opening: { type: 'string', maxLength: 600 }, points: { type: 'array', minItems: 3, maxItems: 4, items: { type: 'string', maxLength: 220 } }, closing: { type: 'string', maxLength: 300 } },
+};
+/** A warm "in case you missed Sunday" email from the digest. */
+export async function writeEmailWithAI(cfg, digest, { title = '', source = '', guide = '', example = '', watch = '', invite = '', signal } = {}) {
+  const r = await completeJSON(cfg, `You write a church's weekly email to its members and friends.\n${RULES}\n${guide}${exampleBlock(example.slice(0, 500))}`,
+    `Sermon: "${title}"\nThe message, part by part:\n${digestText(digest)}
+Write: a subject line under 50 characters; preview text under 90 characters; an opening paragraph of two or three warm sentences for
+someone who missed Sunday; three or four short points that carry the heart of the message (one sentence each); and a closing sentence
+that invites them to live it this week.`, EMAIL_SCHEMA, { signal, maxTokens: 600 });
+  return [`**Subject:** ${r.subject}`, `**Preview:** ${r.preview}`, '', 'Hi [FIRST NAME],', '', grounded(r.opening, source, 3), '',
+    ...(r.points || []).map((p) => `- ${grounded(p, source, 1)}`).filter((p) => p.length > 2), '', grounded(r.closing, source, 2) || String(r.closing || '').replace(/["\u201C\u201D]/g, ''), '',
+    watch ? `${watch}. ${invite}` : invite, '', '[YOUR NAME]'].join('\n');
+}
+
+const GUIDE_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['open', 'context', 'questions', 'apply', 'pray'],
+  properties: { open: { type: 'string', maxLength: 200 }, context: { type: 'string', maxLength: 600 }, questions: { type: 'array', minItems: 4, maxItems: 7, items: { type: 'string', maxLength: 220 } }, apply: { type: 'string', maxLength: 220 }, pray: { type: 'string', maxLength: 220 } },
+};
+/** A small group guide that walks the message: an opening question, a little context, questions in order, a step and a prayer. */
+export async function writeGuideWithAI(cfg, digest, { title = '', refs = [], source = '', signal } = {}) {
+  const r = await completeJSON(cfg, `You write small group discussion guides for a church.\n${RULES}\nQuestions are open (not yes or no), one idea each, and move from understanding the passage to living it.`,
+    `Sermon: "${title}"${refs.length ? `\nPassages: ${refs.join(', ')}` : ''}\nThe message, part by part:\n${digestText(digest)}
+Write: one easy opening question anyone can answer; two or three sentences of context for the main passage, from the message; four to six
+discussion questions that follow the message in order; one question about a step to take this week; and a one-sentence prayer focus.`, GUIDE_SCHEMA, { signal, maxTokens: 700 });
+  return [`# Small group guide: ${title}`, '', `**Open:** ${r.open}`, '', refs.length ? `**Read:** ${refs.slice(0, 2).join(', ')}` : '', '',
+    grounded(r.context, source, 3), '', '**Discuss:**', ...(r.questions || []).map((q, i) => `${i + 1}. ${q}`), '',
+    `**Live it:** ${r.apply}`, '', `**Pray:** ${grounded(r.pray, source, 1) || r.pray}`].filter((x, i, arr) => !(x === '' && arr[i - 1] === '')).join('\n');
+}
+
+const DAY_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['title', 'reflection', 'question', 'prayer'],
+  properties: { title: { type: 'string', maxLength: 80 }, reflection: { type: 'string', maxLength: 900 }, question: { type: 'string', maxLength: 220 }, prayer: { type: 'string', maxLength: 300 } },
+};
+/** A devotional series walking through the message in order, one short reading a day. */
+export async function writeDevotionalWithAI(cfg, digest, { title = '', days = 5, refs = [], source = '', signal, onProgress } = {}) {
+  const n = [3, 5, 7].includes(Number(days)) ? Number(days) : 5;
+  const out = [`# ${n}-day devotional: ${title}`, '', `A short reading each day, walking through "${title}" in order.`];
+  for (let d = 0; d < n; d++) {
+    onProgress?.(d, n);
+    const part = digest[Math.min(digest.length - 1, Math.floor((d * digest.length) / n))];
+    const read = part.refs?.[0] || refs[d % Math.max(1, refs.length)] || '';
+    try {
+      const r = await completeJSON(cfg, `You write short daily devotionals for a church.\n${RULES}`,
+        `Day ${d + 1} of ${n}, from the sermon "${title}".${read ? ` Passage: ${read}.` : ''}\nThis day's idea: ${part.point}. ${part.summary}${part.illustration ? ` Example: ${part.illustration}` : ''}
+Write: a short title; a reflection of 80 to 120 words that helps a reader sit with this idea; one honest question to reflect on; and a one-sentence prayer.`, DAY_SCHEMA, { signal, maxTokens: 450 });
+      out.push('', `## Day ${d + 1}: ${String(r.title).replace(/^Day \d+:\s*/i, '')}`, read ? `**Read:** ${read}` : '', '', grounded(r.reflection, source, 7), '', `**Reflect:** ${r.question}`, '', `**Pray:** ${r.prayer}`);
+    } catch (e) {
+      if (signal?.aborted) throw e;
+      out.push('', `## Day ${d + 1}: ${part.point}`, read ? `**Read:** ${read}` : '', '', part.summary, '', `**Reflect:** ${part.apply || 'Where do you see this in your week?'}`, '', '**Pray:** [ADD: a short prayer.]');
+    }
+  }
+  return out.filter((x, i, arr) => !(x === '' && arr[i - 1] === '')).join('\n');
 }

@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('desktop', {
   setMenuBar: (on) => ipcRenderer.invoke('set-menu-bar', on),
   openRoute: (route) => ipcRenderer.invoke('open-route', route),
   trayHide: () => ipcRenderer.invoke('tray-hide'),
+  openWeb: (url, title) => ipcRenderer.invoke('open-web', { url, title }),
   onTrayShown: (cb) => { const f = () => cb(); ipcRenderer.on('tray-shown', f); return () => ipcRenderer.removeListener('tray-shown', f); },
   onGo: (cb) => { const f = (_e, route) => cb(route); ipcRenderer.on('go', f); return () => ipcRenderer.removeListener('go', f); },
 });

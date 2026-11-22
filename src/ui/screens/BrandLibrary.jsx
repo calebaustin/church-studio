@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import ToolIntro, { introSeen } from '../components/ToolIntro.jsx';
-import { FolderOpen, Plus, Image as ImageIcon, Film, FileText, Shapes, Eye, X, Wand2, Palette, Heart, Trash2, MoreHorizontal, Star, RefreshCw, Search, Globe, Eraser } from 'lucide-react';
+import { FolderOpen, Plus, Image as ImageIcon, Film, FileText, Shapes, Eye, X, Wand2, Palette, Heart, Trash2, MoreHorizontal, Star, RefreshCw, Search, Globe, Eraser, Sun, Tags } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { api, desktop, sizeLabel } from '../api.js';
 import { usePoll } from '../poll.js';
@@ -63,6 +63,30 @@ function LogoManager({ lib, reload }) {
     await saveConfig(patch); reload(); refreshLogo?.();
     toast({ text: 'Logo replaced. The old one is in the Trash.' });
   };
+  // A white "light version" made from a logo with a see-through background, or a color version of a white logo
+  // in the church's first brand color. Made right here from the logo's own shape, then saved next to it.
+  const recolor = async (l, mode) => {
+    try {
+      const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = l.url; });
+      const k = Math.min(1, 2000 / Math.max(img.naturalWidth || 800, img.naturalHeight || 800));
+      const w = Math.max(1, Math.round((img.naturalWidth || 800) * k)); const h = Math.max(1, Math.round((img.naturalHeight || 800) * k));
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      const g = c.getContext('2d'); g.drawImage(img, 0, 0, w, h);
+      const px = g.getImageData(0, 0, w, h).data; let clear = 0;
+      for (let i = 3; i < px.length; i += 16) if (px[i] < 200) clear++;
+      if (clear / (px.length / 16) < 0.04) { toast({ kind: 'error', text: 'This logo has a solid background. Erase the background first, then make the version.' }); return; }
+      g.globalCompositeOperation = 'source-in';
+      g.fillStyle = mode === 'white' ? '#FFFFFF' : (config.brandColors?.[0] || '#2B7F5F');
+      g.fillRect(0, 0, w, h);
+      const base = l.name.replace(/\.[a-z0-9]+$/i, '');
+      const r = await api.post('/api/library/save', { folder: 'Logos', name: `${base} (${mode === 'white' ? 'white' : 'color'})`, dataUrl: c.toDataURL('image/png') });
+      if (r?.rel) await saveConfig({ logoKinds: { ...kinds, [r.rel]: mode === 'white' ? 'light' : 'full' } });
+      reload();
+      toast({ text: mode === 'white' ? 'Made a white version for dark backgrounds and video.' : 'Made a color version in your brand color.' });
+    } catch { toast({ kind: 'error', text: 'Could not make that version from this file.' }); }
+  };
+  // Is this logo mostly white (so a color version helps)? Judged from its file name and kind; the menu offers both otherwise.
+  const looksWhite = (l) => kindOf(l) === 'light' || /white|light|reverse|knockout/i.test(l.name);
   const remove = async (l) => {
     await api.post('/api/library/trash', { rel: l.rel });
     if (config.appLogo === l.rel) await saveConfig({ appLogo: '' });
@@ -92,6 +116,8 @@ function LogoManager({ lib, reload }) {
                       <span className="cp-group-name" style={{ padding: '6px 10px 2px' }}>This version is</span>
                       {LOGO_KINDS.map(([x, lbl]) => <button key={x} className={`pop-item ${k === x ? 'on' : ''}`} onClick={() => { setMenu(null); setKind(l, x); }}>{lbl}</button>)}
                       <hr className="hairline" />
+                      {!looksWhite(l) && <button className="pop-item" onClick={() => { setMenu(null); recolor(l, 'white'); }}><span className="row" style={{ gap: 8 }}><Sun size={14} />Make a white version</span></button>}
+                      {looksWhite(l) && <button className="pop-item" onClick={() => { setMenu(null); recolor(l, 'color'); }}><span className="row" style={{ gap: 8 }}><Palette size={14} />Make a color version</span></button>}
                       {!/\.svg$/i.test(l.rel) && <button className="pop-item" onClick={() => { setMenu(null); setErasing(l); }}><span className="row" style={{ gap: 8 }}><Eraser size={14} />Erase background…</span></button>}
                       {desktop?.pickFiles && <button className="pop-item" onClick={() => { setMenu(null); replace(l); }}><span className="row" style={{ gap: 8 }}><RefreshCw size={14} />Replace…</span></button>}
                       <button className="pop-item" onClick={() => { setMenu(null); api.post('/api/library/reveal', { rel: l.rel }); }}><span className="row" style={{ gap: 8 }}><Search size={14} />Show in Finder</span></button>
@@ -196,7 +222,7 @@ export default function BrandLibrary({ section }) {
     const t = setInterval(() => { const el = document.getElementById(`brand-${section}`); if (el || ++n > 20) { clearInterval(t); el?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }, 150);
     return () => clearInterval(t);
   }, [section]);
-  const { go, onJobFinished } = useApp();
+  const { go, onJobFinished, trackJob, toast } = useApp();
   // Three tabs keep the page short. Links to a section (like "voice") open its tab.
   const [tab, setTab] = useState(section === 'voice' || section === 'brand-voice' ? 'voice' : section === 'files' ? 'files' : 'kit');
   const [lib, setLib] = useState(null);
@@ -274,7 +300,10 @@ export default function BrandLibrary({ section }) {
             <h2>Brand files</h2>
             {lib && <span className="muted small truncate" title={lib.root}>{lib.root.replace(/^\/Users\/[^/]+/, '~')}</span>}
           </div>
-          <input className="input" style={{ maxWidth: 260 }} placeholder="Search names, alt text and tags" value={q} onChange={(e) => setQ(e.target.value)} />
+          <div className="row" style={{ gap: 8 }}>
+            <button className="btn sm" title="Tags each photo with what's in it (worked out on this Mac), so photos are easy to search" onClick={async () => { const r = await api.post('/api/library/auto-tag', {}); trackJob?.(r.job); toast({ text: 'Tagging your photos. Search by what’s in them in a moment.' }); }}><Tags size={13} />Add tags</button>
+            <input className="input" style={{ maxWidth: 260 }} placeholder="Search names, alt text and tags" value={q} onChange={(e) => setQ(e.target.value)} />
+          </div>
         </div>
         <div className="seg" style={{ justifySelf: 'start', flexWrap: 'wrap' }}>{['All', ...(lib?.folders || [])].map((f) => <button key={f} className={folder === f ? 'on' : ''} onClick={() => setFolder(f)}>{f}{f !== 'All' && counts[f] ? ` · ${counts[f]}` : ''}</button>)}</div>
       </div>

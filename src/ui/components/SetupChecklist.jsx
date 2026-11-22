@@ -11,14 +11,25 @@ export default function SetupChecklist({ id, eyebrow = 'Getting started', title,
   const { config, saveConfig } = useApp();
   const openKey = `${id}:open`;
   const [open, setOpenState] = useState(Boolean(config.dismissed?.[openKey]));
+  const [asking, setAsking] = useState(null); // the step showing "Done?" before it is checked off by hand
   if (config.dismissed?.[id]) return null;
+  // A step can be checked off by hand when it was done another way the app didn't notice.
+  const marked = config.checked || {};
+  steps = steps.map((s) => ({ ...s, ok: s.ok || Boolean(marked[`${id}:${s.label}`]) }));
+  const markDone = (s) => { saveConfig({ checked: { ...marked, [`${id}:${s.label}`]: true } }); setAsking(null); };
   const done = steps.filter((s) => s.ok).length;
   if (done === steps.length) return null;
   const next = steps.find((s) => !s.ok);
   const setOpen = (v) => { setOpenState(v); saveConfig({ dismissed: { ...(config.dismissed || {}), [openKey]: v } }); };
   const Row = (s) => (
     <div key={s.label} className={`check-row ${s.ok ? 'done' : ''}`}>
-      <span className="check">{s.ok && <Check size={15} />}</span>
+      {s.ok ? <span className="check"><Check size={15} /></span> : (
+        <button type="button" className={`check check-btn${asking === s.label ? ' asking' : ''}`} aria-label={asking === s.label ? `Mark “${s.label}” done` : `Already did “${s.label}”? Check it off`}
+          title={asking === s.label ? 'Click again to check it off' : 'Already done? Check it off'}
+          onClick={() => (asking === s.label ? markDone(s) : setAsking(s.label))} onBlur={() => setAsking((a) => (a === s.label ? null : a))}>
+          {asking === s.label ? <span className="check-ask">Done?</span> : <Check size={13} className="check-hint" />}
+        </button>
+      )}
       <div className="stack" style={{ gap: 0 }}><strong className="label">{s.label}</strong><span className="muted small">{s.help}</span></div>
       {!s.ok && s.action && <button className="btn sm" onClick={s.action}>{s.cta}</button>}
     </div>

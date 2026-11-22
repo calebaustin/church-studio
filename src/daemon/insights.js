@@ -5,11 +5,11 @@ import { existsSync, statSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { file, getProject, getTranscript, listProjects } from './projects.js';
 import { toSentences, backgroundOf, keywords } from './text.js';
-import { lineFeatures } from './clips.js';
+import { lineFeatures, lineScore } from './clips.js';
 import { extractRefs, normalizeText, normalizeWords } from './scripture.js';
 import { contentPlan } from './hub.js';
 
-const VERSION = 2;
+const VERSION = 3;
 
 export async function forProject(id) {
   const tf = file(id, 'transcript.json');
@@ -31,8 +31,14 @@ export async function forProject(id) {
   sentences.forEach((s, i) => {
     if (!lineFeatures(s.text).story) return;
     if (stories.some((x) => s.start - x.start < 45)) return;
-    const text = sentences.slice(i, i + 4).map((x) => x.text).join(' ');
-    if (text.split(' ').length >= 18) stories.push({ start: s.start, text: text.slice(0, 600) });
+    const run = sentences.slice(i, i + 4);
+    const text = run.map((x) => x.text).join(' ');
+    if (text.split(' ').length < 18) return;
+    // A grade like the clip finder's: how vivid and complete the story reads (story lines, a point, a quotable line).
+    const feats = run.map((x) => lineFeatures(x.text));
+    const avg = run.reduce((a, x) => a + lineScore(x.text), 0) / run.length;
+    const grade = Math.max(20, Math.min(99, Math.round(48 + avg * 5 + feats.filter((f) => f.story).length * 5 + (feats.some((f) => f.apply || f.quotable) ? 8 : 0) - (feats.some((f) => f.housekeeping) ? 15 : 0))));
+    stories.push({ start: s.start, text: text.slice(0, 600), grade });
   });
   const all = sentences.map((s) => s.text).join(' ');
   const themes = keywords(all, backgroundOf(sentences), 10);

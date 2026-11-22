@@ -82,7 +82,7 @@ export function ColorRow({ label, color, opacity, onColor, onOpacity, hint }) {
   );
 }
 
-function FontPicker({ value, onChange }) {
+function FontPicker({ value, onChange, label = 'Font' }) {
   const { themes } = useApp();
   const current = findFont(themes, value);
   const options = [
@@ -90,7 +90,7 @@ function FontPicker({ value, onChange }) {
     ...(themes.systemFonts || []).map((f) => ({ value: f.id, label: f.name, css: f.css, weight: f.weight, group: 'Installed on this Mac' })),
   ];
   if (current && !options.some((o) => o.value === value)) options.unshift({ value, label: current.name, css: current.css, group: 'Current' });
-  return <FontMenu label="Font" value={value} onChange={onChange} options={options} />;
+  return <FontMenu label={label} value={value} onChange={onChange} options={options} />;
 }
 
 /** All caption style controls. Used in Settings and live in the clip editor. */
@@ -142,6 +142,7 @@ export function CaptionStyleFields({ draft, set }) {
 export function HookStyleFields({ draft, set }) {
   return (
     <div className="stack" style={{ gap: 12 }}>
+      <FontPicker label="Hook font" value={draft.hookFont || draft.font} onChange={(id) => set({ hookFont: id })} />
       <div className="stack" style={{ gap: 6 }}>
         <span className="small" style={{ fontWeight: 600, color: 'var(--ink)' }}>Hook shape</span>
         <div className="seg">
@@ -153,7 +154,8 @@ export function HookStyleFields({ draft, set }) {
         {(draft.hookShape || 'pill') !== 'none' && <ColorRow label="Hook background" color={draft.hookBg || '#FFFFFF'} opacity={draft.hookBgOpacity ?? 0.94} onColor={(v) => set({ hookBg: v })} onOpacity={(v) => set({ hookBgOpacity: v })} />}
         <label className="field">Hook size · {draft.hookSize ?? 58}<input type="range" min="30" max="110" value={draft.hookSize ?? 58} onChange={(e) => set({ hookSize: Number(e.target.value) })} /></label>
         <label className="field">Shows for · {(draft.hookDuration ?? 3.5).toFixed(1)}s<input type="range" min="1" max="10" step="0.5" value={draft.hookDuration ?? 3.5} onChange={(e) => set({ hookDuration: Number(e.target.value) })} /></label>
-        <label className="field">Default position · {Math.round((draft.hookY ?? 0.13) * 100)}% down<input type="range" min="0.05" max="0.9" step="0.01" value={draft.hookY ?? 0.13} onChange={(e) => set({ hookY: Number(e.target.value) })} /></label>
+        <label className="field">Position · {Math.round((draft.hookY ?? 0.13) * 100)}% down<input type="range" min="0.05" max="0.9" step="0.01" value={draft.hookY ?? 0.13} onChange={(e) => set({ hookY: Number(e.target.value) })} /></label>
+        <label className="field">Width · {Math.round((draft.hookWidth ?? 0.8) * 100)}%<input type="range" min="0.3" max="0.96" step="0.01" value={draft.hookWidth ?? 0.8} onChange={(e) => set({ hookWidth: Number(e.target.value) })} /></label>
         <Toggle checked={Boolean(draft.hookUppercase)} onChange={(e) => set({ hookUppercase: e.target.checked })} icon={CaseUpper} label="ALL CAPS" small style={{alignSelf: 'end'}} />
       </div>
     </div>

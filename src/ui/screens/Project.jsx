@@ -4,7 +4,7 @@ import Toggle from '../components/Toggle.jsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp, useHelperFocus } from '../App.jsx';
 import { api, fmt, fmtEta, media } from '../api.js';
-import { ArrowLeft, ArrowRight, Check, Square, Wand2, Download, Trash2, Plus, Send, FolderOpen, Copy, ScissorsLineDashed, Scissors, AudioLines, ChevronDown, FileText, PenLine, Quote, Share2, Clock } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Square, Wand2, Download, Trash2, Plus, Send, FolderOpen, Copy, ScissorsLineDashed, Scissors, AudioLines, ChevronDown, FileText, PenLine, Quote, Share2, Clock, BookOpen, Clapperboard } from 'lucide-react';
 import AudioCleanup from '../components/AudioCleanup.jsx';
 import ContentPlan from '../components/ContentPlan.jsx';
 import ClipEditor from './ClipEditor.jsx';
@@ -120,7 +120,6 @@ export default function Project({ id, initialStep, initialClip, initialTime }) {
   const src = project.sourceFile ? media(id, project.sourceFile) : null;
   const transcribed = project.status === 'transcribed';
   const audioOnly = Boolean(project.media && !project.media.width);
-  const plan = ['plan', 'Sermon page', false];
   const stepsBase = audioOnly && project.kind === 'lyric' ? [
     ['transcribe', 'Transcribe', transcribed],
     ['edit', 'Edit & export', project.clips.some((c) => c.export)],
@@ -137,23 +136,32 @@ export default function Project({ id, initialStep, initialClip, initialTime }) {
     ['exports', 'Exports', false],
     ['text', 'Transcript', false],
   ];
-  // Sermons get a content plan: everything that can be made from them.
-  const steps = project.kind === 'sermon' || !project.kind ? [...stepsBase, plan] : stepsBase;
+  // Sermons get a Sermon page of their own (the content plan), linked to the video but outside its steps.
+  const hasPage = project.kind === 'sermon' || !project.kind;
+  const steps = stepsBase;
+  const onPage = step === 'plan';
+  const videoStep = transcribed ? (project.clips.some((c) => c.status === 'kept' || c.status === 'exported') ? 'clips' : audioOnly ? 'text' : 'clips') : 'transcribe';
 
   return (
     <div className="page">
       <div className="row between wrap">
         <div className="row grow" style={{ minWidth: 300 }}>
-          <button className="btn ghost sm" onClick={() => go({ name: 'library' })}><ArrowLeft size={15} />Videos</button>
+          {onPage
+            ? <button className="btn ghost sm" onClick={() => go({ name: 'projects' })}><ArrowLeft size={15} />All projects</button>
+            : <button className="btn ghost sm" onClick={() => go({ name: 'library' })}><ArrowLeft size={15} />Videos</button>}
           <input className="input" style={{ fontWeight: 650, fontSize: 17, background: 'transparent', border: 0, boxShadow: 'none' }}
             defaultValue={project.title} onBlur={(e) => e.target.value.trim() && e.target.value !== project.title && patch({ title: e.target.value.trim() })} />
           <StatusChip status={project.status} />
           <button className="btn ghost sm" title="Share this project with a teammate or another Mac" onClick={() => setSharing(true)}><Share2 size={14} />Share</button>
-          <button className="btn ghost sm danger" title="Delete this sermon" onClick={async () => {
+          {!onPage && <button className="btn ghost sm danger" title="Delete this sermon" onClick={async () => {
             if (!confirm(`Delete “${project.title}”? Its video, transcript, clips and exports in the project folder are removed from this Mac. This can't be undone.`)) return;
             await api.del(`/api/projects/${id}`); go({ name: 'library' });
-          }}><Trash2 size={14} />Delete</button>
+          }}><Trash2 size={14} />Delete</button>}
         </div>
+        {onPage ? (
+          <button className="btn sm" title="The recording this Sermon page comes from: transcript, clips and exports" onClick={() => go({ name: 'project', id: project.id, step: videoStep })}><Clapperboard size={14} />Video and clips</button>
+        ) : (
+        <div className="row" style={{ gap: 8 }}>
         <div className="steps glass">
           {steps.map(([key, label, done], i) => (
             <button key={key} className={`${step === key ? 'on' : ''} ${done ? 'done' : ''}`}
@@ -163,6 +171,9 @@ export default function Project({ id, initialStep, initialClip, initialTime }) {
             </button>
           ))}
         </div>
+        {hasPage && <button className="btn sm ghost" disabled={!transcribed} title="This sermon's own page: its points, next steps and everything made from it" onClick={async () => { if (step === 'edit' && !(await confirmLeave())) return; go({ name: 'project', id: project.id, step: 'plan' }); }}><BookOpen size={14} />Sermon page</button>}
+        </div>
+        )}
       </div>
       {notice && <div className="banner row between"><span>{notice}</span><button className="btn ghost sm" onClick={() => setNotice(null)}>Dismiss</button></div>}
 
@@ -184,7 +195,7 @@ export default function Project({ id, initialStep, initialClip, initialTime }) {
           }} />
       )}
       {step === 'clips' && (
-        <ClipsStep project={project} src={src} player={player} patch={patch} busy={busyKind('propose')} job={jobOf('propose')} start={start}
+        <ClipsStep project={project} transcript={transcript} src={src} player={player} patch={patch} busy={busyKind('propose')} job={jobOf('propose')} start={start}
           onEdit={(cid) => { setSelected(cid); setStep('edit'); }} />
       )}
       {step === 'edit' && transcript && (
@@ -350,7 +361,52 @@ function SermonStep({ project, transcript, src, player, onConfirm, busy, job, au
   );
 }
 
-function ClipsStep({ project, src, player, patch, busy, job, start, onEdit }) {
+/**
+ * The player on Pick clips. With a suggested clip picked, it plays just that clip on a loop, like the finished
+ * clip would: simple captions over the picture and the seconds left in the corner.
+ */
+function ClipPreview({ player, src, clip, words, onStop }) {
+  const [t, setT] = useState(0);
+  useEffect(() => {
+    if (!clip) return undefined;
+    let raf;
+    const tick = () => {
+      const v = player.current;
+      if (v) {
+        if (v.currentTime >= clip.end - 0.03 || v.currentTime < clip.start - 0.5) { v.currentTime = clip.start; }
+        setT(v.currentTime);
+      }
+      raf = v && !v.paused ? requestAnimationFrame(tick) : setTimeout(() => { raf = requestAnimationFrame(tick); }, 200);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => { cancelAnimationFrame(raf); clearTimeout(raf); };
+  }, [clip?.id]);
+  // Captions: the clip's words in groups of up to six, the word being said in the accent color.
+  const line = useMemo(() => {
+    if (!clip) return null;
+    const ws = words.filter((w) => w.w && w.start >= clip.start - 0.05 && w.end <= clip.end + 0.05);
+    const at = ws.findIndex((w) => t < w.end);
+    if (at < 0) return null;
+    const from = Math.floor(at / 6) * 6;
+    return { words: ws.slice(from, from + 6), now: at - from };
+  }, [clip?.id, words, Math.floor(t * 10)]);
+  const left = clip ? Math.max(0, clip.end - Math.max(clip.start, t)) : 0;
+  return (
+    <div className={`clip-preview ${clip ? 'on' : ''}`}>
+      <video ref={player} className="player" src={src} controls preload="metadata" />
+      {clip && (
+        <>
+          <span className="clip-preview-left num" title="Seconds left in this clip">{left.toFixed(1)}</span>
+          {line && <div className="clip-preview-cap" aria-hidden="true">{line.words.map((w, i) => <span key={i} className={i === line.now ? 'now' : ''}>{w.w} </span>)}</div>}
+          <button className="clip-preview-stop" onClick={onStop} title="Show the whole video again">Whole video</button>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ClipsStep({ project, transcript, src, player, patch, busy, job, start, onEdit }) {
+  const [preview, setPreview] = useState(null); // the suggested clip playing on a loop in the player
   const { config, trackJob, toast } = useApp();
   const [exportKept, setExportKept] = useState(false);
   const [topic, setTopic] = useState('');
@@ -366,7 +422,7 @@ function ClipsStep({ project, src, player, patch, busy, job, start, onEdit }) {
     if (status === 'skipped') toast({ text: 'Clip skipped.', action: { label: 'Undo', run: () => patch({ clips: project.clips.map((c) => (c.id === cid ? { ...c, status: prev } : c)) }) } });
   };
   const kept = project.clips.filter((c) => c.status === 'kept' || c.status === 'exported').length;
-  const playClip = (c) => { const v = player.current; if (v) { v.currentTime = c.start; v.play(); } };
+  const playClip = (c) => { setPreview(c); const v = player.current; if (v) { v.currentTime = c.start; v.play().catch(() => {}); } };
   const addHere = async () => {
     const t = player.current?.currentTime || project.sermon?.start || 0;
     const { clip } = await api.post(`/api/projects/${project.id}/clips`, { start: t, end: t + 30, title: 'New clip' });
@@ -378,7 +434,7 @@ function ClipsStep({ project, src, player, patch, busy, job, start, onEdit }) {
     <div className="grid2" style={{ gridTemplateColumns: '1fr 1.25fr', alignItems: 'start' }}>
       <div className="stack" style={{ position: 'sticky', top: 0, gap: 18 }}>
         <section className="glass panel stack">
-          <video ref={player} className="player" src={src} controls preload="metadata" />
+          <ClipPreview player={player} src={src} clip={preview} words={transcript?.words || []} onStop={() => setPreview(null)} />
           <button className="btn sm" style={{ justifySelf: 'start' }} onClick={addHere}><Plus size={14} />Make a clip from here</button>
         </section>
         <section className="glass strong panel stack">
@@ -418,7 +474,7 @@ function ClipsStep({ project, src, player, patch, busy, job, start, onEdit }) {
         {!clips.length && <div className="glass empty"><ScissorsLineDashed size={40} /><h3>No clips yet</h3><p>Press Find clips.</p></div>}
         <div className="clip-list">
           {clips.map((c) => (
-            <div key={c.id} className={`glass clip-card ${c.status === 'skipped' ? 'skipped' : ''}`} onClick={() => playClip(c)}>
+            <div key={c.id} className={`glass clip-card ${c.status === 'skipped' ? 'skipped' : ''} ${preview?.id === c.id ? 'previewing' : ''}`} onClick={() => playClip(c)}>
               <div className="score" title="How strong this moment looks">{c.score ?? '–'}</div>
               <div className="stack" style={{ gap: 6 }}>
                 <strong style={{ fontSize: 15 }}>{c.title}</strong>
@@ -426,11 +482,12 @@ function ClipsStep({ project, src, player, patch, busy, job, start, onEdit }) {
                   <span className="chip accent">{c.category}</span>
                   <span className="chip">{fmt(c.start)} · {Math.round(c.end - c.start)}s</span>
                   {c.status === 'exported' && <span className="chip ok">Exported</span>}
+                  {c.flags?.includes('slide') && <span className="chip warn" title={`A slide fills the screen for part of this clip${c.slideAt?.length ? ` (around ${c.slideAt.map((t) => `${Math.round(t)}s`).join(', ')} in)` : ''}. It may still be a good clip. You can trim that part in the editor.`}>Full-screen slide</span>}
                   {c.source && c.source !== 'heuristic' && c.source !== 'manual' && <span className="chip">{c.source}</span>}
                 </div>
                 {c.summary && <p className="muted small">{c.summary}</p>}
                 {c.startPhrase && <p className="phrase"><b>Starts:</b> “{c.startPhrase}” &nbsp; <b>Ends:</b> “{c.endPhrase}”</p>}
-                <div className="row wrap">{(c.reasons || []).slice(0, 4).map((r) => <span key={r} className="chip">{r}</span>)}</div>
+                <div className="row wrap clip-reasons">{(c.reasons || []).slice(0, 4).map((r) => <span key={r} className="chip">{r}</span>)}</div>
               </div>
               <div className="stack" onClick={(e) => e.stopPropagation()}>
                 {c.status === 'kept' || c.status === 'exported'

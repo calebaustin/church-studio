@@ -3,19 +3,21 @@ import { BookOpen, Download, Hash, Layers, MessageSquareQuote, Scissors, Search,
 import { api, fmt } from '../api.js';
 import { useApp } from '../App.jsx';
 
-const TABS = [['scripture', 'Scripture', BookOpen], ['stories', 'Illustrations', MessageSquareQuote], ['themes', 'Themes', Hash], ['series', 'Series', Layers], ['gaps', 'Content gaps', TriangleAlert]];
+const TABS = [['stories', 'Illustrations', MessageSquareQuote], ['scripture', 'Scripture', BookOpen], ['themes', 'Themes', Hash], ['series', 'Series', Layers], ['gaps', 'Content gaps', TriangleAlert]];
 
 /** Everything preached, searchable: scripture, stories, recurring themes, series and what's not shared yet. */
 export default function SermonIndex() {
   const { go, toast } = useApp();
   const [data, setData] = useState(null);
   const [gaps, setGaps] = useState(null);
-  const [tab, setTab] = useState('scripture');
+  const [tab, setTab] = useState('stories');
+  const [sort, setSort] = useState('grade'); // best first, or most recent
   const [q, setQ] = useState('');
   useEffect(() => { api.get('/api/index').then(setData).catch(() => setData({ count: 0, scripture: [], stories: [], themes: [], series: [] })); }, []);
   useEffect(() => { if (tab === 'gaps' && !gaps) api.get('/api/gaps').then(setGaps).catch(() => setGaps({ rows: [] })); }, [tab]);
   const ql = q.trim().toLowerCase();
-  const stories = useMemo(() => (data?.stories || []).filter((s) => !ql || s.text.toLowerCase().includes(ql) || s.title.toLowerCase().includes(ql)), [data, ql]);
+  const stories = useMemo(() => (data?.stories || []).filter((s) => !ql || s.text.toLowerCase().includes(ql) || s.title.toLowerCase().includes(ql))
+    .sort((a, b) => (sort === 'grade' ? (b.grade || 0) - (a.grade || 0) : String(b.date || '').localeCompare(String(a.date || '')) || a.start - b.start)), [data, ql, sort]);
   const clipAt = async (s) => {
     const { clip } = await api.post(`/api/projects/${s.projectId}/clips`, { start: Math.max(0, s.start - 1), end: s.start + 45, title: s.text.split(' ').slice(0, 6).join(' ') });
     go({ name: 'project', id: s.projectId, clip: clip.id });
@@ -28,6 +30,7 @@ export default function SermonIndex() {
         <div className="tabs" style={{ margin: 0, borderBottom: 0 }}>
           {TABS.map(([k, l, I]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}><I size={14} />{l}</button>)}
         </div>
+        {tab === 'stories' && <div className="seg sm" role="radiogroup" aria-label="Sort illustrations">{[['grade', 'Best first'], ['recent', 'Most recent']].map(([v, l]) => <button key={v} role="radio" aria-checked={sort === v} className={sort === v ? 'on' : ''} onClick={() => setSort(v)}>{l}</button>)}</div>}
         {tab === 'stories' && <label className="link-field" style={{ maxWidth: 280 }}><Search size={14} className="muted" /><input placeholder="Search stories" value={q} onChange={(e) => setQ(e.target.value)} /></label>}
         {tab === 'gaps' && <button className="btn sm" onClick={async () => { const r = await api.post('/api/gaps/save'); toast({ text: 'Report saved to Downloads.', action: { label: 'Show', run: () => api.post('/api/reveal', { path: r.file }) } }); }}><Download size={13} />Save report</button>}
       </div>
@@ -52,11 +55,14 @@ export default function SermonIndex() {
         <div className="stack" style={{ gap: 8 }}>
           <span className="small muted">Stories, examples and illustrations from your sermons. Turn one into a clip, or find one you told before.</span>
           {stories.slice(0, 60).map((s, k) => (
-            <section key={k} className="glass panel stack" style={{ gap: 6 }}>
+            <section key={k} className="glass panel story-row">
+              {s.grade != null && <span className={`score story-grade ${s.grade >= 80 ? 'hi' : s.grade >= 60 ? 'mid' : ''}`} title="How vivid and complete this story reads">{s.grade}</span>}
+              <div className="stack" style={{ gap: 6, minWidth: 0 }}>
               <p style={{ margin: 0, lineHeight: 1.55 }}>{s.text}</p>
               <div className="row between wrap" style={{ gap: 8 }}>
                 <span className="small muted">{s.title} · {fmt(s.start)}</span>
                 <button className="btn sm" onClick={() => clipAt(s)}><Scissors size={13} />Make a clip</button>
+              </div>
               </div>
             </section>
           ))}

@@ -24,7 +24,8 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 /** Undo/redo over a clip's editable state. */
 function useHistory(initial) {
   const [state, setState] = useState({ past: [], present: initial, future: [] });
-  const set = useCallback((next) => setState((s) => ({ past: [...s.past.slice(-80), s.present], present: typeof next === 'function' ? next(s.present) : next, future: [] })), []);
+  // quiet: change the clip without a new undo step (the rest of a drag after its first move).
+  const set = useCallback((next, { quiet = false } = {}) => setState((s) => ({ past: quiet ? s.past : [...s.past.slice(-80), s.present], present: typeof next === 'function' ? next(s.present) : next, future: quiet ? s.future : [] })), []);
   const undo = useCallback(() => setState((s) => (s.past.length ? { past: s.past.slice(0, -1), present: s.past.at(-1), future: [s.present, ...s.future] } : s)), []);
   const redo = useCallback(() => setState((s) => (s.future.length ? { past: [...s.past, s.present], present: s.future[0], future: s.future.slice(1) } : s)), []);
   const reset = useCallback((v) => setState({ past: [], present: v, future: [] }), []);
@@ -224,23 +225,36 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
 
   useEffect(() => {
     let raf;
+    // Jumping over a cut: seek once, wait for it to land, and keep playing (one seek per frame stalls the video).
+    let jumping = false; let resume = false;
+    const v0 = video.current;
+    const landed = () => { jumping = false; if (resume && video.current?.paused) video.current.play().catch(() => {}); resume = false; };
+    v0?.addEventListener('seeked', landed);
+    const jump = (v, to) => { jumping = true; resume = !v.paused; v.currentTime = to; };
     const tick = () => {
       const v = video.current;
       if (v) {
         let r = v.currentTime - clip.start;
-        if (r >= len - 0.02 || r < -0.5) { v.pause(); v.currentTime = clip.start + (keep[0]?.[0] || 0); r = keep[0]?.[0] || 0; }
-        else if (!keep.some(([s, e]) => r >= s && r < e)) {
-          const next = keep.find(([s]) => s > r);
-          if (next) { v.currentTime = clip.start + next[0]; r = next[0]; } else v.pause();
+        if (!jumping && !v.seeking) {
+          if (r >= len - 0.02 || r < -0.5) { v.pause(); v.currentTime = clip.start + (keep[0]?.[0] || 0); r = keep[0]?.[0] || 0; }
+          else {
+            const inSeg = keep.find(([s, e]) => r >= s && r < e);
+            // About to run into a cut (within a frame or two): jump now, so the cut part never plays.
+            const lookahead = v.paused ? 0 : 0.04;
+            if (!inSeg || (inSeg && r + lookahead >= inSeg[1])) {
+              const next = keep.find(([s]) => s > r + (inSeg ? 0 : -0.001) && s >= (inSeg ? inSeg[1] : r));
+              if (next) { jump(v, clip.start + next[0]); r = next[0]; } else if (!inSeg) v.pause();
+            }
+          }
         }
         setRel(r);
-        setPlaying(!v.paused);
+        setPlaying(!v.paused || resume);
       }
       // Playing: follow every frame. Paused: check a few times a second, which is plenty for seeks.
       if (v && v.paused) { raf = setTimeout(() => { raf = requestAnimationFrame(tick); }, 120); } else raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    return () => { cancelAnimationFrame(raf); clearTimeout(raf); };
+    return () => { cancelAnimationFrame(raf); clearTimeout(raf); v0?.removeEventListener('seeked', landed); };
   }, [clip.start, clip.end, keep]);
   useEffect(() => { if (video.current) video.current.currentTime = clip.start + (keep[0]?.[0] || 0); }, [clip.id]);
   const seekRel = (t) => { if (video.current) video.current.currentTime = clip.start + Math.max(0, Math.min(len, t)); };
@@ -263,7 +277,18 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
   });
 
   const font = findFont(themes, themeDraft?.font);
-  const set = (p) => h.set((c) => ({ ...c, ...p }));
+  const set = (p, opts) => h.set((c) => ({ ...c, ...p }), opts);
+  // Where the hook and captions sit and how big they are belong to this clip, so dragging in the preview and the
+  // sliders change the same values. Everything else about their look stays in the caption theme.
+  const LAYOUT = { hookY: 'hookY', hookSize: 'hookSize', hookWidth: 'hookWidth', hookFont: 'hookFont', position: 'capY', maxWidth: 'capWidth', size: 'capSize' };
+  const placed = themeDraft && { ...themeDraft, ...Object.fromEntries(Object.entries(LAYOUT).filter(([, ck]) => clip[ck] != null).map(([tk, ck]) => [tk, clip[ck]])) };
+  const setPlaced = (p, opts) => {
+    const toClip = {}; const toTheme = {};
+    for (const [k, v] of Object.entries(p)) { if (LAYOUT[k]) toClip[LAYOUT[k]] = v; else toTheme[k] = v; }
+    if (Object.keys(toClip).length) set(toClip, opts);
+    if (Object.keys(toTheme).length) setTheme(toTheme);
+  };
+  const hookFont = findFont(themes, placed?.hookFont || themeDraft?.font);
   // The helper chat sees this clip; a picked hook, title or caption lands here (and Undo takes it back).
   useHelperFocus({ kind: 'clip', id: project.id, clipId: clip.id }, (field, value) => {
     if (!['hook', 'title', 'summary'].includes(field)) return false;
@@ -445,8 +470,9 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
             {clip.look?.blur > 0 && project.media?.width > 0 && (wide || ['auto', 'manual', 'cues'].includes(mode)) && <div className="look-blur" style={{ backdropFilter: `blur(${(2 + clip.look.blur * 8).toFixed(1)}px)`, WebkitBackdropFilter: `blur(${(2 + clip.look.blur * 8).toFixed(1)}px)` }} aria-hidden="true" />}
             {(clip.popups || []).map((p) => <PopupPreview key={p.id} p={p} t={outTime} still={!playing} frameWidth={FW} accent={config.brandColors?.[1]} />)}
             {themeDraft && (
-              <CaptionOverlay theme={themeDraft} font={font} words={clip.captions !== false ? capWords : []} t={rel} frameWidth={FW}
-                hook={clip.hook} showHook={outTime < (themeDraft.hookDuration ?? 3.5) || tab === 'text'} hookY={clip.hookY} onHookDrag={(y) => set({ hookY: +y.toFixed(3) })} />
+              <CaptionOverlay theme={placed} font={font} hookFont={hookFont} words={clip.captions !== false ? capWords : []} t={rel} frameWidth={FW}
+                hook={clip.hook} showHook={outTime < (themeDraft.hookDuration ?? 3.5) || tab === 'text'}
+                editing={tab === 'text' ? 'hook' : tab === 'look' && clip.captions !== false ? 'captions' : null} onPlace={setPlaced} />
             )}
             {clip.overlay?.rel && (
               <img alt="" src={`/library/${clip.overlay.rel.split('/').map(encodeURIComponent).join('/')}`} style={{
@@ -505,8 +531,8 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
               {clip.hook && themeDraft && (
                 <>
                   <div className="row between"><h3>Hook style</h3><span className="muted small">Part of the “{themeDraft.name}” caption theme</span></div>
-                  <HookStyleFields draft={themeDraft} set={setTheme} />
-                  {clip.hookY != null && <button className="btn ghost sm" onClick={() => set({ hookY: null })}>Use the theme's position</button>}
+                  <HookStyleFields draft={placed} set={setPlaced} />
+                  {['hookY', 'hookSize', 'hookWidth', 'hookFont'].some((k) => clip[k] != null) && <button className="btn ghost sm" onClick={() => set({ hookY: null, hookSize: null, hookWidth: null, hookFont: null })}>Use the theme's hook size and place</button>}
                 </>
               )}
               <hr className="hairline" />
@@ -528,7 +554,7 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
               </div>
               {clip.captions !== false && themeDraft && (
                 <>
-                  <CaptionStyleFields draft={themeDraft} set={setTheme} />
+                  <CaptionStyleFields draft={placed} set={setPlaced} />
                   <div className="row wrap">
                     <button className="btn primary sm" disabled={!themeDirty} onClick={async () => {
                       const name = themeDraft.builtin ? prompt('Name this caption template', `${themeDraft.name} (mine)`) : themeDraft.name;

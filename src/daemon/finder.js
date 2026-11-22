@@ -32,8 +32,15 @@ async function allItems(state) {
   const items = [];
   const trashed = new Set(state.trash.map((t) => t.key));
   for (const p of await listProjects()) {
-    // The key stays sermon:<id> for every project, so stars, folders and tags never move.
-    items.push({ key: `sermon:${p.id}`, type: p.isSermon ? 'sermon' : 'video', id: p.id, name: p.title, thumb: p.thumbnail || null, updated: p.updated || p.created, meta: p.duration ? `${Math.round(p.duration / 60)} min` : p.status });
+    // Every recording is a Video. A Sermon also gets its Sermon page as an item of its own, linked to that video.
+    // A video's key stays sermon:<id> (stars, folders and tags never move); a Sermon's video moves to video:<id>
+    // so the Sermon page keeps what was starred or filed as the Sermon.
+    const len = p.duration ? `${Math.round(p.duration / 60)} min` : p.status;
+    if (p.isSermon) {
+      items.push({ key: `sermon:${p.id}`, type: 'sermon', id: p.id, name: p.title, thumb: null, // its own tile, so it never looks like the video
+        updated: p.updated || p.created, meta: 'Sermon page', projectId: p.id });
+      items.push({ key: `video:${p.id}`, type: 'video', id: p.id, name: p.title, thumb: p.thumbnail || null, updated: p.updated || p.created, meta: `${len} · video of the sermon`, projectId: p.id });
+    } else items.push({ key: `sermon:${p.id}`, type: 'video', id: p.id, name: p.title, thumb: p.thumbnail || null, updated: p.updated || p.created, meta: len });
     const full = await getProject(p.id).catch(() => null);
     for (const c of full?.clips || []) {
       if (!c.export) continue;
@@ -155,7 +162,7 @@ export async function emptyTrash() {
 /** Where an item lives on this Mac: the exported file when there is one, else its project or data file. */
 export async function locate(key) {
   const [type, ...rest] = key.split(':'); const id = rest.join(':');
-  if (type === 'sermon') { const p = await getProject(id); if (!p) throw new Error('Not found'); return projectDir(id); }
+  if (type === 'sermon' || type === 'video') { const p = await getProject(id); if (!p) throw new Error('Not found'); return projectDir(id); }
   if (type === 'clip') {
     const [pid, cid] = id.split('/');
     const c = (await getProject(pid))?.clips.find((x) => x.id === cid);

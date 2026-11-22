@@ -320,7 +320,7 @@ export default function App() {
 
   const nav = [
     ['home', 'Dashboard', LayoutDashboard, route.name === 'home'],
-    ...(config ? enabledTools(config) : []).map((t) => [t.id, t.label, t.icon, route.name === t.id || (t.id === 'library' && route.name === 'project') || (t.id === 'calendar' && route.name === 'inspiration')]),
+    ...(config ? enabledTools(config) : []).map((t) => [t.id, t.label, t.icon, route.name === t.id || (t.id === 'library' && route.name === 'project' && route.step !== 'plan') || (t.id === 'projects' && route.name === 'project' && route.step === 'plan') || (t.id === 'calendar' && route.name === 'inspiration')]),
   ];
   const bottomNav = [
     ['me', 'My App', UserRound, route.name === 'me'],

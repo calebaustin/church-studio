@@ -8,10 +8,26 @@ Every update keeps your sermons, designs, drafts and settings. Before a new vers
 - **More detail on long tasks.** Downloads show their speed and time left beside the bar. Hover the progress card for the details: size so far, speed and which part is downloading; the Whisper model, position in the audio, words so far and pace while transcribing; frames and render speed while exporting; plus time spent and time left. Updates and the CS Helper download show speed too.
 - **Text-only announcements.** Every template pack has a text announcement that needs no photo, in four layouts (Big type, Color block, Badge and Poster), filled in from your event. A new "With a photo / Text only" switch in Design templates finds them, and searching "text" works too.
 - **Bold and italic shortcuts.** In Design, Command-B and Command-I make the selected text box bold or italic, even while you're typing in it.
+- **Sermon pages of their own.** A Sermon's page is now its own item in All projects, with its own tile, linked to the video it comes from. It opens on its own with a "Video and clips" button, and the video has a "Sermon page" button beside its steps.
+- **A sermon summary, right after transcribing.** With an AI helper on, Church Studio sums up each part of the sermon as soon as it's transcribed. The Sermon page's main points and new Next steps come from it, and the email, discussion guide and devotional use it. Older sermons get a "Sum up with AI helper" button.
+- **Watch a clip before you pick it.** Clicking a suggested clip plays it on a loop with simple captions and a countdown in the corner.
+- **Full-screen slides flagged.** Clips where a sermon slide fills the screen get a "Full-screen slide" tag, found on this Mac with Apple's Vision framework.
+- **Move and size the hook and captions in the preview.** Drag the hook or captions to move them, drag the sides to change the width and the corner to change the size. The sliders follow along, and each drag is one undo step. The hook gets its own font.
+- **Email, discussion guide and devotional with your helper.** "Write with AI helper" writes them from the whole sermon, not just its first part.
+- **Watch the blog being written.** Rewriting with a helper shows the working wave over the text, and paragraphs appear as they're written.
+- **Logo versions.** In Brand library, make a white version of a color logo, or a color version of a white one (logos with a see-through background).
+- **Photo tags.** With an AI helper on, photos you add get three or four tags, found on this Mac. "Add tags" in Brand library tags the ones you already have.
+- **Your social pages, for a quick look.** Add your Instagram, Facebook, YouTube and TikTok links in Social › Accounts and open them in a Church Studio window. Sign in once there if a page asks, and it remembers. No developer account needed.
+- **Illustrations first in the Sermon index.** Stories and illustrations are graded and sort by best or most recent.
+- **Check off setup steps yourself.** Click a step in the setup list, then click "Done?" to check it off.
 
 ### Fixed
 - In a post's campaign strip, clicking another post opens it, from the Social screen as well as the Calendar.
 - After downloading just the sermon, the transcribe step no longer asks whether to transcribe the whole video, and the sermon is already marked.
+- The clip finder's progress bar moves steadily while CS Helper works through its batches.
+- Playback no longer freezes at cut words in the clip editor, and cuts keep the end of the word before and the start of the word after, so they sound natural.
+- Clip reason tags wrap instead of stretching the card.
+- Website colors from Jumpstart come from your logo and the site's own colors, not a photo.
 
 ## 0.24.0 · November 21, 2026
 

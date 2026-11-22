@@ -7,7 +7,7 @@ import { rm } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import os from 'node:os';
-import { DATA_DIR } from './tools.js';
+import { DATA_DIR, run as runTool, tool } from './tools.js';
 import { libraryFile } from './library.js';
 import { loadConfig } from './config.js';
 import { describeImage, providerReady, withFallback } from './ai.js';
@@ -51,4 +51,48 @@ export async function suggestNote(rel) {
   } finally {
     await rm(tmp, { force: true });
   }
+}
+
+// ---------------------------------------------------------------- tags from Apple's Vision framework
+// What a picture shows (people, outdoor, food, crowd…), worked out on this Mac by cs-vision: fast, free and
+// private. Used for quick searchable tags on new photos, and in bulk from the brand library.
+const SKIP = new Set(['structure', 'material', 'textile', 'consumer_electronics', 'document', 'screenshot', 'adult']);
+const friendly = (id) => id.replace(/_/g, ' ').replace(/\bother\b/, '').trim();
+/** Tags for picture files: up to four labels Vision is fairly sure of. { [file]: [tag…] } */
+export async function visionTags(files) {
+  const bin = tool('cs-vision');
+  const out = {};
+  for (let i = 0; i < files.length; i += 16) {
+    const batch = files.slice(i, i + 16);
+    try {
+      const { stdout } = await runTool(bin, batch);
+      for (const line of stdout.split('\n').filter(Boolean)) {
+        const r = JSON.parse(line);
+        out[r.file] = (r.labels || []).filter(([id, c]) => c >= 0.35 && !SKIP.has(id)).slice(0, 4).map(([id]) => friendly(id)).filter(Boolean);
+      }
+    } catch { /* cs-vision missing or a file it can't read: no tags for these */ }
+  }
+  return out;
+}
+/** Add tags to brand pictures (keeping any tags already there). untaggedOnly skips pictures that have tags. */
+export async function autoTag(rels, { untaggedOnly = true, ctx } = {}) {
+  const notes = await loadNotes();
+  const todo = [];
+  for (const rel of rels) {
+    if (!/\.(jpe?g|png|heic|webp|gif|tiff?)$/i.test(rel)) continue;
+    if (untaggedOnly && notes[rel]?.tags?.length) continue;
+    const file = await libraryFile(rel).catch(() => null);
+    if (file && existsSync(file)) todo.push({ rel, file });
+  }
+  let done = 0;
+  for (let i = 0; i < todo.length; i += 16) {
+    const batch = todo.slice(i, i + 16);
+    const tags = await visionTags(batch.map((x) => x.file));
+    for (const x of batch) {
+      const t = tags[x.file] || [];
+      if (t.length) { await setNote(x.rel, { tags: [...(notes[x.rel]?.tags || []), ...t] }); done++; }
+    }
+    ctx?.progress(Math.round(((i + batch.length) / todo.length) * 100), `Tagging pictures ${Math.min(todo.length, i + batch.length)} of ${todo.length}…`);
+  }
+  return { tagged: done, looked: todo.length };
 }

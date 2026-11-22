@@ -73,6 +73,15 @@ export default function ContentPlan({ project, setStep, onChange }) {
             </div>
           )}
           {sm.points?.length > 0 && <ol className="sermon-points">{sm.points.map((p) => <li key={p}>{p}</li>)}</ol>}
+          {sm.steps?.length > 0 && (
+            <div className="stack" style={{ gap: 2 }}>
+              <span className="eyebrow">Next steps</span>
+              <ul className="sermon-points">{sm.steps.map((p) => <li key={p}>{p}</li>)}</ul>
+            </div>
+          )}
+          {!sm.digest && ai?.ready && project.status === 'transcribed' && (
+            <button className="btn sm ghost" title="Your AI helper reads the whole sermon and sums up each part. Writing uses it too." onClick={async () => { try { await api.post(`/api/projects/${project.id}/digest`, {}); toast({ text: 'Summing up the sermon. The points update when it’s done.' }); } catch (e) { toast({ text: e.message, tone: 'warn' }); } }}><Sparkles size={13} />Sum up with AI helper</button>
+          )}
           {sm.themes?.length > 0 && <div className="row wrap" style={{ gap: 6 }}>{sm.themes.map((t) => <span key={t} className="chip">{t}</span>)}</div>}
           {!sermonType && (
             <div className="sermon-note small">

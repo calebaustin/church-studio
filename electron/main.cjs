@@ -194,6 +194,22 @@ ipcMain.handle('open-route', (_e, route) => {
   if (trayWindow && !trayWindow.isDestroyed()) trayWindow.hide();
   showMain(route && typeof route === 'object' ? route : null);
 });
+// A social page (Instagram, Facebook…) in its own window. Sign-ins there are remembered, so after signing in once
+// the church's feed shows up without any developer account.
+const webWindows = new Map();
+ipcMain.handle('open-web', (_e, { url, title } = {}) => {
+  if (!/^https:\/\//.test(String(url || ''))) return false;
+  const host = new URL(url).hostname;
+  const open = webWindows.get(host);
+  if (open && !open.isDestroyed()) { open.loadURL(url); open.show(); open.focus(); return true; }
+  const w = new BrowserWindow({ width: 1060, height: 900, title: title || host, autoHideMenuBar: true,
+    webPreferences: { partition: 'persist:social', contextIsolation: true, sandbox: true } });
+  w.webContents.setWindowOpenHandler(({ url: u }) => { if (/^https:\/\//.test(u)) shell.openExternal(u); return { action: 'deny' }; });
+  w.on('closed', () => webWindows.delete(host));
+  webWindows.set(host, w);
+  w.loadURL(url);
+  return true;
+});
 ipcMain.handle('tray-hide', () => { if (trayWindow && !trayWindow.isDestroyed()) trayWindow.hide(); });
 async function menuBarWanted() {
   try { const r = await fetch(`http://127.0.0.1:${PORT}/api/config`); const j = await r.json(); return j.config?.menuBar !== false; } catch { return true; }

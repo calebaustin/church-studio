@@ -206,21 +206,36 @@ const lum = (h) => { const [r, g, b] = [1, 3, 5].map((i) => parseInt(h.slice(i, 
 const near = (a, b) => [1, 3, 5].reduce((s, i) => s + Math.abs(parseInt(a.slice(i, i + 2), 16) - parseInt(b.slice(i, i + 2), 16)), 0) < 60;
 
 /** The brand colors a site uses most: theme-color first, then the most-used colorful values in its CSS. */
-function pickColors(css, themeColor) {
+function pickColors(css, themeColor, logoColors = []) {
   const tally = new Map();
   for (const m of css.matchAll(/#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b|rgba?\([^)]+\)/g)) {
     const h = hexOf(m[0]);
     if (h) tally.set(h, (tally.get(h) || 0) + 1);
+  }
+  // Page and section backgrounds (the site's canvas) say more about a brand than one-off text or border colors.
+  for (const m of css.matchAll(/background(?:-color)?\s*:\s*([^;}]+)/gi)) {
+    for (const c of m[1].matchAll(/#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b|rgba?\([^)]+\)/g)) { const h = hexOf(c[0]); if (h) tally.set(h, (tally.get(h) || 0) + 3); }
   }
   const ranked = [...tally.entries()].sort((a, b) => b[1] - a[1]).map(([h]) => h);
   const colorful = ranked.filter((h) => sat(h) > 0.25 && lum(h) > 0.06 && lum(h) < 0.9);
   const dark = ranked.find((h) => lum(h) < 0.12 && !['#000000'].includes(h)) || '#1B2440';
   const light = ranked.find((h) => lum(h) > 0.88 && h !== '#FFFFFF') || '#F4EFE6';
   const picks = [];
-  for (const h of [themeColor && hexOf(themeColor), ...colorful]) if (h && !picks.some((p) => near(p, h))) picks.push(h);
+  // The logo's own colors lead, then theme-color, then the site's most-used colors.
+  for (const h of [...logoColors.filter((c) => sat(c) > 0.2 && lum(c) > 0.04 && lum(c) < 0.92), themeColor && hexOf(themeColor), ...colorful]) if (h && !picks.some((p) => near(p, h))) picks.push(h);
   const main = picks.slice(0, 3);
   while (main.length < 2) main.push(['#2B7F5F', '#D9A441'][main.length]);
   return [main[0], main[1], dark, light, main[2] || '#8FB8A8'];
+}
+
+/** Colors written in an SVG logo (fill and stroke values), most used first. Picture logos are sampled in the app. */
+function svgColors(logos) {
+  const svg = logos.find((l) => l.ext === 'svg');
+  if (!svg) return [];
+  const text = Buffer.from(svg.dataUrl.split(',')[1] || '', 'base64').toString('utf8');
+  const tally = new Map();
+  for (const m of text.matchAll(/(?:fill|stroke|stop-color)\s*[:=]\s*["']?(#[0-9a-fA-F]{3,6}\b|rgba?\([^)]+\))/g)) { const h = hexOf(m[1]); if (h) tally.set(h, (tally.get(h) || 0) + 1); }
+  return [...tally.entries()].sort((a, b) => b[1] - a[1]).map(([h]) => h);
 }
 
 function pickFonts(html, css) {
@@ -341,7 +356,7 @@ export async function scanWebsite(input) {
     website: base,
     name: contact.name || title,
     churchInfo: { name: contact.name || title, address: contact.address, phone: contact.phone, email: contact.email, website: base.replace(/\/$/, ''), times: contact.times },
-    colors: pickColors(css, themeColor),
+    colors: pickColors(css, themeColor, svgColors(logos)),
     fonts: pickFonts(html, css),
     logos,
     social: socialFrom(pages.join('\n')),

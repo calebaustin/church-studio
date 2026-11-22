@@ -13,7 +13,7 @@ import { lineScore, lineFeatures } from './clips.js';
 import { normalizeWords, normalizeText, extractRefs } from './scripture.js';
 import { loadConfig, saveConfig } from './config.js';
 import { aiStatus, complete, providerReady, withFallback } from './ai.js';
-import { assembleBlog, isFragment, structure, styleExample, tidy, writeBlogWithAI } from './blogwriter.js';
+import { assembleBlog, isFragment, sermonDigest, structure, styleExample, tidy, writeBlogWithAI, writeDevotionalWithAI, writeEmailWithAI, writeGuideWithAI } from './blogwriter.js';
 import { loadVoice, themeBonus, voiceGuide } from './voice.js';
 import { readdir } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -398,7 +398,7 @@ const ANGLE_NOTES = {
 };
 
 /** Write the blog again from the chosen title, keyphrase and angle. With an AI helper, it rewrites the prose too. */
-export async function rewriteBlog(projectId, { title, keyphrase, slug, metaDescription, angle = 'teaching', ai = false, signal } = {}) {
+export async function rewriteBlog(projectId, { title, keyphrase, slug, metaDescription, angle = 'teaching', ai = false, signal, onPartial } = {}) {
   const { project, a } = await load(projectId);
   const draft = blogFor(a, project, { title, keyphrase, angle });
   if (!ai) return { text: draft };
@@ -416,7 +416,9 @@ Use the focus keyphrase "${keyphrase}" naturally in the first paragraph and in o
     try { const { syncBlog } = await import('./blog.js'); await syncBlog({ url: cfg.churchInfo.website }); a.voice = await loadVoice(); } catch { /* no blog found: write without it */ }
   }
   const r = await withFallback(cfg, async () => {
-    const out = await writeBlogWithAI(cfg, a, { title, keyphrase, angleNote: ANGLE_NOTES[angle] || '', guide, example: styleExample(a.voice?.samples, a.all), signal });
+    // Each finished section is sent along as it's written, so the post fills in on screen.
+    const onSection = onPartial ? (done) => onPartial(assembleBlog({ title, intro: '', sections: done, closing: '', invite: '' })) : undefined;
+    const out = await writeBlogWithAI(cfg, a, { title, keyphrase, angleNote: ANGLE_NOTES[angle] || '', guide, example: styleExample(a.voice?.samples, a.all), signal, onSection });
     const localSections = (() => { const md = localPost(a, project, { title, kp: keyphrase }); return md.split(/\n## /).slice(1).map((chunk) => { const [heading, ...rest] = chunk.split('\n\n'); return { heading, paras: rest.filter((x) => !x.startsWith('[Watch') && !x.includes('join ')) }; }); })();
     const sections = out.sections.map((x, k) => { if (x) return x; local++; return localSections[k] || null; }).filter(Boolean);
     const f = out.frame || {};
@@ -677,4 +679,44 @@ export async function rewriteFor(text, audience) {
   if (!providerReady(cfg)) return { text: rewriteLocal(text, audience), local: true };
   const r = await withFallback(cfg, () => complete(cfg, REWRITE_SYSTEM(`${a[1]}. ${a[2]}`), text), () => rewriteLocal(text, audience));
   return { text: r.value, local: r.local };
+}
+
+// ---------------------------------------------------------------- email, discussion guide and devotional with an AI helper
+// The whole-message digest, made once per sermon (right after transcribing when a helper is on) and kept on disk.
+// It feeds the Sermon page's main points and next steps and the email, guide and devotional.
+const DIGESTS = path.join(DATA_DIR, 'digests');
+const digestFile = (id) => path.join(DIGESTS, `${String(id).replace(/[^\w-]/g, '')}.json`);
+/** The saved digest, if it still matches the transcript. */
+export async function savedDigest(projectId) {
+  try {
+    const d = JSON.parse(await readFile(digestFile(projectId), 'utf8'));
+    const { a } = await load(projectId);
+    return d.key === `${a.all.length}:${a.parts.length}` ? d.digest : null;
+  } catch { return null; }
+}
+/** Make (or reuse) the digest with the AI helper. */
+export async function makeDigest(projectId, { signal, onProgress } = {}) {
+  const have = await savedDigest(projectId);
+  if (have) return have;
+  const { project, a } = await load(projectId);
+  const cfg = await loadConfig();
+  if (!providerReady(cfg)) throw new Error('Turn on an AI helper in Settings first.');
+  const title = (await loadDraft(projectId))?.title || project.title;
+  const digest = await sermonDigest(cfg, a, { title, signal, onProgress });
+  await mkdir(DIGESTS, { recursive: true });
+  await writeFile(digestFile(projectId), JSON.stringify({ key: `${a.all.length}:${a.parts.length}`, at: new Date().toISOString(), digest }));
+  return digest;
+}
+/** Write the email, discussion guide or devotional with the AI helper, from a digest of the whole sermon. */
+export async function aiWrite(projectId, kind, { days = 5, signal } = {}) {
+  const { project, a } = await load(projectId);
+  const cfg = await loadConfig();
+  if (!providerReady(cfg)) throw new Error('Turn on an AI helper in Settings first.');
+  const title = (await loadDraft(projectId))?.title || project.title;
+  const digest = await makeDigest(projectId, { signal });
+  const watch = project.sourceUrl ? `[Watch the full message](${project.sourceUrl})` : '';
+  if (kind === 'email') return { text: await writeEmailWithAI(cfg, digest, { title, source: a.all, guide: voiceGuide(a.voice || {}), example: styleExample(a.voice?.samples, a.all), watch, invite: `Join ${a.church?.name || 'us'} for worship${a.church?.times ? ` ${a.church.times}` : ' [ADD: service times]'}.`, signal }) };
+  if (kind === 'group') return { text: await writeGuideWithAI(cfg, digest, { title, refs: a.refs, source: a.all, signal }) };
+  if (kind === 'devotional') return { text: await writeDevotionalWithAI(cfg, digest, { title, days, refs: a.refs, source: a.all, signal }) };
+  throw new Error('That kind of writing can\'t be written this way yet.');
 }
