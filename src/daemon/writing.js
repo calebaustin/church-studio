@@ -11,8 +11,9 @@ import { cachedEvents } from './calendar.js';
 import { toSentences, backgroundOf, keywords, STOPWORDS } from './text.js';
 import { lineScore, lineFeatures } from './clips.js';
 import { normalizeWords, normalizeText, extractRefs } from './scripture.js';
-import { loadConfig } from './config.js';
-import { complete, providerReady, withFallback } from './ai.js';
+import { loadConfig, saveConfig } from './config.js';
+import { aiStatus, complete, providerReady, withFallback } from './ai.js';
+import { assembleBlog, isFragment, structure, styleExample, tidy, writeBlogWithAI } from './blogwriter.js';
 import { loadVoice, themeBonus, voiceGuide } from './voice.js';
 import { readdir } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -27,19 +28,24 @@ const titleCase = (t) => t.replace(/(^|[\s"“(-])([a-z])([\w'’]*)/g, (m, pre,
 
 function analyze(words, range) {
   const inRange = words.filter((w) => (!range || (w.start >= range.start && w.end <= range.end)));
-  const sentences = toSentences(normalizeWords(inRange)).map((s) => ({ ...s, text: normalizeText(s.text) })).filter((s) => s.text.split(' ').length >= 5);
-  const scored = sentences.map((s, i) => ({ ...s, i, score: lineScore(s.text), f: lineFeatures(s.text) }));
+  // Whole spoken sentences (not 28-word slices), cleaned of filler and repeated phrases.
+  const sentences = toSentences(normalizeWords(inRange), { maxWords: 60, gap: 1.6 }).map((s) => ({ ...s, text: tidy(normalizeText(s.text)) })).filter((s) => s.text.split(' ').length >= 5);
+  const scored = sentences.map((s, i) => {
+    const f = { ...lineFeatures(s.text), fragment: isFragment(s.text) };
+    return { ...s, i, score: lineScore(s.text) - (f.fragment ? 5 : 0) - (s.text.split(' ').length > 45 ? 1.5 : 0), f };
+  });
   const bg = backgroundOf(sentences);
   const all = sentences.map((s) => s.text).join(' ');
   const keys = keywords(all, bg, 8);
   const refs = extractRefs(all, 6);
-  const questions = scored.filter((s) => s.f.question && s.text.length < 160 && !s.f.dangling).sort((a, b) => b.score - a.score).slice(0, 6);
-  // Four movements of the sermon, by time.
-  const parts = [];
-  const per = Math.ceil(scored.length / 4);
-  for (let k = 0; k < 4; k++) parts.push(scored.slice(k * per, (k + 1) * per));
-  const best = [...scored].sort((a, b) => b.score - a.score);
-  return { sentences: scored, keys, refs, questions, parts: parts.filter((p) => p.length), best, all };
+  // The message's own parts: split where the preacher turns, without the opening small talk or the closing invitation.
+  const st = structure(scored);
+  const body = scored.slice(st.startAt, st.endAt);
+  const usable = (s) => !s.f.fragment && !s.f.housekeeping;
+  const questions = body.filter((s) => s.f.question && s.text.length < 160 && !s.f.dangling && usable(s)).sort((a, b) => b.score - a.score).slice(0, 6);
+  const parts = st.sections.length ? st.sections : [body];
+  const best = [...body].filter(usable).sort((a, b) => b.score - a.score);
+  return { sentences: scored, body, keys, refs, questions, parts: parts.filter((p) => p.length), best: best.length ? best : [...scored].sort((a, b) => b.score - a.score), all };
 }
 
 /** A short, complete heading: the punchiest short line in a section, or a clean cut at a natural break. */
@@ -131,6 +137,8 @@ async function load(projectId) {
   const bonus = themeBonus(voice);
   a.best = [...a.best].sort((x, y) => (y.score + bonus(y.text)) - (x.score + bonus(x.text)));
   a.mission = voice.mission;
+  a.voice = voice;
+  a.church = (await loadConfig()).churchInfo || {};
   return { project, a };
 }
 
@@ -211,10 +219,48 @@ function blogFor(a, project, { title, keyphrase = '', angle = 'teaching' } = {})
       join,
     ];
   } else {
-    body = [intro, key, ...sections(6), scripture,
-      a.questions.length ? `## Questions to sit with\n\n${a.questions.slice(0, 3).map((q) => `- ${sentenceEnd(clean(q.text))}`).join('\n')}` : '', join];
+    return localPost(a, project, { title, kp });
   }
   return [`# ${title}`, ...body].filter(Boolean).join('\n\n').replace(/\n{3,}/g, '\n\n');
+}
+
+/** The line that closes every post: watch the sermon, then come worship (real times when the church set them). */
+function inviteLine(a, project) {
+  const name = a.church?.name || 'us';
+  const times = a.church?.times ? ` ${a.church.times.replace(/^Sundays?/i, (m) => m)}` : ' [ADD: service times]';
+  const watch = project.sourceUrl ? `[Watch the full sermon](${project.sourceUrl})` : 'Watch the full sermon';
+  return `${watch}, and join ${name} for worship${times}.`;
+}
+const usable = (s) => !s.f.fragment && !s.f.housekeeping && !s.f.dangling;
+/** Sentences for a short paragraph, in the order they were said. */
+const para = (list, n) => topIn(list.filter(usable), n).map((s) => sentenceEnd(clean(s.text))).join(' ');
+
+/**
+ * The offline post, in the shape good sermon recaps share: a hook and the main idea up top, a heading and two
+ * short paragraphs per point, a closing that applies it, then the invitation. Every sentence is from the sermon.
+ */
+function localPost(a, project, { title, kp = '' }) {
+  const open = a.parts[0] || a.body;
+  // Lines about the message's own subject (its key words), so asides and small talk don't lead.
+  const keys = a.keys.map((k) => k.toLowerCase());
+  const onTopic = (s) => keys.some((k) => s.text.toLowerCase().includes(k));
+  const fit = (s) => usable(s) && s.text.split(' ').length >= 8 && s.text.split(' ').length <= 30 && !s.f.question;
+  const hook = open.find((s) => fit(s) && onTopic(s)) || open.find(fit);
+  const passage = a.body.find((s) => usable(s) && extractRefs(s.text, 1).length && s.text.split(' ').length <= 35);
+  const main = a.best.find((s) => has(s.text, kp) && (s.f.apply || s.f.quotable)) || a.best.find((s) => s.f.apply || s.f.quotable) || a.best[0];
+  const intro = [...new Set([hook, passage, main].filter(Boolean))].sort((x, y) => x.i - y.i).map((s) => sentenceEnd(clean(s.text))).join(' ');
+  const sections = a.parts.map((part) => {
+    const all = part.filter(usable);
+    if (!all.length) return null;
+    const topical = all.filter(onTopic);
+    const pool = topical.length >= 3 ? topical : all;
+    const ranked = topIn(pool, Math.min(5, Math.max(3, Math.round(pool.length / 6))));
+    const half = Math.ceil(ranked.length / 2);
+    return { heading: titleCase(headingFor(pool, title)), paras: [ranked.slice(0, half), ranked.slice(half)].filter((g) => g.length).map((g) => g.map((s) => sentenceEnd(clean(s.text))).join(' ')) };
+  }).filter(Boolean);
+  const last = a.parts.at(-1) || a.body;
+  const closing = para(last.filter((s) => s.f.apply && !s.f.question), 2) || '';
+  return assembleBlog({ title, intro, sections, closing, invite: inviteLine(a, project) });
 }
 
 // Endings for "The sermon said: “…”" prompts. Rotated so a guide never repeats one.
@@ -352,7 +398,7 @@ const ANGLE_NOTES = {
 };
 
 /** Write the blog again from the chosen title, keyphrase and angle. With an AI helper, it rewrites the prose too. */
-export async function rewriteBlog(projectId, { title, keyphrase, slug, metaDescription, angle = 'teaching', ai = false } = {}) {
+export async function rewriteBlog(projectId, { title, keyphrase, slug, metaDescription, angle = 'teaching', ai = false, signal } = {}) {
   const { project, a } = await load(projectId);
   const draft = blogFor(a, project, { title, keyphrase, angle });
   if (!ai) return { text: draft };
@@ -361,9 +407,25 @@ export async function rewriteBlog(projectId, { title, keyphrase, slug, metaDescr
   const guide = voiceGuide(await loadVoice());
   const system = `${POLISH_SYSTEM}\n${guide}\nThis is a church blog post. ${ANGLE_NOTES[angle] || ''} Use the title "${title}" as the H1.
 Use the focus keyphrase "${keyphrase}" naturally in the first paragraph and in one subheading. Keep it between 600 and 1000 words.`;
-  const r = await withFallback(cfg, () => complete(cfg, system, `Meta description (for context): ${metaDescription}\nWeb address: ${slug}\n\nSermon excerpt:\n${a.all.slice(0, 14000)}\n\nStarting draft:\n${draft}`), () => draft);
-  return { text: r.value, notice: r.notice?.text || null };
+  // Written part by part (small requests that suit on-device helpers), in the church's own blog voice when its
+  // posts are connected. Any part the helper can't write keeps the local version.
+  let local = 0;
+  // The church's own posts teach the helper its voice. If the blog isn't connected yet, try the church website once.
+  if (!a.voice?.samples?.some((x) => x.source === 'blog') && cfg.blogVoice !== false && cfg.churchInfo?.website && !cfg.blogAutoTried) {
+    await saveConfig({ blogAutoTried: new Date().toISOString() });
+    try { const { syncBlog } = await import('./blog.js'); await syncBlog({ url: cfg.churchInfo.website }); a.voice = await loadVoice(); } catch { /* no blog found: write without it */ }
+  }
+  const r = await withFallback(cfg, async () => {
+    const out = await writeBlogWithAI(cfg, a, { title, keyphrase, angleNote: ANGLE_NOTES[angle] || '', guide, example: styleExample(a.voice?.samples, a.all), signal });
+    const localSections = (() => { const md = localPost(a, project, { title, kp: keyphrase }); return md.split(/\n## /).slice(1).map((chunk) => { const [heading, ...rest] = chunk.split('\n\n'); return { heading, paras: rest.filter((x) => !x.startsWith('[Watch') && !x.includes('join ')) }; }); })();
+    const sections = out.sections.map((x, k) => { if (x) return x; local++; return localSections[k] || null; }).filter(Boolean);
+    const f = out.frame || {};
+    return assembleBlog({ title: f.title?.trim() || title, intro: f.intro || localPost(a, project, { title, kp: keyphrase }).split('\n\n')[1] || '', sections, closing: f.closing || '', invite: inviteLine(a, project) });
+  }, () => draft);
+  const notice = r.notice?.text || (r.local ? `${PROVIDER_LABEL(cfg)} couldn't write this one, so it was written locally.` : local ? `${PROVIDER_LABEL(cfg)} wrote most of this. ${local} part${local === 1 ? ' was' : 's were'} written locally.` : null);
+  return { text: r.value, notice };
 }
+const PROVIDER_LABEL = (cfg) => ({ cshelper: 'CS Helper', apple: 'Apple Intelligence', anthropic: 'Claude', openai: 'ChatGPT', gemini: 'Gemini', ollama: 'Ollama' }[cfg.llmProvider] || 'The helper');
 
 /** Good moments for a still from the sermon video: strong lines, at least 40 seconds apart. */
 export async function stillTimes(projectId, n = 6) {

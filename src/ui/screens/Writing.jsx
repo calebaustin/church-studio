@@ -278,7 +278,7 @@ function WritingEditor({ pid, onBack, startKind }) {
                           <Toggle checked={useAi} onChange={(e) => setUseAi(e.target.checked)} icon={Sparkles} label="AI helper" small />
                         )}
                         {undoBlog && <button className="btn ghost sm" onClick={() => { set({ blog: undoBlog }); setUndoBlog(null); }}><Undo2 size={13} />Undo</button>}
-                        <button className="btn primary" disabled={busy} onClick={rewrite}><RefreshCw size={15} />Rewrite post</button>
+                        <button className="btn primary" disabled={busy} onClick={rewrite}><RefreshCw size={15} className={busy ? 'spin' : ''} />{busy ? (useAi && config.llmProvider !== 'none' ? 'Writing, about a minute…' : 'Rewriting…') : 'Rewrite post'}</button>
                       </span>
                     </div>
                   </div></>}

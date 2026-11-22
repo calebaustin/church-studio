@@ -204,6 +204,19 @@ export async function testProvider(cfg) {
 }
 
 /** Plain text completion for writing help. Same providers and keys as clip ranking. */
+/**
+ * A JSON answer that matches a schema. CS Helper is held to the schema as it writes; other helpers are asked
+ * for JSON and the first object in the reply is used.
+ */
+export async function completeJSON(cfg, system, user, schema, { signal, maxTokens = 900 } = {}) {
+  if (cfg.llmProvider === 'cshelper') return llamaChat({ system, messages: [{ role: 'user', content: user }], schema, maxTokens, temperature: 0.3, signal });
+  const keys = Object.keys(schema.properties || {}).join(', ');
+  const text = await complete(cfg, system, `${user}\n\nAnswer with only a JSON object with these keys: ${keys}.`);
+  const m = String(text).match(/\{[\s\S]*\}/);
+  if (!m) throw new Error('The helper did not answer in the expected form.');
+  return JSON.parse(m[0]);
+}
+
 export async function complete(cfg, system, user) {
   const p = cfg.llmProvider;
   if (p === 'apple') return appleAsk({ system, prompt: user, temperature: 0.4 });
