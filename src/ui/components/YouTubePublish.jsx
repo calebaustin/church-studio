@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ExternalLink, Upload } from 'lucide-react';
-import { api, openLink } from '../api.js';
+import { api, desktop, openLink } from '../api.js';
 import { useApp } from '../App.jsx';
 import Modal, { ModalHead } from './Modal.jsx';
 
@@ -61,9 +61,24 @@ export default function YouTubePublish({ project, onClose }) {
       )}
       {accounts && !accounts.length && (
         <div className="keycard stack" style={{ gap: 8 }}>
-          <strong>Connect your YouTube channel first</strong>
-          <span className="small muted">In Social › Accounts, connect YouTube. Church Studio uploads with your own channel's sign-in.</span>
-          <button className="btn sm" onClick={() => { onClose(); go({ name: 'social', tab: 'accounts' }); }}>Open Social accounts</button>
+          <strong>Post through YouTube's own upload page</strong>
+          <span className="small muted">Church Studio opens YouTube signed in and puts the sermon in for you. The title is shown at the top of the page and the description is copied, ready to paste. Playlists are picked on YouTube's page.</span>
+          {form && <input className="input" value={yt} onChange={(e) => setCustomTitle(e.target.value)} aria-label="YouTube title" />}
+          <div className="row wrap" style={{ gap: 8 }}>
+            {desktop?.webPost
+              ? <button className="btn primary sm" disabled={busy} onClick={async () => {
+                  setBusy(true);
+                  try {
+                    const { file } = await api.post(`/api/projects/${project.id}/youtube/file`, {});
+                    const r = await desktop.webPost({ platform: 'youtube', file, caption: description, title: yt });
+                    if (!r?.ok) throw new Error(r?.error || 'Couldn’t open YouTube.');
+                    toast({ text: 'YouTube is open with the sermon. Paste the description with ⌘V.' });
+                    onClose();
+                  } catch (e) { toast({ kind: 'error', text: e.message }); setBusy(false); }
+                }}><Upload size={14} />{busy ? 'Getting the sermon ready…' : 'Open YouTube with the sermon'}</button>
+              : <span className="small muted">This works in the Church Studio app.</span>}
+            <button className="btn ghost sm" onClick={() => { onClose(); go({ name: 'social', tab: 'accounts' }); }}>Or connect for automatic posting</button>
+          </div>
         </div>
       )}
       {form && accounts?.length > 0 && (

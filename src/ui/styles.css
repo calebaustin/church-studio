@@ -1949,3 +1949,10 @@ button.tp-tile:active .tp-orb { transform: scale(.92); transition-duration: 120m
 .cutout-hit:hover { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 60%, transparent); }
 .cutout-tag { position: absolute; left: 6px; top: 6px; display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 999px; font-size: 11.5px; font-weight: 700; background: var(--surface-solid); color: var(--text); box-shadow: var(--shadow-sm, 0 1px 4px rgba(var(--shade-rgb), .2)); }
 .cutout-hit.on .cutout-tag { background: var(--accent); color: var(--on-accent); }
+
+/* Connections: one row per social page */
+.conn-list { display: grid; gap: 6px; }
+.conn-row { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 12px; background: var(--field); box-shadow: inset 0 0 0 1px var(--line); }
+@media (max-width: 640px) { .conn-row { grid-template-columns: 1fr; } }
+.drag-file { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; border: 1px dashed var(--line-strong); color: var(--muted); font-size: 12.5px; font-weight: 600; cursor: grab; user-select: none; }
+.drag-file:active { cursor: grabbing; }

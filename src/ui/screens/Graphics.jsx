@@ -4,7 +4,7 @@ import PreviewTile from '../components/PreviewTile.jsx';
 import ToolIntro from '../components/ToolIntro.jsx';
 import {
   Clapperboard, Copy, GalleryHorizontalEnd, Heart, LayoutGrid, MonitorPlay, NotebookPen, Presentation, Printer,
-  Scaling, Search, Smartphone, Sparkles, Trash2, Home as HomeIcon, Wand2, X, BookOpen, Plus, PenTool, Film, Laptop, CalendarClock, MessageCircleQuestion, Palette} from 'lucide-react';
+  Scaling, Search, Smartphone, Sparkles, Trash2, Home as HomeIcon, Wand2, X, BookOpen, Plus, PenTool, Film, Laptop, CalendarClock, MessageCircleQuestion, Palette, ListOrdered, Mail, Rows3, BookOpenText } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { Masonry } from '../components/Masonry.jsx';
 import { api } from '../api.js';
@@ -18,6 +18,7 @@ import { PACKS2, PACK2_TEMPLATES, inBrandColors } from '../design/packs2.js';
 import { PACKS3, PACK3_TEMPLATES } from '../design/packs3.js';
 import { CAROUSEL_TEMPLATES } from '../design/carousels.js';
 import { TEXT_TEMPLATES } from '../design/textposts.js';
+import { MORE_TEMPLATES } from '../design/packs4.js';
 
 // Every template pack: the newer plug-and-play packs first.
 export const PACKS = { ...PACKS3, ...PACKS2, ...PACKS1 };
@@ -36,7 +37,7 @@ export function photoCount(t) {
   return photoCounts.get(t.id);
 }
 const EVENT_READY = new Set(['post-event', 'flyer-event', ...Object.keys(PACKS1).map((k) => `${k}-event`)]);
-export const TEMPLATES = [...PACK3_TEMPLATES, ...PACK2_TEMPLATES, ...BASE_TEMPLATES.map((t) => (EVENT_READY.has(t.id) ? { ...t, event: true } : t)), ...PACK_TEMPLATES.map((t) => (EVENT_READY.has(t.id) ? { ...t, event: true, photos: 1 } : t)), ...CAROUSEL_TEMPLATES, ...TEXT_TEMPLATES];
+export const TEMPLATES = [...PACK3_TEMPLATES, ...PACK2_TEMPLATES, ...BASE_TEMPLATES.map((t) => (EVENT_READY.has(t.id) ? { ...t, event: true } : t)), ...PACK_TEMPLATES.map((t) => (EVENT_READY.has(t.id) ? { ...t, event: true, photos: 1 } : t)), ...CAROUSEL_TEMPLATES, ...TEXT_TEMPLATES, ...MORE_TEMPLATES];
 
 export { cohesive } from '../design/model.js';
 
@@ -44,10 +45,10 @@ export { cohesive } from '../design/model.js';
 // The Design bar: a few categories, each opening the kinds of design inside it.
 // Tile colors come from the app theme (tone-1 to tone-6 in styles.css), so they follow the user's colors.
 const CATEGORIES = [
-  ['design', 'Design', PenTool, 5, [['design', 'Blank design', 'A square canvas to start your own way', PenTool], ['presentation', 'Presentation', 'Slides you can present', Presentation], ['deck', 'Slide deck maker', 'A full deck from a few answers', Wand2], ['scripture', 'Scripture graphic', 'A verse in your brand look', BookOpen], ['sermon', 'From a sermon', 'Slides, carousels and stories from its words', Sparkles], ['import', 'Bring in your own', 'A design from Canva, Photoshop or anywhere', Laptop]]],
+  ['design', 'Design', PenTool, 5, [['design', 'Blank design', 'A square canvas to start your own way', PenTool], ['presentation', 'Presentation', 'Slides you can present', Presentation], ['slide', 'Event slide', 'One-off event and announcement slides', MonitorPlay], ['deck', 'Slide deck maker', 'A full deck from a few answers', Wand2], ['scripture', 'Scripture graphic', 'A verse in your brand look', BookOpen], ['sermon', 'From a sermon', 'Slides, carousels and stories from its words', Sparkles], ['import', 'Bring in your own', 'A design from Canva, Photoshop or anywhere', Laptop]]],
   ['video', 'Video', Film, 6, [['videocard', 'Clip intro and end cards', 'For the start or end of a clip', Film], ['thumbnail', 'YouTube thumbnail', 'A cover for your video', MonitorPlay]]],
-  ['social', 'Social', Heart, 2, [['post', 'Social post', 'Quote cards, events, verses', Heart], ['story', 'Story', 'Instagram and Facebook stories', Smartphone], ['carousel', 'Carousel', 'Swipeable posts and recaps', GalleryHorizontalEnd], ['event', 'For an event', 'Pick a church event and a template', CalendarClock]]],
-  ['print', 'Print', Printer, 3, [['flyer', 'Flyer', 'Letter size, print or share', Printer], ['notes', 'Sermon notes', 'Fill-in-the-blank handouts', NotebookPen], ['print-sizes', 'Posters and more', 'Half letter, 11x17, 18x24', Scaling]]],
+  ['social', 'Social', Heart, 2, [['post', 'Social post', 'Quote cards, events, verses', Heart], ['story', 'Story', 'Instagram and Facebook stories', Smartphone], ['carousel', 'Carousel', 'Swipeable posts and recaps', GalleryHorizontalEnd], ['infographic', 'Infographic', 'Schedules, steps and ways to get involved', ListOrdered], ['event', 'For an event', 'Pick a church event and a template', CalendarClock]]],
+  ['print', 'Print', Printer, 3, [['flyer', 'Flyer', 'Letter size, print or share', Printer], ['invite', 'Invite card 5x7', 'Printed invitations for events', Mail], ['invitewide', 'Invite card 7x5', 'A wide printed invitation', Mail], ['rack', 'Rack card 4x9', 'For the welcome desk and lobby', Rows3], ['brochure', 'Trifold brochure', 'Folded in three, outside and inside', BookOpenText], ['notes', 'Sermon notes', 'Fill-in-the-blank handouts', NotebookPen], ['print-sizes', 'Posters and more', 'Half letter, 11x17, 18x24', Scaling]]],
   ['custom', 'Custom', Scaling, 0, null],
 ];
 const SERMON_OUTPUTS = [

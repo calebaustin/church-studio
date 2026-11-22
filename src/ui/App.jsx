@@ -368,7 +368,7 @@ export default function App() {
           <div className="top-drag" />
           {!config ? null : route.name === 'settings' ? <Settings section={route.section} key={route.section || 's'} />
             : route.name === 'social' && route.campaign ? <CalendarScreen campaign={route.campaign} key={`camp${route.campaign.event?.id || route.campaign.projectId || ''}`} />
-            : route.name === 'social' ? <Social compose={route.compose} caption={route.caption} key={route.compose?.clipId || route.compose?.design?.id || route.compose?.projectId || route.caption || 'social'} />
+            : route.name === 'social' ? <Social compose={route.compose} caption={route.caption} tab={route.tab} key={`${route.tab || ''}:${route.compose?.clipId || route.compose?.design?.id || route.compose?.projectId || route.caption || 'social'}`} />
               : route.name === 'project' ? <Project id={route.id} initialStep={route.clip ? 'edit' : route.step} initialClip={route.clip} initialTime={route.t} key={route.id + (route.step || '') + (route.clip || '') + (route.t ?? '')} />
                 : route.name === 'library' ? <Library openPicker={route.pick} key={route.pick ? 'pick' : 'lib'} />
                   : route.name === 'writing' ? <Writing project={route.project} kind={route.kind} key={(route.project || 'w') + (route.kind || '')} />

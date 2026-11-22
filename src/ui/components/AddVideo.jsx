@@ -60,8 +60,8 @@ export default function AddVideo({ url, title, onClose, onAdd }) {
           </div>
           {mode === 'sermon' && (
             <div className="keycard">
-              {info.id && <YouTubePeek ref={peek} id={info.id} start={range.start} onTime={setNow} />}
-              {info.id && (
+              {info.id && !info.processing && <YouTubePeek ref={peek} id={info.id} start={range.start} onTime={setNow} />}
+              {info.id && !info.processing && (
                 <div className="row wrap" style={{ gap: 6 }}>
                   <button className="btn sm" onClick={() => setRange((r) => ({ ...r, start: now, end: r.end > now ? r.end : Math.min(info.duration, now + 1800) }))}>Start here</button>
                   <button className="btn sm" disabled={now <= range.start} onClick={() => setRange((r) => ({ ...r, end: now }))}>End here</button>
@@ -92,7 +92,7 @@ export default function AddVideo({ url, title, onClose, onAdd }) {
             <span className="muted small num">{fmt(len)} to download</span>
             <div className="row">
               <button className="btn ghost" onClick={onClose}>Cancel</button>
-              <button className="btn primary lg" disabled={mode === 'sermon' && !(range.end > range.start)}
+              <button className="btn primary lg" disabled={info.processing || (mode === 'sermon' && !(range.end > range.start))} title={info.processing ? 'YouTube is still processing this stream. Try again later.' : ''}
                 onClick={() => onAdd(mode === 'all' ? { url, title: info.title } : { url, title: info.title, start: range.start, end: range.end })}>
                 {mode === 'sermon' ? <Scissors size={16} /> : <Download size={16} />}{mode === 'sermon' ? `Download the sermon (${Math.round((range.end - range.start) / 60)} min)` : `Download whole video (${fmt(info.duration)})`}
               </button>

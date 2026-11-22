@@ -18,6 +18,11 @@ contextBridge.exposeInMainWorld('desktop', {
   openRoute: (route) => ipcRenderer.invoke('open-route', route),
   trayHide: () => ipcRenderer.invoke('tray-hide'),
   openWeb: (url, title) => ipcRenderer.invoke('open-web', { url, title }),
+  webLogin: (platform) => ipcRenderer.invoke('web-login', platform),
+  webStatus: () => ipcRenderer.invoke('web-status'),
+  webLogout: (platform) => ipcRenderer.invoke('web-logout', platform),
+  webPost: (opts) => ipcRenderer.invoke('web-post', opts),
+  startDrag: (file) => ipcRenderer.send('start-drag', file),
   onTrayShown: (cb) => { const f = () => cb(); ipcRenderer.on('tray-shown', f); return () => ipcRenderer.removeListener('tray-shown', f); },
   onGo: (cb) => { const f = (_e, route) => cb(route); ipcRenderer.on('go', f); return () => ipcRenderer.removeListener('go', f); },
 });

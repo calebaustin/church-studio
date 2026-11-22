@@ -8,7 +8,8 @@ import { api, desktop, openLink, fmt } from '../api.js';
 import VideoThemeEditor from '../components/VideoThemeEditor.jsx';
 import ColorField from '../components/ColorField.jsx';
 import ChurchInfoFields from '../components/ChurchInfoFields.jsx';
-import { AppLogo, Connections, Credits, Feedback, YourTools } from './SettingsMore.jsx';
+import { AppLogo, Credits, Feedback, YourTools } from './SettingsMore.jsx';
+import ConnectionsHub from '../components/ConnectionsHub.jsx';
 import { mdToHtml } from '../markdown.js';
 import { Download, RefreshCw, ShieldCheck, Sparkles } from 'lucide-react';
 
@@ -45,7 +46,7 @@ export default function Settings({ section: initial }) {
       </div>
       <div className="stack" style={{ gap: 18 }}>
         {section === 'menu' && <YourTools />}
-        {section === 'connections' && <Connections />}
+        {section === 'connections' && <ConnectionsHub />}
         {section === 'feedback' && <Feedback />}
         {section === 'credits' && <Credits />}
         {section === 'tools' && <Tools />}

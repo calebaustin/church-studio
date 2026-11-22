@@ -168,3 +168,21 @@ export async function publishSermon(projectId, body, ctx) {
     if (temp && existsSync(temp)) await rm(temp, { force: true });
   }
 }
+
+/**
+ * The sermon as a file on this Mac, for posting through YouTube's own page (no API account): a sermon-only download
+ * is used as is; otherwise the sermon is cut out once (no re-encode) and kept for next time.
+ */
+export async function sermonFile(projectId, ctx) {
+  const p = await getProject(projectId);
+  if (!p?.sourceFile) throw new Error('This sermon has no video on this Mac.');
+  const src = file(projectId, p.sourceFile);
+  const r = p.sermon;
+  if (p.range || !r || !(r.end > r.start) || (r.end - r.start) >= (p.media?.duration || Infinity) - 5) return { file: src };
+  const out = file(projectId, 'sermon-only.mp4');
+  if (existsSync(out) && p.sermonCut?.start === r.start && p.sermonCut?.end === r.end) return { file: out };
+  ctx?.progress?.(10, 'Cutting out the sermon…');
+  await run(tool('ffmpeg'), ['-y', '-loglevel', 'error', '-ss', String(r.start), '-to', String(r.end), '-i', src, '-c', 'copy', '-movflags', '+faststart', out], { signal: ctx?.signal });
+  await updateProject(projectId, (x) => { x.sermonCut = { start: r.start, end: r.end }; });
+  return { file: out };
+}

@@ -2,6 +2,18 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## Unreleased
+
+### New
+- **Connections.** My App has a Connections button that brings together your social pages, sign-ins, church calendar and automatic posting. Social › Accounts and Settings show the same panel.
+- **Sign in once, post from Church Studio.** Add your handle for Instagram, Facebook, YouTube, TikTok, X, LinkedIn or Threads, then View the page or Log in. Church Studio remembers the sign-in on this Mac. On a post that's ready to share, Post in Church Studio opens that site's upload page signed in, puts your video or design in the moment the site asks for a file, and copies the caption to paste. No developer setup needed.
+- **Drag a clip anywhere.** Ready posts have a Drag video handle: drop it into any browser, Finder, Mail or Messages.
+- **Post the sermon without an API connection.** With no YouTube account connected for automatic posting, Post to YouTube opens YouTube's own upload page with just the sermon ready, the title at the top and the description copied.
+- **More kinds of designs.** Invite cards (5x7 and 7x5), event and announcement slides (1920x1080), rack cards (4x9), trifold brochures (outside and inside) and infographics (event schedules, ways to get involved), in every template pack's look.
+
+### Fixed
+- A livestream that just ended says YouTube is still processing it and to try again later, instead of a download error. The preview and download wait until it's ready.
+
 ## 0.27.0 · November 22, 2026
 
 ### New

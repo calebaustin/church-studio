@@ -12,6 +12,8 @@ export function plainYtError(msg) {
   const m = String(msg || '');
   if (/CERTIFICATE_VERIFY_FAILED|SSL: |certificate verify failed/i.test(m)) return 'Couldn’t make a secure connection to YouTube. Update Church Studio to the newest version and try again.';
   if (/does not exist|HTTP Error 404|This channel is not available|Unable to recognize tab page|not a valid URL/i.test(m)) return 'YouTube doesn’t know that channel. Check the link or handle.';
+  // A stream that just ended: YouTube is still putting the recording together, so there's nothing to download yet.
+  if (/Did not get any data blocks|post_live|fragment \d+ not found|Unable to download fragment|requested format is not available.*live|This live event will begin|Premieres in/i.test(m)) return 'YouTube is still processing this livestream, so it can’t be downloaded yet. That usually takes an hour or two after a stream ends (longer for long streams). Try again later.';
   if (/Sign in to confirm|not a bot/i.test(m)) return 'YouTube asked to confirm this isn’t a robot. Wait a few minutes and try again.';
   if (/getaddrinfo|Name or service not known|nodename nor servname|Failed to resolve|timed out|Network is unreachable|Connection refused|Temporary failure/i.test(m)) return 'Couldn’t reach YouTube. Check your internet connection and try again.';
   if (/Cancelled/.test(m)) return 'Cancelled';
@@ -129,6 +131,10 @@ export function json3Words(data) {
 export function captionWait(info, hasCaptions, now = Date.now()) {
   if (hasCaptions) return {};
   if (info.live_status === 'is_live' || info.is_live) return { live: true, captionNote: 'This stream is still live. YouTube adds captions after it ends.' };
+  if (info.live_status === 'post_live') {
+    // Just ended: YouTube is still building the recording. It can't be played here or downloaded until that's done.
+    return { processing: true, captionNote: 'YouTube is still processing this livestream, so it can’t be played or downloaded yet. That usually takes an hour or two after a stream ends (longer for long streams). Try again later.' };
+  }
   const wasLive = info.live_status === 'was_live' || info.live_status === 'post_live' || info.was_live;
   if (!wasLive) return { captionNote: 'This video has no captions, so the sermon can\'t be found ahead of time. Set the start and end yourself, or download it all.' };
   const started = Number(info.release_timestamp || info.timestamp || 0) * 1000;
@@ -165,7 +171,7 @@ export async function scoutVideo(url) {
     return {
       id: info.id, title: info.title, duration: info.duration, thumb: info.thumbnail,
       chapters: (info.chapters || []).map((c) => ({ title: c.title, start: c.start_time, end: c.end_time })),
-      sermon, captions: words.length > 0, ...captionWait(info, words.length > 0),
+      sermon, captions: words.length > 0, ...captionWait(info, words.length > 0 && info.live_status !== 'post_live'),
     };
   } finally {
     await rm(dir, { recursive: true, force: true });

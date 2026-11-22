@@ -15,12 +15,18 @@ export const KINDS = {
   story: { label: 'Story', w: 1080, h: 1920, multi: true, hint: 'Instagram and Facebook stories' },
   thumbnail: { label: 'Thumbnail', w: 1920, h: 1080, hint: 'YouTube video covers' },
   flyer: { label: 'Flyer', w: 1275, h: 1650, hint: 'Letter size, print or share' },
+  invite: { label: 'Invite card 5x7', w: 1500, h: 2100, hint: 'Printed invitations for church events' },
+  invitewide: { label: 'Invite card 7x5', w: 2100, h: 1500, hint: 'A wide printed invitation' },
+  rack: { label: 'Rack card 4x9', w: 1200, h: 2700, hint: 'For the welcome desk and lobby racks' },
+  brochure: { label: 'Trifold brochure', w: 3300, h: 2550, multi: true, hint: 'Letter size, folded in three: outside and inside' },
+  slide: { label: 'Event slide', w: 1920, h: 1080, multi: true, hint: 'One-off event and announcement slides for the screens' },
+  infographic: { label: 'Infographic', w: 1080, h: 1350, hint: 'Schedules, steps and ways to get involved' },
   notes: { label: 'Sermon notes', w: 1275, h: 1650, multi: true, hint: 'Fill-in-the-blank handouts' },
   custom: { label: 'Custom size', w: 1080, h: 1080, multi: true, hint: 'Any size you need' },
 };
 export const SIZE_PRESETS = [
   ['Square 1:1', 1080, 1080], ['Portrait 4:5', 1080, 1350], ['Story 9:16', 1080, 1920], ['Wide 16:9', 1920, 1080],
-  ['Letter', 1275, 1650], ['Half letter', 825, 1275], ['Poster 11x17', 1650, 2550], ['Poster 18x24', 2700, 3600],
+  ['Letter', 1275, 1650], ['Half letter', 825, 1275], ['Invite 5x7', 1500, 2100], ['Invite 7x5', 2100, 1500], ['Rack card 4x9', 1200, 2700], ['Poster 11x17', 1650, 2550], ['Poster 18x24', 2700, 3600],
   ['Facebook cover', 1640, 924], ['Banner 3:1', 1500, 500],
 ];
 

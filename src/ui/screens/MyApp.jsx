@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Lightbulb, Plus, ArrowRight, Check, Layers, MonitorPlay, Palette, Target, Send, Sparkles, FolderHeart, Search } from 'lucide-react';
+import ConnectionsHub from '../components/ConnectionsHub.jsx';
+import Modal, { ModalHead } from '../components/Modal.jsx';
+import { Lightbulb, Plus, ArrowRight, Check, Layers, MonitorPlay, Palette, Target, Send, Sparkles, FolderHeart, Search , Link2 } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { api } from '../api.js';
 import Activity from '../components/Activity.jsx';
@@ -28,6 +30,7 @@ export default function MyApp({ section } = {}) {
   const [accounts, setAccounts] = useState(null);
   const [lib, setLib] = useState(null);
   const [newName, setNewName] = useState('');
+  const [connecting, setConnecting] = useState(section === 'connections');
   useEffect(() => {
     api.get('/api/ideas').then(setIdeas).catch(() => setIdeas({ topics: [], sermons: [] }));
     api.get('/api/workspaces').then(setWs);
@@ -58,7 +61,7 @@ export default function MyApp({ section } = {}) {
     [Palette, 'App theme', `${theme?.name || 'Default'} · ${dark?.name || 'Default'} at night · ${config.appearance === 'system' ? 'matches your Mac' : config.appearance}`, () => go({ name: 'settings', section: 'app-theme' })],
     [Layers, 'Caption theme', caption?.name || 'Default', () => go({ name: 'settings', section: 'video-themes' })],
     [Target, 'Weekly goal', `${config.weeklyGoal || 5} clips`, () => go({ name: 'home' })],
-    [Send, 'Social accounts', accounts ? (accounts.length ? accounts.map((a) => a.label).join(', ') : 'None yet') : '…', () => go({ name: 'social' })],
+    [Link2, 'Connections', 'Social pages and sign-ins, calendar and automatic posting', () => setConnecting(true)],
     [Sparkles, 'AI helper', ({ none: 'Off', apple: 'Apple Intelligence', cshelper: 'CS Helper', anthropic: 'Claude', openai: 'ChatGPT', gemini: 'Gemini', ollama: 'Ollama' })[config.llmProvider || 'none'] || 'Off', () => go({ name: 'settings', section: 'ai' })],
     [FolderHeart, 'Brand library', lib ? `${lib.items.length} files` : '…', () => go({ name: 'assets' })],
   ];
@@ -67,9 +70,23 @@ export default function MyApp({ section } = {}) {
     <div className="page">
       <div className="stack" style={{ gap: 2 }}>
         <span className="eyebrow">{current ? `Workspace: ${current.name}` : 'Workspace'}</span>
-        <h1>My App</h1>
+        <div className="row between wrap" style={{ gap: 10 }}>
+          <h1>My App</h1>
+          <button className="btn" onClick={() => setConnecting(true)}><Link2 size={15} />Connections</button>
+        </div>
         <span className="muted">Your settings at a glance, and ideas for what to make next.</span>
       </div>
+      {connecting && (
+        <Modal onClose={() => setConnecting(false)} width={860} label="Connections">
+          <ModalHead title="Connections" sub="Your social pages and sign-ins, your church calendar and automatic posting, in one place. Social › Accounts shows the same." />
+          <ConnectionsHub apiAccounts={
+            <section className="glass panel row between wrap" style={{ gap: 10 }}>
+              <div className="stack" style={{ gap: 2 }}><strong>Automatic posting</strong><span className="small muted">{accounts?.length ? accounts.map((a) => a.label).join(', ') : 'Accounts that post on a schedule through each site’s own connection.'}</span></div>
+              <button className="btn sm" onClick={() => { setConnecting(false); go({ name: 'social', tab: 'accounts' }); }}>Manage in Social</button>
+            </section>
+          } />
+        </Modal>
+      )}
 
       <div className="myapp-cols">
         <div className="stack">

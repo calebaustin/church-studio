@@ -279,6 +279,7 @@ route('POST', '/api/projects/:id/download', projectJob('download', 'Download', (
   return downloadToProject(p.sourceUrl, ctx, p);
 }));
 route('GET', '/api/projects/:id/youtube', async ({ id }) => { await requireProject(id); const parts = await ytpublish.sermonParts(id); return { ...parts, suggested: ytpublish.formatSermonTitle(parts, parts.pattern) }; });
+route('POST', '/api/projects/:id/youtube/file', async ({ id }) => { try { return await ytpublish.sermonFile(id); } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/projects/:id/youtube', projectJob('youtube-upload', 'Post to YouTube', (id, b, ctx) => ytpublish.publishSermon(id, b, ctx)));
 route('POST', '/api/projects/:id/proxy', projectJob('proxy', 'Smooth preview', (id, _b, ctx) => makeProxy(id, ctx)));
 route('POST', '/api/projects/:id/thumbs', projectJob('thumbs', 'Scene strip', (id, _b, ctx) => makeThumbs(id, ctx)));

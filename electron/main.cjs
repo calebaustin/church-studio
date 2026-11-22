@@ -1,5 +1,5 @@
 // Electron shell: own window, starts the local daemon, loads the UI from it.
-const { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, Notification, screen, shell, Tray } = require('electron');
+const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, Notification, screen, session, shell, Tray } = require('electron');
 const { fork } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -194,21 +194,115 @@ ipcMain.handle('open-route', (_e, route) => {
   if (trayWindow && !trayWindow.isDestroyed()) trayWindow.hide();
   showMain(route && typeof route === 'object' ? route : null);
 });
-// A social page (Instagram, Facebook…) in its own window. Sign-ins there are remembered, so after signing in once
-// the church's feed shows up without any developer account.
+// ---- social sites in Church Studio windows: view, sign in once, and post without any developer account.
+// Every site shares one remembered session ("persist:social"), so a sign-in sticks between launches.
+const SITES = {
+  instagram: { name: 'Instagram', login: 'https://www.instagram.com/accounts/login/', upload: 'https://www.instagram.com/', cookie: ['instagram.com', 'sessionid'] },
+  facebook: { name: 'Facebook', login: 'https://www.facebook.com/login', upload: 'https://www.facebook.com/reels/create', cookie: ['facebook.com', 'c_user'] },
+  youtube: { name: 'YouTube', login: 'https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fstudio.youtube.com%2F', upload: 'https://www.youtube.com/upload', cookie: ['youtube.com', 'LOGIN_INFO'], autoFile: true },
+  tiktok: { name: 'TikTok', login: 'https://www.tiktok.com/login', upload: 'https://www.tiktok.com/tiktokstudio/upload', cookie: ['tiktok.com', 'sessionid'], autoFile: true },
+  x: { name: 'X', login: 'https://x.com/i/flow/login', upload: 'https://x.com/compose/post', cookie: ['x.com', 'auth_token'] },
+  linkedin: { name: 'LinkedIn', login: 'https://www.linkedin.com/login', upload: 'https://www.linkedin.com/feed/?shareActive=true', cookie: ['linkedin.com', 'li_at'] },
+  threads: { name: 'Threads', login: 'https://www.threads.com/login', upload: 'https://www.threads.com/', cookie: ['threads.com', 'sessionid'] },
+};
+let socialReady = false;
+function socialSession() {
+  const ses = session.fromPartition('persist:social');
+  if (!socialReady) {
+    // Sites like Google won't sign in from a browser that says it's an embedded app, so these windows say they're Chrome.
+    ses.setUserAgent(ses.getUserAgent().replace(/\s?Electron\/\S+/, '').replace(/\s?church-studio\/\S+/i, ''));
+    socialReady = true;
+  }
+  return ses;
+}
 const webWindows = new Map();
+function webWindow(key, url, title) {
+  const open = webWindows.get(key);
+  if (open && !open.isDestroyed()) { open.loadURL(url); open.show(); open.focus(); return open; }
+  const w = new BrowserWindow({ width: 1100, height: 900, title, autoHideMenuBar: true,
+    webPreferences: { session: socialSession(), contextIsolation: true, sandbox: true } });
+  // Sign-in pop-ups (Google, Facebook) open in the same remembered session, not in another browser.
+  w.webContents.setWindowOpenHandler(({ url: u }) => (/^https:\/\//.test(u)
+    ? { action: 'allow', overrideBrowserWindowOptions: { width: 520, height: 720, autoHideMenuBar: true, webPreferences: { session: socialSession(), contextIsolation: true, sandbox: true } } }
+    : { action: 'deny' }));
+  w.on('closed', () => webWindows.delete(key));
+  webWindows.set(key, w);
+  w.loadURL(url);
+  return w;
+}
 ipcMain.handle('open-web', (_e, { url, title } = {}) => {
   if (!/^https:\/\//.test(String(url || ''))) return false;
   const host = new URL(url).hostname;
-  const open = webWindows.get(host);
-  if (open && !open.isDestroyed()) { open.loadURL(url); open.show(); open.focus(); return true; }
-  const w = new BrowserWindow({ width: 1060, height: 900, title: title || host, autoHideMenuBar: true,
-    webPreferences: { partition: 'persist:social', contextIsolation: true, sandbox: true } });
-  w.webContents.setWindowOpenHandler(({ url: u }) => { if (/^https:\/\//.test(u)) shell.openExternal(u); return { action: 'deny' }; });
-  w.on('closed', () => webWindows.delete(host));
-  webWindows.set(host, w);
-  w.loadURL(url);
+  const key = Object.keys(SITES).find((k) => host.includes(SITES[k].cookie[0].split('.')[0])) || host;
+  webWindow(key, url, title || host);
   return true;
+});
+ipcMain.handle('web-login', (_e, platform) => { const s = SITES[platform]; if (!s) return false; webWindow(platform, s.login, `Sign in to ${s.name} · Church Studio`); return true; });
+/** Which sites Church Studio is signed in to, from the saved session. */
+ipcMain.handle('web-status', async () => {
+  const ses = socialSession(); const out = {};
+  for (const [k, s] of Object.entries(SITES)) {
+    const [domain, name] = s.cookie;
+    const c = await ses.cookies.get({ domain, name }).catch(() => []);
+    out[k] = c.some((x) => x.value && (!x.expirationDate || x.expirationDate * 1000 > Date.now()));
+  }
+  return out;
+});
+ipcMain.handle('web-logout', async (_e, platform) => {
+  const s = SITES[platform]; if (!s) return false;
+  const ses = socialSession();
+  for (const c of await ses.cookies.get({ domain: s.cookie[0] })) {
+    await ses.cookies.remove(`https://${c.domain.replace(/^\./, '')}${c.path}`, c.name).catch(() => {});
+  }
+  return true;
+});
+/**
+ * Post through the site itself: open its upload page signed in, hand it the video the moment it asks for a file
+ * (no file picker), copy the caption, and show a small note at the top of the page saying what's next.
+ */
+ipcMain.handle('web-post', async (_e, { platform, file, caption = '', title = '' } = {}) => {
+  const s = SITES[platform];
+  if (!s || !file || !fs.existsSync(file)) return { ok: false, error: 'That video isn’t on this Mac anymore. Export it again.' };
+  if (caption) clipboard.writeText(caption);
+  const w = webWindow(platform, s.upload, `Post to ${s.name} · Church Studio`);
+  const dbg = w.webContents.debugger;
+  try { if (!dbg.isAttached()) dbg.attach('1.3'); } catch { /* another tool attached: the file picker still works by hand */ }
+  const give = async (backendNodeId) => { try { await dbg.sendCommand('DOM.setFileInputFiles', { files: [file], backendNodeId }); } catch { /* the page moved on */ } };
+  const intercept = async () => { try { await dbg.sendCommand('Page.enable'); await dbg.sendCommand('Page.setInterceptFileChooserDialog', { enabled: true }); } catch { /* fine */ } };
+  dbg.removeAllListeners('message');
+  dbg.on('message', (_ev, method, params) => { if (method === 'Page.fileChooserOpened' && params.backendNodeId) give(params.backendNodeId); });
+  await intercept();
+  const note = `Church Studio: when ${s.name} asks for a file, your video goes in by itself.${caption ? ' The caption is copied: click the caption box and press ⌘V.' : ''}${title ? ` Title: ${title}` : ''}`;
+  const show = () => {
+    intercept();
+    w.webContents.executeJavaScriptInIsolatedWorld(1001, [{ code: `(() => {
+      if (document.getElementById('cs-post-note')) return;
+      const d = document.createElement('div'); d.id = 'cs-post-note';
+      d.style.cssText = 'position:fixed;z-index:2147483647;top:12px;left:50%;transform:translateX(-50%);max-width:min(720px,92vw);padding:10px 40px 10px 16px;border-radius:999px;background:#2B5F45;color:#fff;font:600 13px -apple-system,system-ui,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.25)';
+      d.textContent = ${JSON.stringify(note)};
+      const x = document.createElement('button'); x.textContent = '×'; x.setAttribute('aria-label', 'Close');
+      x.style.cssText = 'position:absolute;right:10px;top:50%;transform:translateY(-50%);border:0;background:transparent;color:#fff;font-size:18px;cursor:pointer';
+      x.onclick = () => d.remove(); d.appendChild(x); document.documentElement.appendChild(d);
+    })();` }]).catch(() => {});
+    // Upload pages that already show a file box (YouTube, TikTok) get the video right away.
+    if (s.autoFile) setTimeout(async () => {
+      try {
+        const { root } = await dbg.sendCommand('DOM.getDocument', { depth: -1, pierce: true });
+        const { nodeId } = await dbg.sendCommand('DOM.querySelector', { nodeId: root.nodeId, selector: 'input[type=file]' });
+        if (nodeId) await dbg.sendCommand('DOM.setFileInputFiles', { files: [file], nodeId });
+      } catch { /* not there yet: the file picker hand-off covers it */ }
+    }, 2500);
+  };
+  w.webContents.removeAllListeners('did-finish-load');
+  w.webContents.on('did-finish-load', show);
+  if (!w.webContents.isLoading()) show();
+  return { ok: true };
+});
+/** Drag a clip or design out of Church Studio into any window: a browser, Finder, Mail, Messages. */
+ipcMain.on('start-drag', (e, file) => {
+  if (!file || !fs.existsSync(file)) return;
+  const icon = nativeImage.createFromPath(path.join(app.isPackaged ? process.resourcesPath : ROOT, 'assets', 'build', 'icon.png'));
+  e.sender.startDrag({ file, icon: icon.isEmpty() ? nativeImage.createEmpty() : icon.resize({ width: 64, height: 64 }) });
 });
 ipcMain.handle('tray-hide', () => { if (trayWindow && !trayWindow.isDestroyed()) trayWindow.hide(); });
 async function menuBarWanted() {
