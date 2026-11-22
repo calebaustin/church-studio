@@ -2,7 +2,7 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
-## Unreleased
+## 0.25.0 · November 21, 2026
 
 ### New
 - **More detail on long tasks.** Downloads show their speed and time left beside the bar. Hover the progress card for the details: size so far, speed and which part is downloading; the Whisper model, position in the audio, words so far and pace while transcribing; frames and render speed while exporting; plus time spent and time left. Updates and the CS Helper download show speed too.
