@@ -171,7 +171,7 @@ function BrandKit({ lib, reload }) {
           <span className="field-label">Colors <span className="hint">Drag to reorder. The order sets each color's job.</span></span>
           <div className="row wrap" style={{ gap: 12 }}>
             {colors.map((c, i) => (
-              <span key={`${i}-${c}`} className={`kit-color ${drag === i ? 'dragging' : ''}`} draggable
+              <span key={i} className={`kit-color ${drag === i ? 'dragging' : ''}`} draggable
                 onDragStart={(e) => { setDrag(i); e.dataTransfer.effectAllowed = 'move'; }} onDragEnd={() => setDrag(null)}
                 onDragOver={(e) => { e.preventDefault(); if (drag != null && drag !== i) { const next = [...colors]; const [x] = next.splice(drag, 1); next.splice(i, 0, x); setColors(next); setDrag(i); } }}>
                 <ColorField value={c} size={46} onChange={(v) => setColors(colors.map((x, j) => (j === i ? v : x)))} />
@@ -322,7 +322,7 @@ export default function BrandLibrary({ section }) {
         {items.map((i) => {
           const I = ICON[i.kind];
           return (
-            <div key={i.rel} className="glass lib-card" onContextMenu={(e) => itemMenu.open(e, { type: 'file', rel: i.rel, name: i.name })}>
+            <div key={i.rel} className="glass lib-card" onContextMenu={(e) => itemMenu.open(e, { type: 'file', rel: i.rel, name: i.name, folder: i.folder })}>
               <div className="lib-thumb">{i.kind === 'image' ? <img src={i.url} alt="" loading="lazy" /> : <I size={36} />}</div>
               <div className="stack" style={{ gap: 4, padding: '8px 10px 10px' }}>
                 <strong className="truncate small" title={i.name}>{i.name}</strong>

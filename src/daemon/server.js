@@ -504,6 +504,8 @@ route('POST', '/api/campaigns/draft', async (_p, b) => { try { return await camp
 route('POST', '/api/campaigns', async (_p, b) => { try { return { campaign: await campaigns.createCampaign(b || {}) }; } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/campaigns/:cid/repeat', async ({ cid }, b) => { try { return { campaign: await campaigns.repeatCampaign(cid, b || {}) }; } catch (e) { throw new HttpError(400, e.message); } });
 route('DELETE', '/api/campaigns/:cid', async ({ cid }) => campaigns.deleteCampaign(cid));
+route('POST', '/api/campaigns/:cid/items', async ({ cid }, b) => { try { return { campaign: await campaigns.linkItem(cid, b || {}) }; } catch (e) { throw new HttpError(400, e.message); } });
+route('POST', '/api/campaigns/:cid/unlink', async ({ cid }, b) => { try { return { campaign: await campaigns.unlinkItem(cid, String(b.key || '')) }; } catch (e) { throw new HttpError(400, e.message); } });
 
 // ---------------------------------------------------------------- inspiration, blog, photo notes
 route('GET', '/api/inspiration', async (_p, _b, q) => inspiration.inspiration({ period: q?.searchParams?.get('period') || 'quarter' }));
@@ -563,6 +565,7 @@ route('POST', '/api/library/reveal', async (_p, b) => {
   return { ok: true };
 });
 route('POST', '/api/library/save', async (_p, b) => { try { return await library.saveDataUrl(b.folder || 'Graphics', b.name, b.dataUrl); } catch (e) { throw new HttpError(400, e.message); } });
+route('POST', '/api/library/move', async (_p, b) => { try { return { rel: await library.moveFile(String(b.rel || ''), String(b.folder || '')) }; } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/library/rename', async (_p, b) => { try { return { rel: await library.renameFile(String(b.rel || ''), b.name) }; } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/library/erase', async (_p, b) => { try { return { removed: await library.eraseFile(String(b.rel || '')) }; } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/library/trash', async (_p, b) => { try { return await library.trashFile(String(b.rel || '')); } catch (e) { throw new HttpError(400, e.message); } });
@@ -629,6 +632,8 @@ route('DELETE', '/api/finder/folders/:fid', async ({ fid }) => { await finder.de
 route('POST', '/api/finder/folders/:fid/items', async ({ fid }, b) => { await finder.addToFolder(fid, String(b.key)); return { ok: true }; });
 route('POST', '/api/finder/folders/:fid/remove', async ({ fid }, b) => { await finder.removeFromFolder(fid, String(b.key)); return { ok: true }; });
 route('POST', '/api/finder/reveal', async (_p, b) => { try { await revealInFinder(await finder.locate(String(b.key))); return { ok: true }; } catch (e) { throw new HttpError(404, e.message); } });
+route('GET', '/api/finder/folder-list', async () => ({ folders: await finder.folderList() }));
+route('POST', '/api/finder/move', async (_p, b) => { try { await finder.moveToFolder(String(b.key), b.folderId || null); return { ok: true }; } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/finder/rename', async (_p, b) => { try { return { name: await finder.renameItem(String(b.key), b.name) }; } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/finder/source', async (_p, b) => { const f = await finder.sourceOf(String(b.key)); return { file: f ? f.split('/').pop() : null }; });
 route('POST', '/api/finder/delete-source', async (_p, b) => { try { return { removed: await finder.deleteSource(String(b.key)) }; } catch (e) { throw new HttpError(400, e.message); } });

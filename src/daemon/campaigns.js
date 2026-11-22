@@ -173,3 +173,26 @@ export async function setCampaignSermon(id, projectId) {
   await save(all);
   return c;
 }
+
+/** Link any item (a project, clip, design, writing or library file) to a campaign, so it's at hand there. */
+export async function linkItem(id, item) {
+  const all = await load();
+  const c = all.find((x) => x.id === id);
+  if (!c) throw new Error('Campaign not found');
+  const ref = item?.key || (item?.rel ? `file:${item.rel}` : null);
+  if (!ref) throw new Error('Nothing to link.');
+  c.items = (c.items || []).filter((x) => x.key !== ref);
+  c.items.push({ key: ref, name: String(item.name || '').slice(0, 160), type: item.type || 'file', at: new Date().toISOString() });
+  // A sermon linked to a campaign with no sermon yet becomes its sermon.
+  if (!c.projectId && /^(sermon|video):/.test(ref)) c.projectId = ref.split(':').slice(1).join(':');
+  await save(all);
+  return c;
+}
+export async function unlinkItem(id, key) {
+  const all = await load();
+  const c = all.find((x) => x.id === id);
+  if (!c) throw new Error('Campaign not found');
+  c.items = (c.items || []).filter((x) => x.key !== key);
+  await save(all);
+  return c;
+}

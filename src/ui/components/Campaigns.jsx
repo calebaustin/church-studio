@@ -54,6 +54,16 @@ function CampaignCard({ c, onEdit, onRepeat, reload }) {
     if (c.event) return go({ name: 'graphics', event: c.event, eventMode: 'pick', ...camp });
     return go({ name: 'graphics' });
   };
+  // Something linked from a right-click: open it where it lives.
+  const openLinked = (it) => {
+    const [type, ...rest] = it.key.split(':'); const id = rest.join(':');
+    if (type === 'sermon') return go({ name: 'project', id, step: 'plan' });
+    if (type === 'video') return go({ name: 'project', id });
+    if (type === 'clip') { const [pid, cid] = id.split('/'); return go({ name: 'project', id: pid, clip: cid }); }
+    if (type === 'design') return go({ name: 'graphics', design: id });
+    if (type === 'writing') return go({ name: 'writing', project: id });
+    return go({ name: 'assets', section: 'files' });
+  };
   const ICON = { flyer: Shapes, countdown: Shapes, design: Shapes, clip: Clapperboard, photo: ImageIcon };
   return (
     <section className="glass panel stack" style={{ gap: 10 }}>
@@ -68,6 +78,17 @@ function CampaignCard({ c, onEdit, onRepeat, reload }) {
           <button className="rt-btn" title="Delete campaign and its unscheduled drafts" aria-label="Delete campaign" onClick={async () => { await api.del(`/api/campaigns/${c.id}`); toast({ text: `“${c.name}” deleted. Scheduled posts stay on the calendar.` }); reload(); }}><Trash2 size={14} /></button>
         </div>
       </div>
+      {c.items?.length > 0 && (
+        <div className="row wrap" style={{ gap: 6 }}>
+          <span className="small muted">Linked</span>
+          {c.items.map((it) => (
+            <span key={it.key} className="chip camp-link">
+              <button className="camp-link-open" title="Open" onClick={() => openLinked(it)}>{it.name || 'Item'}</button>
+              <button className="camp-link-x" aria-label={`Unlink ${it.name}`} title="Unlink" onClick={async () => { await api.post(`/api/campaigns/${c.id}/unlink`, { key: it.key }); reload(); }}>×</button>
+            </span>
+          ))}
+        </div>
+      )}
       <div className="camp-steps">
         {c.steps.map((st) => {
           const p = st.post;

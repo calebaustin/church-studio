@@ -171,3 +171,23 @@ export async function eraseFile(rel) {
   await moveNote(rel, null);
   return path.basename(f);
 }
+
+/** Move a library file to another of its folders (Photos, Logos…). Returns the new relative path. */
+export async function moveFile(rel, folder) {
+  if (!FOLDERS.includes(folder)) throw new Error('Unknown folder');
+  const f = await libraryFile(rel);
+  if (!f) throw new Error('File not found.');
+  const root = await ensureLibrary();
+  const ext = path.extname(f); const base = path.basename(f, ext);
+  let dest = path.join(root, folder, path.basename(f));
+  for (let n = 2; existsSync(dest); n++) dest = path.join(root, folder, `${base} ${n}${ext}`);
+  if (path.dirname(f) === path.dirname(dest)) return rel;
+  await mkdir(path.dirname(dest), { recursive: true });
+  await rename(f, dest);
+  const next = path.relative(root, dest).split(path.sep).join('/');
+  const { moveNote } = await import('./photos.js');
+  await moveNote(rel, next);
+  const cfg = await loadConfig();
+  if (cfg.appLogo === rel) await saveConfig({ appLogo: next });
+  return next;
+}

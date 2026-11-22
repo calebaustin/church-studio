@@ -12,6 +12,7 @@ import FontMenu, { useFamilies } from '../components/FontMenu.jsx';
 import BackgroundEraser from '../components/BackgroundEraser.jsx';
 import LibraryPicker from '../components/LibraryPicker.jsx';
 import Popover, { PopList } from '../components/Popover.jsx';
+import { applyMap, shuffleMap } from './shuffle.js';
 import { ACCENTS, ARROWS, MORE_BASIC, DEVICE_ASPECT, KINDS, PATTERNS, RESIZE_TARGETS, SHAPES, STROKED, shapeIcon, resizeDesign, blankPage, cohesive, loadAssets, onColor, page as newPage, renderPage, shape as newShape, svgColors, text as newText, uid } from './model.js';
 import { snapMove } from './snap.js';
 import PhotoEdits from './PhotoEdits.jsx';
@@ -106,6 +107,8 @@ export default function DesignEditor({ id, onClose }) {
     }, 90);
   };
   const [swap, setSwap] = useState(null);
+  // Shuffle from brand colors: the latest mapping (original color -> new) for one page, offered for every page.
+  const [shuf, setShuf] = useState(null);
   const [extend, setExtend] = useState(null); // { id, dir: 'next' | 'prev', fresh: true when it needs a new page, at } // { kind: 'color' | 'font', from, to, count, at }
   const pendingSwap = useRef(null);
   const swapTimer = useRef(null);
@@ -227,6 +230,35 @@ export default function DesignEditor({ id, onClose }) {
       if (count > 0) setSwap({ ...q, count, at: Date.now() });
     }, 700);
   }
+  const shuffleColors = () => {
+    const brand = config.brandColors || [];
+    if (brand.length < 2) { toast({ text: 'Add at least two brand colors in Brand library to shuffle from.', action: { label: 'Brand library', run: () => go({ name: 'assets' }) } }); return; }
+    const idx = Math.min(pi, doc.pages.length - 1);
+    // Shuffling again on the same page keeps one mapping from the colors it started with.
+    const origin = {};
+    if (shuf && shuf.pi === idx) for (const [o, n] of Object.entries(shuf.map)) origin[n] = o;
+    const map = shuffleMap(doc.pages[idx], brand, origin);
+    // A mesh background is drawn from the design colors, so those shuffle too (for every mesh page at once).
+    const meshy = doc.pages[idx].bg?.type === 'mesh';
+    const changes = Object.entries(map).some(([o, n]) => o !== n);
+    if (!changes && !meshy) { toast({ text: 'This page has no colors to shuffle yet.' }); return; }
+    update((d) => {
+      applyMap(d.pages[idx], map, origin);
+      if (meshy) {
+        const pal = [...new Set(brand)].map((c) => [Math.random(), c]).sort((a, b) => a[0] - b[0]).map((x) => x[1]);
+        d.palette = Array.from({ length: Math.max(5, d.palette?.length || 5) }, (_, i) => pal[i % pal.length]);
+      }
+      return d;
+    });
+    setSwap(null);
+    setShuf({ map, pi: idx, at: Date.now() });
+  };
+  const shuffleAll = () => {
+    const sh = shuf; if (!sh) return;
+    update((d) => { d.pages.forEach((p2, i) => { if (i !== sh.pi) applyMap(p2, sh.map); }); return d; });
+    setShuf(null);
+    toast({ text: `New colors on all ${doc.pages.length} pages. Undo puts them back.` });
+  };
   const changeEverywhere = (sw) => {
     update((d) => { replaceUses(d, sw.kind, sw.from, sw.to); return d; });
     setSwap(null);
@@ -634,6 +666,15 @@ export default function DesignEditor({ id, onClose }) {
 
         {/* canvas */}
         <div className="dz-center" onPointerDown={(e) => { if (e.target === e.currentTarget && !editing) setSel(null); }}>
+          {shuf && !swap && doc.pages.length > 1 && (
+            <div className="dz-swap" role="status" key={shuf.at}>
+              <span className="dz-swap-what">{Object.entries(shuf.map).slice(0, 4).map(([o, n]) => <i key={o} style={{ background: n }} />)}</span>
+              <span className="small">Apply to all pages?</span>
+              <button className="btn sm primary" onClick={shuffleAll}>Apply to all</button>
+              <button className="dz-swap-x" aria-label="No thanks" title="No thanks" onClick={() => setShuf(null)}><X size={14} /></button>
+              <i className="dz-swap-timer" onAnimationEnd={() => setShuf(null)} />
+            </div>
+          )}
           {swap && (
             <div className="dz-swap" role="status" key={swap.at}>
               <span className="dz-swap-what">
@@ -900,7 +941,10 @@ export default function DesignEditor({ id, onClose }) {
               </label>
               <div className="row between" style={{ gap: 8 }}>
                 <span className="eyebrow">Design colors</span>
+                <span className="row" style={{ gap: 2 }}>
+                <button className="btn ghost sm" title="Swap this page's colors for your brand colors. Colors that match stay matched." onClick={shuffleColors}><Shuffle size={13} />Shuffle</button>
                 <button className="btn ghost sm" title="Use my brand colors" onClick={() => update((d) => { d.palette = [...(config.brandColors || d.palette)].slice(0, 5); while (d.palette.length < 5) d.palette.push('#888888'); return d; })}><Palette size={13} />Brand colors</button>
+                </span>
               </div>
               <div className="row wrap" style={{ gap: 8 }}>
                 {doc.palette.map((c, i) => <ColorField key={i} value={c} onChange={(v) => { noteChange('color', c, v); update((d) => { d.palette[i] = v; return d; }, { record: false }); }} />)}

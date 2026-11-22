@@ -5,7 +5,12 @@ Every update keeps your sermons, designs, drafts and settings. Before a new vers
 ## Unreleased
 
 ### New
-- **Right-click any file or project.** In All projects, Videos and the Brand library, right-click a card for Rename, Show in Finder, Delete project (or Delete clip, or Move to Trash for designs, writing and library files) and Delete source file. Delete source file asks first, then erases the video, export or file from your computer. A project keeps its transcript and clips, and you can add the video back later.
+- **Right-click any file or project.** In All projects, Videos and the Brand library, right-click a card for Rename, Move to, Link to campaign, Show in Finder, Delete project (or Delete clip, or Move to Trash for designs, writing and library files) and Delete source file. Delete source file asks first, then erases the video, export or file from your computer. A project keeps its transcript and clips, and you can add the video back later.
+- **Move to and Link to campaign.** Move to puts the item in one of your folders, or makes a new folder for it. Brand library files move between Photos, Logos and the other library folders. Link to campaign ties the item to a campaign, and campaign cards in Social list what's linked, with a click to open it.
+- **Shuffle brand colors in Design.** Shuffle (under Design colors) swaps the page's colors for your brand colors. Colors that matched still match, so all the gray text turns the same new color together, and text stays readable on its background. On a multi-page design, a toast asks "Apply to all pages?" to use the same color swap everywhere. Shuffle again for another look, and Undo puts it back.
+
+### Fixed
+- Pasting or typing a full hex code in a Brand kit color no longer closes the color picker right away. You see the color first and close it yourself.
 
 ## 0.25.0 · November 21, 2026
 

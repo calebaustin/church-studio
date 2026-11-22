@@ -1867,3 +1867,9 @@ button.tp-tile:active .tp-orb { transform: scale(.92); transition-duration: 120m
 /* Right-click menu on files and projects */
 .item-menu { width: 230px; }
 .pop-sep { border: 0; height: 1px; margin: 4px 6px; background: var(--line); }
+.item-menu-back { color: var(--muted); }
+.camp-link { display: inline-flex; align-items: center; gap: 2px; padding-right: 4px; }
+.camp-link-open, .camp-link-x { border: 0; background: none; color: inherit; font: inherit; cursor: pointer; padding: 0 2px; }
+.camp-link-open:hover { text-decoration: underline; }
+.camp-link-x { color: var(--muted); font-size: 14px; line-height: 1; }
+.camp-link-x:hover { color: var(--bad); }

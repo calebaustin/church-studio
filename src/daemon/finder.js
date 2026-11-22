@@ -257,3 +257,14 @@ export async function deleteItem(key) {
   } else throw new Error('Designs and writing go to the trash.');
   await save(s);
 }
+
+/** Move an item into one folder: it leaves the folders it was in. folderId null takes it out of every folder. */
+export async function moveToFolder(key, folderId) {
+  const s = await load();
+  if (folderId && !s.folders.some((f) => f.id === folderId)) throw new Error('That folder is gone.');
+  for (const f of s.folders) f.items = f.items.filter((k) => k !== key);
+  if (folderId) s.folders.find((f) => f.id === folderId).items.unshift(key);
+  await save(s);
+}
+/** Just the folder names, for Move to. */
+export async function folderList() { return (await load()).folders.map((f) => ({ id: f.id, name: f.name, count: f.items.length })); }
