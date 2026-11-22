@@ -2,7 +2,7 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
-## Unreleased
+## 0.26.0 · November 22, 2026
 
 ### New
 - **Right-click any file or project.** In All projects, Videos and the Brand library, right-click a card for Rename, Move to, Link to campaign, Show in Finder, Delete project (or Delete clip, or Move to Trash for designs, writing and library files) and Delete source file. Delete source file asks first, then erases the video, export or file from your computer. A project keeps its transcript and clips, and you can add the video back later.
