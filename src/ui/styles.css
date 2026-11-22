@@ -1920,3 +1920,18 @@ button.tp-tile:active .tp-orb { transform: scale(.92); transition-duration: 120m
 /* Clip editor: tab groups and the color wash preview */
 .tab-sep { width: 1px; align-self: center; height: 18px; background: var(--line-strong); margin: 0 4px; flex: none; }
 .look-wash { position: absolute; inset: 0; mix-blend-mode: color; pointer-events: none; z-index: 2; }
+
+/* Clip editor: full-screen cards */
+.clip-card-layer { position: absolute; inset: 0; z-index: 5; overflow: hidden; pointer-events: none; display: grid; place-items: center; }
+.clip-card-bg { position: absolute; inset: 0; }
+.clip-card-bg.moving { inset: -12%; animation: card-drift 18s ease-in-out infinite alternate; will-change: transform; }
+.clip-card-bg.moving.glow { animation-name: card-glow; animation-duration: 14s; }
+.clip-card-bg.moving.bokeh { animation-name: card-rise; animation-duration: 22s; }
+@keyframes card-drift { from { transform: translate3d(-3%, -2%, 0) scale(1.02); } to { transform: translate3d(3%, 2%, 0) scale(1.06); } }
+@keyframes card-glow { from { transform: rotate(-4deg) scale(1.05); } to { transform: rotate(4deg) scale(1.1); } }
+@keyframes card-rise { from { transform: translate3d(0, 3%, 0); } to { transform: translate3d(0, -3%, 0); } }
+.clip-card-dim { position: absolute; inset: 0; background: rgb(var(--shade-rgb)); }
+.clip-card-text { position: relative; width: 84%; text-align: center; font-weight: 700; line-height: 1.18; white-space: pre-wrap; text-shadow: 0 2px 6px rgba(var(--shade-rgb), .35); }
+.card-row { padding: 12px; border-radius: 14px; background: var(--field); box-shadow: inset 0 0 0 1px var(--line); }
+.card-time { width: 74px; min-height: 30px; padding: 0 8px; }
+@media (prefers-reduced-motion: reduce) { .clip-card-bg.moving { animation: none; } }

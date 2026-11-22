@@ -16,6 +16,7 @@ import AudioCleanup from '../components/AudioCleanup.jsx';
 import Popover from '../components/Popover.jsx';
 import { useChurchEvents } from '../components/ChurchEvents.jsx';
 import { LOOKS, hasLook, lookFilter } from '../studioLook.js';
+import { CardPreview, CardsPanel } from '../components/ClipCards.jsx';
 
 const FILLERS = new Set(['um', 'uh', 'uhm', 'umm', 'er', 'erm', 'ah']);
 const STUMBLE = new Set(['i', 'a', 'the', 'and', 'that', 'it', 'to', 'or', 'we', 'you', 'is', 'in', 'of', 'so', 'but', 'he', 'they', 'this', 'what', 'if', 'for', 'on', 'my', 'was', "it's", "i'm", "we're", "you're", "that's"]);
@@ -493,6 +494,7 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
                 hook={clip.hideHook ? '' : clip.hook} showHook={!clip.hideHook && (outTime < (themeDraft.hookDuration ?? 3.5) || tab === 'text')}
                 editing={tab === 'text' ? 'hook' : tab === 'look' && clip.captions !== false ? 'captions' : null} onPlace={setPlaced} />
             )}
+            {clip.cards?.length > 0 && <CardPreview cards={clip.cards} outTime={outTime} keep={keep} capWords={capWords} theme={placed} font={font} frameWidth={FW} playing={playing} brand={config.brandColors || []} />}
             {clip.overlay?.rel && (
               <img alt="" src={`/library/${clip.overlay.rel.split('/').map(encodeURIComponent).join('/')}`} style={{
                 position: 'absolute', width: `${(clip.overlay.size ?? 0.18) * 100}%`, opacity: clip.overlay.opacity ?? 1, pointerEvents: 'none', zIndex: 3,
@@ -609,6 +611,7 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
 
           {tab === 'gfx' && (
             <div className="stack" style={{ gap: 14 }}>
+              <CardsPanel clip={clip} set={set} now={outTime} len={outLen} brand={config.brandColors || []} />
               <div className="keycard">
                 <div className="row between"><strong>Logo in the corner</strong>
                   {clip.overlay?.rel ? <button className="btn ghost sm danger" onClick={() => set({ overlay: null })}>Remove</button> : <button className="btn sm" onClick={() => setLibPick('overlay')}>Pick a logo</button>}

@@ -144,6 +144,9 @@ export async function buildJob(project, clip, { preview = false, trackOnly = fal
     audioFilter: audioFilter(clip.audioCleanup !== undefined ? clip.audioCleanup : project.audioCleanup),
     // Text pop-ups (times are in the finished clip) and colors for clips with no picture.
     popups: Array.isArray(clip.popups) ? clip.popups.filter((p) => p.text && p.end > p.start) : [],
+    // Full-screen lyric or scripture cards, in front of everything.
+    cards: Array.isArray(clip.cards) ? clip.cards.filter((c) => c.end > c.start) : [],
+    brandColors: (await loadConfig()).brandColors || [],
     lyric: { colors: (await loadConfig()).brandColors || [] },
   };
 }

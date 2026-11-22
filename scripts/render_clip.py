@@ -323,7 +323,7 @@ class Captions:
         self.font = load_font(theme["fontFile"], theme.get("fontStyle"), int(theme.get("size", 78) * self.k), theme.get("fontIndex"))
         self.cache: dict = {}
         self.events = []  # (start, end, group_idx, active_idx)
-        self.groups = group_words(words, int(theme.get("words", 3)))
+        self.groups = group_words(words, int(theme.get("words", 3)), int(theme.get("maxChars", 22)))
         for gi, g in enumerate(self.groups):
             for wi, w in enumerate(g):
                 s = w["start"]
@@ -624,6 +624,175 @@ class Popups:
 
 
 
+# ---------------------------------------------------------------- full-screen cards (lyrics or scripture)
+
+class CardBackground:
+    """A card's background: solid, gradient, pattern, mesh, or a slow moving one (drift, glow, bokeh).
+    Drawn small and scaled up, so moving ones stay cheap and soft."""
+
+    def __init__(self, bg: dict, W: int, H: int, brand):
+        bg = bg or {}
+        self.type = bg.get("type", "mesh")
+        cols = [hex_bgr(c) for c in (bg.get("colors") or brand or ["#1F3A2E", "#2B7F5F", "#D9A441"])]
+        while len(cols) < 3:
+            cols.append(cols[-1])
+        self.c = cols[:3]
+        self.W, self.H = W, H
+        self.w, self.h = max(8, W // 6), max(8, H // 6)
+        yy, xx = np.mgrid[0:self.h, 0:self.w].astype(np.float32)
+        self.X, self.Y = xx / self.w, yy / self.h
+        self.motion = bg.get("motion", "drift")
+        self.pattern = bg.get("pattern", "dots")
+        self.dim = max(0.0, min(0.7, float(bg.get("dim", 0.18))))
+        self.static = None if self.type == "motion" else self._draw(0.0)
+
+    def frame(self, t: float):
+        return self.static if self.static is not None else self._draw(t)
+
+    def _blob(self, img, cx, cy, r, col, k=1.0):
+        d = ((self.X - cx) ** 2 + ((self.Y - cy) * self.h / self.w) ** 2) / (r * r)
+        a = (np.exp(-d) * k)[:, :, None]
+        return img * (1 - a) + col[None, None, :] * a
+
+    def _draw(self, t: float):
+        c0, c1, c2 = self.c
+        base = np.ones((self.h, self.w, 3), np.float32) * c0
+        kind = self.type if self.type != "motion" else {"drift": "mesh", "glow": "gradient", "bokeh": "gradient"}.get(self.motion, "mesh")
+        if kind == "gradient":
+            ang = 2.35 + (t * 0.12 if self.type == "motion" else 0.0)
+            v = np.clip((self.X - 0.5) * np.cos(ang) + (self.Y - 0.5) * np.sin(ang) + 0.5, 0, 1)[:, :, None]
+            base = c0 * (1 - v) + c1 * v
+            if self.type == "motion" and self.motion == "glow":
+                base = self._blob(base, 0.5 + 0.2 * np.sin(t * 0.3), 0.45, 0.45, c2, 0.35 + 0.1 * np.sin(t * 0.6))
+        elif kind == "mesh":
+            m = t if self.type == "motion" else 0.0
+            base = self._blob(base, 0.22 + 0.1 * np.sin(m * 0.35), 0.28 + 0.06 * np.cos(m * 0.27), 0.42, c1, 0.85)
+            base = self._blob(base, 0.78 + 0.08 * np.cos(m * 0.31), 0.72 + 0.07 * np.sin(m * 0.22), 0.45, c2, 0.75)
+            base = self._blob(base, 0.8 + 0.06 * np.sin(m * 0.4 + 1), 0.18 + 0.05 * np.cos(m * 0.33), 0.3, c1, 0.5)
+        if self.type == "motion" and self.motion == "bokeh":
+            for i in range(7):  # soft lights rising slowly
+                x = (i * 0.37 + 0.11) % 1.0
+                y = 1.1 - ((t * 0.025 + i * 0.19) % 1.3)
+                base = self._blob(base, x, y, 0.07 + 0.03 * (i % 3), c2, 0.35)
+        out = cv2.resize(np.clip(base, 0, 255).astype(np.uint8), (self.W, self.H), interpolation=cv2.INTER_CUBIC)
+        if self.type == "pattern":
+            ov = out.copy()
+            step = max(12, self.W // 14)
+            col = tuple(int(v) for v in c1)
+            if self.pattern == "lines":
+                for k in range(-self.H, self.W, step):
+                    cv2.line(ov, (k, 0), (k + self.H, self.H), col, max(2, step // 10), cv2.LINE_AA)
+            elif self.pattern == "grid":
+                for k in range(0, max(self.W, self.H), step):
+                    cv2.line(ov, (k, 0), (k, self.H), col, 1, cv2.LINE_AA)
+                    cv2.line(ov, (0, k), (self.W, k), col, 1, cv2.LINE_AA)
+            else:
+                for yy in range(step // 2, self.H, step):
+                    for xx in range(step // 2 + (step // 2 if (yy // step) % 2 else 0), self.W, step):
+                        cv2.circle(ov, (xx, yy), max(2, step // 9), col, -1, cv2.LINE_AA)
+            out = cv2.addWeighted(ov, 0.35, out, 0.65, 0)
+        if self.dim > 0:
+            out = (out.astype(np.float32) * (1 - self.dim)).astype(np.uint8)
+        return out
+
+
+class StaticText:
+    def __init__(self, placed):
+        self.placed = placed
+
+    def at(self, t):
+        return [self.placed]
+
+
+def card_text_image(text: str, th: dict, W: int, H: int):
+    """Your own words on a card: the caption font and color, as large as fits 84% of the width and 60% of the height."""
+    k = min(W, H) / 1080
+    lines_in = [ln.strip() for ln in str(text).split("\n") if ln.strip()]
+    size = int(float(th.get("size", 78)) * 1.5 * k)
+    for _ in range(14):
+        font = load_font(th["fontFile"], th.get("fontStyle"), max(12, size), th.get("fontIndex"))
+        maxw = W * 0.84
+        lines = []
+        for para in lines_in:
+            cur = ""
+            for word in para.split():
+                trial = f"{cur} {word}".strip()
+                if cur and font.getlength(trial) > maxw:
+                    lines.append(cur)
+                    cur = word
+                else:
+                    cur = trial
+            if cur:
+                lines.append(cur)
+        asc, desc = font.getmetrics()
+        lh = int((asc + desc) * 1.18)
+        if lh * len(lines) <= H * 0.6 or size <= 24 * k:
+            break
+        size = int(size * 0.88)
+    pad = int(30 * k)
+    w = int(max(font.getlength(ln) for ln in lines) + 2 * pad) if lines else 2
+    h = lh * len(lines) + 2 * pad
+    img = Image.new("RGBA", (max(2, w), max(2, h)), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    fg = hex_rgba(th.get("color", "#FFFFFF"))
+    for i, ln in enumerate(lines):
+        x = (w - font.getlength(ln)) / 2
+        d.text((x + 2 * k, pad + i * lh + 3 * k), ln, font=font, fill=(0, 0, 0, 90))
+        d.text((x, pad + i * lh), ln, font=font, fill=fg)
+    arr = np.array(img)
+    return arr, (W - arr.shape[1]) // 2, (H - arr.shape[0]) // 2, 1.0
+
+
+class Cards:
+    """Full-screen cards in front of everything, for a while: the words being said (styled like the captions,
+    larger and centered) or your own text, like a verse. Fade, blur or slide in and out."""
+
+    def __init__(self, items, words, W, H, theme, brand):
+        self.W, self.H = W, H
+        self.items = []
+        for c in items or []:
+            try:
+                s, e = float(c.get("start", 0)), float(c.get("end", 0))
+            except (TypeError, ValueError):
+                continue
+            if e <= s:
+                continue
+            th = dict(theme)
+            th.update({"size": float(theme.get("size", 78)) * float(c.get("scale", 1.35)), "position": 0.5, "maxWidth": 0.84, "words": int(c.get("words", 10)), "maxChars": 70, "align": "center"})
+            text = str(c.get("text") or "").strip()
+            if text:  # your own text, like a verse: one centered block, sized to fit, no word-by-word highlight
+                caps = StaticText(card_text_image(text, th, W, H))
+            else:
+                ws = [w for w in words if w["start"] >= s - 0.05 and w["end"] <= e + 0.05]
+                caps = Captions(ws, th, W, H, None, e)
+            self.items.append((s, e, c.get("transition", "fade"), caps, CardBackground(c.get("bg") or {}, W, H, brand)))
+
+    def apply(self, img, t: float):
+        for s, e, tr, caps, bg in self.items:
+            if t < s or t > e:
+                continue
+            d = 0.45
+            r = max(0.0, min(1.0, (t - s) / d, (e - t) / d))
+            ease = 1 - (1 - r) ** 3
+            card = bg.frame(t - s).copy()
+            for arr, x, y, op in caps.at(t):
+                blend(card, arr, x, y, op)
+            if tr.startswith("slide"):
+                dx, dy = {"slide-left": (1, 0), "slide-right": (-1, 0), "slide-up": (0, 1), "slide-down": (0, -1)}.get(tr, (0, 1))
+                ox, oy = int(dx * (1 - ease) * self.W), int(dy * (1 - ease) * self.H)
+                M = np.float32([[1, 0, ox], [0, 1, oy]])
+                moved = cv2.warpAffine(card, M, (self.W, self.H), borderMode=cv2.BORDER_CONSTANT)
+                mask = cv2.warpAffine(np.full((self.H, self.W), 255, np.uint8), M, (self.W, self.H)) > 0
+                img[mask] = moved[mask]
+            else:
+                if tr == "blur" and ease < 1:
+                    k = int(1 + (1 - ease) * self.W / 30) | 1
+                    img[:] = cv2.GaussianBlur(img, (k, k), 0)
+                    card = cv2.GaussianBlur(card, (k, k), 0)
+                img[:] = cv2.addWeighted(card, ease, img, 1 - ease, 0)
+        return img
+
+
 def split_frame(frame, src_w, src_h, W, H, split, gap, interp):
     """Stack two crops of one shot: the person at split[0] on top, split[1] below, with a thin gap."""
     g = int(round((gap if gap is not None else 8) * W / 1080)) // 2 * 2
@@ -885,6 +1054,7 @@ def main() -> None:
     look_t = look_tables(look) if mode != "lyric" else None
     blur_amt_bg = max(0.0, min(1.0, float((look or {}).get("blur", 0) or 0)))
     blur_w = blur_weights(W, H) if blur_amt_bg > 0.01 and mode in ("auto", "manual", "cues") else None
+    cards = Cards(job.get("cards"), words, W, H, theme, (job.get("lyric") or {}).get("colors") or job.get("brandColors")) if job.get("cards") else None
     pops = Popups(job.get("popups"), W, H, theme, (job.get("lyric") or {}).get("colors", ["#D9A441"])[1] if len((job.get("lyric") or {}).get("colors", [])) > 1 else "#D9A441")
     dec = None if lyric else subprocess.Popen(
         [FFMPEG, "-loglevel", "error", "-ss", f"{start:.3f}", "-t", f"{dur:.3f}", "-i", src, "-an",
@@ -977,6 +1147,8 @@ def main() -> None:
                 band = img[py:py + ph]
                 band[:] = (band.astype(np.float32) * 0.55).astype(np.uint8)
                 band[:, :int(W * min(1.0, t_out / max(out_len, 0.01)))] = pc
+            if cards is not None:
+                cards.apply(img, t_out)
             if intro_card and t_out < intro_card[1]:
                 # Shows from the start, then moves out over its last 0.4 seconds.
                 arr, x, y, op = card_at(intro_card, (intro_card[1] - t_out) / 0.4, False)
