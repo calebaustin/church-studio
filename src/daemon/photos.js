@@ -8,7 +8,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import os from 'node:os';
 import { DATA_DIR, run as runTool, tool } from './tools.js';
-import { libraryFile } from './library.js';
+import { libraryFile, libraryRoot } from './library.js';
 import { loadConfig } from './config.js';
 import { describeImage, providerReady, withFallback } from './ai.js';
 
@@ -104,4 +104,47 @@ export async function moveNote(from, to) {
   if (to) notes[to] = notes[from];
   delete notes[from];
   await writeFile(STORE, JSON.stringify(notes, null, 2));
+}
+
+// ---------------------------------------------------------------- cutting subjects out of a picture
+// Apple's Vision framework (macOS 14 and later) finds each person, animal or object that stands out, and lifts
+// the ones you pick off any background, on this Mac.
+const lastJson = (stdout) => { const line = String(stdout).trim().split('\n').filter(Boolean).pop(); return line ? JSON.parse(line) : {}; };
+
+/** The subjects in a library picture: each one's outline (a small mask as a data URL) and where it is. */
+export async function findSubjects(rel) {
+  const f = await libraryFile(rel);
+  if (!f) throw new Error('File not found.');
+  const dir = path.join(os.tmpdir(), `cs-subjects-${Date.now().toString(36)}`);
+  await mkdir(dir, { recursive: true });
+  try {
+    const { stdout } = await runTool(tool('cs-vision'), ['--subjects', f, dir]);
+    const r = lastJson(stdout);
+    if (r.error) throw new Error(r.error);
+    const subjects = [];
+    for (const s of r.subjects || []) {
+      const png = await readFile(s.file);
+      subjects.push({ index: s.index, box: s.box, mask: `data:image/png;base64,${png.toString('base64')}` });
+    }
+    return { subjects, width: r.width, height: r.height };
+  } catch (e) {
+    if (/ENOENT|not found|spawn/i.test(String(e.message))) throw new Error('Cutting out subjects needs the Church Studio app on macOS 14 or later.');
+    throw e;
+  } finally { await rm(dir, { recursive: true, force: true }); }
+}
+
+/** Save the picked subjects on a see-through background, next to the original. Returns the new file's path. */
+export async function cutOutSubjects(rel, picks = [], { crop = true } = {}) {
+  const f = await libraryFile(rel);
+  if (!f) throw new Error('File not found.');
+  const base = path.basename(f).replace(/\.[^.]+$/, '');
+  let out = path.join(path.dirname(f), `${base} cutout.png`);
+  for (let n = 2; existsSync(out); n++) out = path.join(path.dirname(f), `${base} cutout ${n}.png`);
+  const chosen = (picks || []).map(Number).filter(Number.isInteger);
+  const args = ['--cutout', f, out, ...(chosen.length ? [chosen.join(',')] : []), ...(crop ? ['--crop'] : [])];
+  const { stdout } = await runTool(tool('cs-vision'), args);
+  const r = lastJson(stdout);
+  if (r.error) throw new Error(r.error);
+  const root = await libraryRoot();
+  return { rel: path.relative(root, out).split(path.sep).join('/'), width: r.width, height: r.height };
 }

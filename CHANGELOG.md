@@ -2,7 +2,7 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
-## Unreleased
+## 0.27.0 · November 22, 2026
 
 ### New
 - **Check the spots before you download.** The YouTube dialog plays the video right there. Scrub to a spot and press Start here or End here; click Start or End to jump the video to that time.
@@ -13,6 +13,7 @@ Every update keeps your sermons, designs, drafts and settings. Before a new vers
 - **"You often keep clips like this."** Suggested clips that look like the ones your church usually keeps get a star. It never changes the score.
 - **Writing when you ask.** A sermon's writing opens empty, with the blog's title, keyphrase and description suggested from the sermon summary. Pick an angle and press Write post; the post's heading always matches the title you chose. Email, guide and devotional each have a Write it button, and social captions are written about a clip you kept or the blog post.
 - **Spots to fill in.** Click the pill to jump to the next [bracketed] spot.
+- **Cut out subjects.** In Design or the Brand library, Cut out subjects finds each person or thing in a photo. Click the ones to keep, and they're saved on a see-through background next to the original, trimmed to fit if you like. Works on any background, on this Mac (macOS 14 or later).
 - **Post the sermon to YouTube.** On the Sermon page, Post to YouTube uploads just the sermon as its own video, titled the way you title sermons ("In Remembrance | Chris Parker 11.15.2026"), and adds it to your "Sunday Sermons" playlist (made if it isn't there). The sermon title, preacher and date are read from the livestream's title when they're in it, and the preacher, playlist and privacy are remembered for next week. Uploads show real progress. If you connected YouTube before this update, connect it again in Social › Accounts so Church Studio can add videos to playlists.
 
 ### Changed

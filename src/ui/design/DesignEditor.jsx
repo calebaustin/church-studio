@@ -3,13 +3,14 @@ import {
   AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical,
   ArrowLeft, ArrowRight, BringToFront, Check, ChevronDown, ChevronLeft, ChevronRight, Circle, Copy, Download, Grid3x3, Image as ImageIcon,
   Magnet, Minus, MonitorUp, Hexagon, Scaling, Smartphone, Laptop, Eraser, ImageOff, Play, RefreshCw, Plus, QrCode, Redo2, SendToBack, Shapes, Square, Trash2, Type, Undo2, Shuffle, X,
-  Send, FlipHorizontal2, FlipVertical2, Link2, AlignLeft, AlignCenter, AlignRight, Palette,
+  Send, FlipHorizontal2, FlipVertical2, Link2, AlignLeft, AlignCenter, AlignRight, Palette, Scissors,
 } from 'lucide-react';
 import { useApp, useHelperFocus } from '../App.jsx';
 import { api } from '../api.js';
 import ColorField from '../components/ColorField.jsx';
 import FontMenu, { useFamilies } from '../components/FontMenu.jsx';
 import BackgroundEraser from '../components/BackgroundEraser.jsx';
+import SubjectCutout from '../components/SubjectCutout.jsx';
 import LibraryPicker from '../components/LibraryPicker.jsx';
 import Popover, { PopList } from '../components/Popover.jsx';
 import { applyMap, shuffleMap } from './shuffle.js';
@@ -83,6 +84,7 @@ export default function DesignEditor({ id, onClose }) {
   const [grid, setGrid] = useState(false);
   const [picker, setPicker] = useState(null);
   const [erasing, setErasing] = useState(null); // library path of the picture being cleared
+  const [cutting, setCutting] = useState(null); // library path of the picture to cut subjects out of
   const [saved, setSaved] = useState(true);
   // "Change X to Y everywhere?": offered after a color or font change settles, when the old value is used elsewhere.
   // The shape panel: Basic, Accents and Arrows, side by side. Swipe between them or pick a tab.
@@ -862,6 +864,7 @@ export default function DesignEditor({ id, onClose }) {
                 </div>
               )}
               {item.type === 'image' && !/\.svg$/i.test(item.rel) && <button className="btn sm" onClick={() => setErasing(item.rel)}><Eraser size={13} />Erase background</button>}
+              {item.type === 'image' && !/\.svg$/i.test(item.rel) && <button className="btn sm" title="Keep just the people or things you pick" onClick={() => setCutting(item.rel)}><Scissors size={13} />Cut out subjects</button>}
               {item.type === 'image' && !/\.svg$/i.test(item.rel) && <PhotoEdits value={item.adjust} colors={colors} onChange={(adjust) => setItem({ adjust }, { record: false })} />}
               {item.type === 'image' && /\.svg$/i.test(item.rel) && <SvgColors item={item} cache={cache.current} swatches={colors} onChange={(recolor) => setItem({ recolor }, { record: false })} />}
               {item.type === 'qr' && (
@@ -968,6 +971,7 @@ export default function DesignEditor({ id, onClose }) {
         </aside>
       </div>
 
+      {cutting && <SubjectCutout rel={cutting} onClose={() => setCutting(null)} onSaved={(out) => { setCutting(null); setItem({ rel: out.rel }); toast({ text: 'Cut out. The copy is in your brand library, next to the original.' }); }} />}
       {erasing && <BackgroundEraser rel={erasing} onClose={() => setErasing(null)} onSaved={(out) => { setErasing(null); setItem({ rel: out.rel }); toast({ text: 'Background erased. The copy is in your brand library.' }); }} />}
       {picker && (
         <LibraryPicker folder={picker === 'logo' ? 'Logos' : 'All'} title={picker === 'logo' ? 'Pick a logo' : picker === 'bg' ? 'Pick a background photo' : picker === 'frame' ? 'Pick a photo for this shape' : 'Pick a photo'} onClose={() => setPicker(null)}

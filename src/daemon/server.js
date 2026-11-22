@@ -581,6 +581,8 @@ route('POST', '/api/library/reveal', async (_p, b) => {
   return { ok: true };
 });
 route('POST', '/api/library/save', async (_p, b) => { try { return await library.saveDataUrl(b.folder || 'Graphics', b.name, b.dataUrl); } catch (e) { throw new HttpError(400, e.message); } });
+route('POST', '/api/library/subjects', async (_p, b) => { try { return await photos.findSubjects(String(b.rel || '')); } catch (e) { throw new HttpError(400, e.message); } });
+route('POST', '/api/library/cutout', async (_p, b) => { try { return await photos.cutOutSubjects(String(b.rel || ''), b.picks || [], { crop: b.crop !== false }); } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/library/move', async (_p, b) => { try { return { rel: await library.moveFile(String(b.rel || ''), String(b.folder || '')) }; } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/library/rename', async (_p, b) => { try { return { rel: await library.renameFile(String(b.rel || ''), b.name) }; } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/library/erase', async (_p, b) => { try { return { removed: await library.eraseFile(String(b.rel || '')) }; } catch (e) { throw new HttpError(400, e.message); } });

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import ToolIntro, { introSeen } from '../components/ToolIntro.jsx';
-import { FolderOpen, Plus, Image as ImageIcon, Film, FileText, Shapes, Eye, X, Wand2, Palette, Heart, Trash2, MoreHorizontal, Star, RefreshCw, Search, Globe, Eraser, Sun, Tags } from 'lucide-react';
+import { FolderOpen, Plus, Image as ImageIcon, Film, FileText, Shapes, Eye, X, Wand2, Palette, Heart, Trash2, MoreHorizontal, Star, RefreshCw, Search, Globe, Eraser, Sun, Tags , Scissors } from 'lucide-react';
 import { useApp } from '../App.jsx';
 import { api, desktop, sizeLabel } from '../api.js';
 import { usePoll } from '../poll.js';
@@ -8,6 +8,7 @@ import ColorField from '../components/ColorField.jsx';
 import FontMenu, { useFamilies } from '../components/FontMenu.jsx';
 import { WebsiteSetup } from '../components/Jumpstart.jsx';
 import BackgroundEraser from '../components/BackgroundEraser.jsx';
+import SubjectCutout from '../components/SubjectCutout.jsx';
 import PhotoNotes, { TagBatch } from '../components/PhotoNotes.jsx';
 import SetupChecklist from '../components/SetupChecklist.jsx';
 import Popover from '../components/Popover.jsx';
@@ -250,6 +251,7 @@ export default function BrandLibrary({ section }) {
   const kit = () => { setTab('kit'); setTimeout(() => document.getElementById('brand-kit')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60); };
   const [webSetup, setWebSetup] = useState(false);
   const [erasingFile, setErasingFile] = useState(null);
+  const [cuttingFile, setCuttingFile] = useState(null);
   const [notes, setNotes] = useState({});
   const [batch, setBatch] = useState(null); // pictures just added, waiting for a description and tags
   const [noting, setNoting] = useState(null);
@@ -278,6 +280,7 @@ export default function BrandLibrary({ section }) {
       {webSetup && <WebsiteSetup onClose={() => setWebSetup(false)} />}
       {batch && <TagBatch items={batch} onClose={() => setBatch(null)} onSaved={async () => { setBatch(null); const r = await api.get('/api/library/notes'); setNotes(r.notes || {}); }} />}
       {noting && <PhotoNotes item={noting} note={notes[noting.rel]} onClose={() => setNoting(null)} onSaved={(n) => { setNotes((x) => { const y = { ...x }; if (n) y[noting.rel] = n; else delete y[noting.rel]; return y; }); setNoting(null); }} />}
+      {cuttingFile && <SubjectCutout rel={cuttingFile} onClose={() => setCuttingFile(null)} onSaved={() => { setCuttingFile(null); load(); toast({ text: 'Cut out and saved next to the original.' }); }} />}
       {erasingFile && <BackgroundEraser rel={erasingFile} onClose={() => setErasingFile(null)} onSaved={() => { setErasingFile(null); load(); }} />}
       {lib && introSeen(config, 'assets') && (
         <SetupChecklist id="brand-setup" eyebrow="Set up your brand" title={(done, total) => (done === 0 ? 'A few building blocks' : `${done} of ${total} done`)} steps={[
@@ -333,6 +336,7 @@ export default function BrandLibrary({ section }) {
                   {i.kind === 'image' && <button className="btn sm" onClick={() => go({ name: 'graphics', image: i.rel })}><Shapes size={13} />Use in a graphic</button>}
                   {i.kind === 'image' && <button className={`btn sm ${notes[i.rel]?.alt ? '' : 'ghost'}`} title="Alt text and tags" onClick={() => setNoting(i)}>Alt</button>}
                   {i.kind === 'image' && !/\.svg$/i.test(i.rel) && <button className="btn icon sm" title="Erase background" aria-label="Erase background" onClick={() => setErasingFile(i.rel)}><Eraser size={14} /></button>}
+                  {i.kind === 'image' && !/\.svg$/i.test(i.rel) && <button className="btn icon sm" title="Cut out subjects" aria-label="Cut out subjects" onClick={() => setCuttingFile(i.rel)}><Scissors size={14} /></button>}
                 </div>
               </div>
             </div>
