@@ -2,7 +2,7 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
-## Unreleased
+## 0.28.0 · November 22, 2026
 
 ### New
 - **Connections.** My App has a Connections button that brings together your social pages, sign-ins, church calendar and automatic posting. Social › Accounts and Settings show the same panel.
