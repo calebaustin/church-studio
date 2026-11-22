@@ -99,8 +99,13 @@ export function childEnv() {
     FFMPEG_PATH: tool('ffmpeg'),
     FFPROBE_PATH: tool('ffprobe'),
     SC_ASSETS: ASSETS_DIR,
+    // The bundled media engine (Python, for yt-dlp and model downloads) was built where trusted certificates
+    // live in Homebrew's folder. A Mac without Homebrew doesn't have that file, so every secure download
+    // failed there ("CERTIFICATE_VERIFY_FAILED"). Every Mac ships its own list here; point to it.
+    ...(!process.env.SSL_CERT_FILE && existsSync(SYSTEM_CERTS) ? { SSL_CERT_FILE: SYSTEM_CERTS } : {}),
   };
 }
+const SYSTEM_CERTS = '/etc/ssl/cert.pem';
 
 /**
  * Run a program and collect its output. Rejects on a non-zero exit with the tail of stderr.

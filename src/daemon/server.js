@@ -26,6 +26,7 @@ import * as photos from './photos.js';
 import * as library from './library.js';
 import * as links from './links.js';
 import { traySummary } from './tray.js';
+import { startFresh } from './reset.js';
 import * as writing from './writing.js';
 import * as voice from './voice.js';
 import * as designs from './designs.js';
@@ -166,7 +167,7 @@ route('GET', '/api/youtube/channel-info', async (_p, _b, url) => {
   const cfg = await loadConfig();
   const channel = url.searchParams.get('channel') || cfg.youtubeChannel;
   if (!channel) throw new HttpError(400, 'Add your YouTube channel first.');
-  try { return { info: await channelDetails(channel) }; } catch (e) { throw new HttpError(502, `Couldn't find that channel. Check the link or handle. ${e.message.slice(-160)}`); }
+  try { return { info: await channelDetails(channel) }; } catch (e) { throw new HttpError(502, e.message); }
 });
 
 route('POST', '/api/youtube/scout', async (_p, b) => {
@@ -502,6 +503,13 @@ route('POST', '/api/jumpstart/reveal', async (_p, b) => {
 });
 
 // ---------------------------------------------------------------- workspaces
+// Start fresh: everything saved goes to the Trash, then the engine restarts as on the first day.
+route('POST', '/api/start-fresh', async (_p, b) => {
+  if (b?.confirm !== 'start fresh') throw new HttpError(400, 'Confirm first.');
+  const r = await startFresh();
+  setTimeout(() => process.exit(75), 300);
+  return { ok: true, ...r, restarting: true };
+});
 route('GET', '/api/workspaces', () => workspaces.listWorkspaces());
 route('POST', '/api/workspaces', async (_p, b) => { try { return { workspace: await workspaces.createWorkspace(b) }; } catch (e) { throw new HttpError(400, e.message); } });
 route('PATCH', '/api/workspaces/:wid', async ({ wid }, b) => ({ workspace: await workspaces.renameWorkspace(wid, b.name) }));

@@ -2,6 +2,15 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## Unreleased
+
+### New
+- **Start fresh.** If a setting got changed by mistake, Settings has a Start fresh button in its own small panel under the list. It explains what clears and what stays, and asks if you're sure. Everything cleared goes into one folder in the Trash, so you can get it back until you empty the Trash. Downloaded helper programs stay.
+
+### Fixed
+- **YouTube works on Macs without developer tools.** On a Mac that had never had developer tools installed, connecting a YouTube channel or downloading a video failed with "certificate verify failed". Church Studio now uses the Mac's own list of trusted certificates, so secure downloads work on every Mac. This also covers downloading transcription models.
+- YouTube errors are in plain words now ("Couldn't reach YouTube. Check your internet connection.") instead of the downloader's technical message.
+
 ## 0.21.0 · November 21, 2026
 
 ### New

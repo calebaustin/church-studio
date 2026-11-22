@@ -2,7 +2,7 @@ import Backups from '../components/Backups.jsx';
 import Toggle from '../components/Toggle.jsx';
 import AIHelperSettings from '../components/AIHelperSettings.jsx';
 import { useEffect, useRef, useState } from 'react';
-import { Plus, AlertTriangle, Droplets, PanelTop } from 'lucide-react';
+import { Plus, AlertTriangle, Droplets, PanelTop, RotateCcw, Trash2 } from 'lucide-react';
 import { useApp, applyAppTheme, activeAppTheme } from '../App.jsx';
 import { api, desktop, openLink, fmt } from '../api.js';
 import VideoThemeEditor from '../components/VideoThemeEditor.jsx';
@@ -33,11 +33,16 @@ export default function Settings({ section: initial }) {
   const [section, setSection] = useState(initial === 'start' ? 'menu' : initial || 'menu');
   return (
     <div className="page settings">
-      <nav className="glass">
-        {SECTIONS.map(([id, label]) => (
-          <button key={id} className={section === id ? 'on' : ''} onClick={() => setSection(id)}>{label}</button>
-        ))}
-      </nav>
+      <div className="settings-side">
+        <nav className="glass">
+          {SECTIONS.map(([id, label]) => (
+            <button key={id} className={section === id ? 'on' : ''} onClick={() => setSection(id)}>{label}</button>
+          ))}
+        </nav>
+        <div className="glass settings-fresh">
+          <button className={`btn ghost sm danger${section === 'fresh' ? ' on' : ''}`} onClick={() => setSection('fresh')}><RotateCcw size={14} />Start fresh</button>
+        </div>
+      </div>
       <div className="stack" style={{ gap: 18 }}>
         {section === 'menu' && <YourTools />}
         {section === 'connections' && <Connections />}
@@ -54,6 +59,7 @@ export default function Settings({ section: initial }) {
         {section === 'church' && <AppLogo />}
         {section === 'backups' && <Backups />}
         {section === 'updates' && <Updates />}
+        {section === 'fresh' && <StartFresh onCancel={() => setSection('menu')} />}
       </div>
     </div>
   );
@@ -470,5 +476,38 @@ function Updates() {
         {log ? <Changelog text={log} current={ver?.version} /> : <div className="skeleton" style={{ height: 200 }} />}
       </section>
     </>
+  );
+}
+
+/** Start fresh: move everything to the Trash and begin again, for when settings got tangled. */
+function StartFresh({ onCancel }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const go = async () => {
+    setBusy(true); setError(null);
+    try {
+      await api.post('/api/start-fresh', { confirm: 'start fresh' });
+      // The engine restarts; the desktop app reloads the window on its own. In a browser, reload once it's back.
+      if (!desktop) setTimeout(() => location.reload(), 2500);
+    } catch (e) { setError(e.message); setBusy(false); }
+  };
+  return (
+    <section className="glass strong panel stack" style={{ gap: 14, maxWidth: 640 }}>
+      <div className="row" style={{ gap: 10 }}><span className="type-badge t-clip" style={{ width: 34, height: 34 }}><RotateCcw size={17} /></span><h2>Start fresh</h2></div>
+      <p>If a setting got changed by mistake and things aren't working, you can start over as if you just installed Church Studio.</p>
+      <div className="keycard stack" style={{ gap: 6 }}>
+        <strong className="small">This clears</strong>
+        <span className="small muted">Your settings and connected accounts, sermons and clips, designs, writing, posts, campaigns, backups and every brand.</span>
+        <strong className="small" style={{ marginTop: 6 }}>This keeps</strong>
+        <span className="small muted">Helper programs you downloaded, like CS Helper, so they don't need to download again. Videos you exported to your own folders stay where they are.</span>
+      </div>
+      <p className="small muted">Everything cleared goes into one folder in the Trash, named “Church Studio data” with today's date. Until you empty the Trash, you can get it back.</p>
+      {error && <div className="banner bad">{error}</div>}
+      <strong>Are you sure?</strong>
+      <div className="row wrap" style={{ gap: 8 }}>
+        <button className="btn danger" disabled={busy} onClick={go}><Trash2 size={15} />{busy ? 'Starting fresh…' : 'Yes, start fresh'}</button>
+        <button className="btn ghost" disabled={busy} onClick={onCancel}>Keep everything</button>
+      </div>
+    </section>
   );
 }

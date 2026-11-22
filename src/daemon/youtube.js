@@ -5,7 +5,23 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { run, tool, probe, pyCommand } from './tools.js';
 
-const ytdlp = (args, opts) => run(...pyCommand('yt-dlp', args), opts);
+const ytdlp = (args, opts) => run(...pyCommand('yt-dlp', args), opts).catch((e) => { throw Object.assign(new Error(plainYtError(e.message)), { stdout: e.stdout }); });
+
+/** yt-dlp's errors in plain words, without its "report this issue on GitHub" advice. */
+export function plainYtError(msg) {
+  const m = String(msg || '');
+  if (/CERTIFICATE_VERIFY_FAILED|SSL: |certificate verify failed/i.test(m)) return 'Couldn’t make a secure connection to YouTube. Update Church Studio to the newest version and try again.';
+  if (/does not exist|HTTP Error 404|This channel is not available|Unable to recognize tab page|not a valid URL/i.test(m)) return 'YouTube doesn’t know that channel. Check the link or handle.';
+  if (/Sign in to confirm|not a bot/i.test(m)) return 'YouTube asked to confirm this isn’t a robot. Wait a few minutes and try again.';
+  if (/getaddrinfo|Name or service not known|nodename nor servname|Failed to resolve|timed out|Network is unreachable|Connection refused|Temporary failure/i.test(m)) return 'Couldn’t reach YouTube. Check your internet connection and try again.';
+  if (/Cancelled/.test(m)) return 'Cancelled';
+  const line = (m.match(/ERROR:\s*(.*)/) || [null, m])[1]
+    .replace(/^\[[^\]]+\]\s*[^:]*:\s*/, '')
+    .replace(/;?\s*please report this issue[\s\S]*$/i, '')
+    .replace(/Confirm you are on the latest version[\s\S]*$/i, '')
+    .trim();
+  return line.slice(0, 220) || 'YouTube didn’t answer the way we expected. Try again in a minute.';
+}
 import { createProject, deleteProject, file, getProject, updateProject } from './projects.js';
 import { existsSync } from 'node:fs';
 import { makeThumbs } from './thumbs.js';
