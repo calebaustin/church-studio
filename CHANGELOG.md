@@ -2,6 +2,11 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## Unreleased
+
+### Changed
+- **More of your fonts.** Font menus already list the fonts installed on your Mac, including ones you've added yourself. They now also include fonts you turned on in Adobe Fonts and the extra Apple fonts you downloaded in Font Book. Fonts you install while Church Studio is open show up the next time you open a font menu, with no refresh needed.
+
 ## 0.22.0 · November 21, 2026
 
 ### New

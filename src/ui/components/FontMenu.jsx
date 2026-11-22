@@ -34,7 +34,7 @@ export default function FontMenu({ value, onChange, options, label, align = 'lef
   return (
     <div className="stack" style={{ gap: 6, position: 'relative', width }}>
       {label && <span className="field-label">{label}</span>}
-      <button type="button" className="font-trigger" data-pop-trigger onClick={() => setOpen(!open)}>
+      <button type="button" className="font-trigger" data-pop-trigger onClick={() => { if (!open) reloadThemes().catch(() => {}); setOpen(!open); }}>
         <span className="truncate" style={{ fontFamily: current?.css }}>{current?.label || 'Choose a font'}</span>
         <ChevronDown size={15} />
       </button>

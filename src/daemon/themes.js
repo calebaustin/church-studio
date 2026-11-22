@@ -3,7 +3,8 @@
 // Caption fonts: a curated list (bundled Montserrat + good macOS fonts) plus every installed
 // system font, discovered once with scripts/list_fonts.py and cached in data/fonts.json.
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { ASSETS_DIR, DATA_DIR, pyCommand, run, jsonFrom } from './tools.js';
 
@@ -39,10 +40,23 @@ export function styleWeight(style = '') {
 }
 
 let systemFonts = null;
+let fontsSig = null;
+// The folders fonts get installed into. When one changes (a font added or removed), the list is rebuilt, so
+// a font installed while the app is open shows up next time a font menu opens. No refresh button needed.
+const FONT_DIRS = ['/Library/Fonts', path.join(os.homedir(), 'Library/Fonts'), path.join(os.homedir(), 'Library/Application Support/Adobe/CoreSync/plugins/livetype/.r'), '/System/Library/AssetsV2'];
+async function fontFoldersSig() {
+  const parts = await Promise.all(FONT_DIRS.map((d) => stat(d).then((x) => `${d}:${x.mtimeMs}`).catch(() => `${d}:-`)));
+  return parts.join('|');
+}
 export async function listSystemFonts() {
-  if (systemFonts) return systemFonts;
-  if (existsSync(FONT_CACHE)) {
-    try { systemFonts = JSON.parse(await readFile(FONT_CACHE, 'utf8')); return systemFonts; } catch { /* rebuild */ }
+  const sig = await fontFoldersSig();
+  if (systemFonts && sig === fontsSig) return systemFonts;
+  if (!systemFonts && existsSync(FONT_CACHE)) {
+    try {
+      const c = JSON.parse(await readFile(FONT_CACHE, 'utf8'));
+      // Older caches were a bare list; they're rebuilt once so the new font folders are included.
+      if (c && !Array.isArray(c) && c.sig === sig) { systemFonts = c.fonts; fontsSig = sig; return systemFonts; }
+    } catch { /* rebuild */ }
   }
   try {
     const { stdout } = await run(...pyCommand('list_fonts', []));
@@ -51,8 +65,9 @@ export async function listSystemFonts() {
       family: f.family, file: f.file, index: f.index, style: f.style,
       css: `'${f.family.replace(/'/g, "\\'")}'`, weight: styleWeight(f.style), italic: /italic|oblique/i.test(f.style), system: true,
     }));
+    fontsSig = sig;
     await mkdir(DATA_DIR, { recursive: true });
-    await writeFile(FONT_CACHE, JSON.stringify(systemFonts));
+    await writeFile(FONT_CACHE, JSON.stringify({ sig, fonts: systemFonts }));
   } catch (e) {
     console.error('Could not list system fonts:', e.message);
     systemFonts = [];
@@ -62,7 +77,7 @@ export async function listSystemFonts() {
 
 export async function refreshSystemFonts() {
   systemFonts = null;
-  await writeFile(FONT_CACHE, '[]').catch(() => {});
+  fontsSig = null;
   const { rm } = await import('node:fs/promises');
   await rm(FONT_CACHE, { force: true });
   return listSystemFonts();
