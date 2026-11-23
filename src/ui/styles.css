@@ -1956,3 +1956,30 @@ button.tp-tile:active .tp-orb { transform: scale(.92); transition-duration: 120m
 @media (max-width: 640px) { .conn-row { grid-template-columns: 1fr; } }
 .drag-file { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; border: 1px dashed var(--line-strong); color: var(--muted); font-size: 12.5px; font-weight: 600; cursor: grab; user-select: none; }
 .drag-file:active { cursor: grabbing; }
+
+/* A video's header page: details, then publish or make clips */
+.project-home-head { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.project-home-poster { width: 148px; aspect-ratio: 16 / 9; border-radius: var(--radius-sm); object-fit: cover; background: var(--video-bg); flex: none; }
+.project-home-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.project-home-paths { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; align-items: start; }
+.project-home-path { align-content: start; }
+.project-home-path.rec { box-shadow: inset 0 0 0 2px var(--accent-soft), var(--shadow); }
+.project-home-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 16px; margin: 0; font-size: 13px; }
+.project-home-facts dt { color: var(--muted); }
+.project-home-facts dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+.project-home-steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 13.5px; }
+.project-home-steps li { display: flex; align-items: center; gap: 8px; }
+.project-home-steps .n { width: 20px; height: 20px; border-radius: var(--radius-pill); display: grid; place-items: center; font-size: 11px; background: var(--hover); color: var(--muted); }
+.project-home-steps li.done .n { background: var(--ok-soft); color: var(--ok); }
+
+/* A video's own pages, joined as two pills next to its name */
+.title-pills { position: relative; z-index: 3; display: inline-flex; flex: none; border-radius: var(--radius-pill); background: var(--hover); padding: 3px; gap: 2px; }
+.title-pills button { border: 0; background: transparent; min-height: 28px; padding: 0 12px; border-radius: var(--radius-pill); display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; transition: background var(--fast) var(--ease), color var(--fast) var(--ease); }
+.title-pills button:hover:not(:disabled) { color: var(--ink); }
+.title-pills button.on { background: var(--surface-solid); color: var(--ink); box-shadow: var(--shadow-chip); }
+.title-pills button[aria-disabled="true"] { opacity: 0.55; cursor: default; }
+.title-pills button[aria-disabled="true"]:hover { color: var(--muted); }
+/* A small info tip under a control that isn't ready yet */
+.has-tip { position: relative; }
+.has-tip::after { content: attr(data-tip); position: absolute; top: calc(100% + 8px); left: 50%; translate: -50% 0; white-space: nowrap; padding: 5px 10px; border-radius: var(--radius-sm); background: var(--toast-bg); color: var(--toast-text); font-size: 12px; font-weight: 500; pointer-events: none; opacity: 0; scale: 0.96; transition: opacity var(--fast) var(--ease), scale var(--fast) var(--ease); z-index: 20; }
+.has-tip:hover::after, .has-tip:focus-visible::after { opacity: 1; scale: 1; }

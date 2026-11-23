@@ -2,6 +2,15 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## 0.29.0 · November 23, 2026
+
+- **A home page for every video.** A video now opens on Overview: its details (sermon title, preacher, date and series, filled in where Church Studio can tell, and yours to change), then what's next. Publish the trimmed sermon to YouTube as its own video, with its title and playlist, or make clips. Do one or both, and each shows how far along it is.
+- **Overview and Sermon page sit with the video's name**, as two joined pills, so the steps from Transcribe to Transcript stay in one bar. Before a video is transcribed, Sermon page shows "Available after transcribe" when you point at it.
+- **Make clips does the rest.** Press it and Church Studio transcribes the video, then finds clips right away when the sermon is already trimmed.
+- **Trim to sermon.** The first choice when you add a YouTube video is now Trim to sermon: it downloads the livestream and keeps only the part you set.
+- **The YouTube preview plays.** The preview in the add video dialog was blocked and stayed black. It plays now.
+- **The quotes follow the times.** The first and last words shown under Start and End change as you move them with −1 min and +1 min, Start here and End here, or typed times, and the preview jumps there too.
+
 ## 0.28.0 · November 22, 2026
 
 ### New

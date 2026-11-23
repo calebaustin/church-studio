@@ -247,6 +247,12 @@ route('PATCH', '/api/projects/:id', async ({ id }, b) => {
     if (Array.isArray(b.clips)) p.clips = b.clips;
     if ('videoTheme' in b) p.videoTheme = b.videoTheme;
     if (typeof b.series === 'string') p.series = b.series.trim().slice(0, 80) || null;
+    // The video's details on its header page (also used for its YouTube title and the Sermon page).
+    if (typeof b.sermonTitle === 'string') p.sermonTitle = b.sermonTitle.trim().slice(0, 150) || null;
+    if (typeof b.preacher === 'string') p.preacher = b.preacher.trim().slice(0, 80) || null;
+    if ('preachedOn' in b) p.preachedOn = b.preachedOn && !Number.isNaN(new Date(b.preachedOn).getTime()) ? new Date(b.preachedOn).toISOString() : null;
+    // What to do once a step finishes: 'clips' finds clips right after transcribing.
+    if ('next' in b) p.next = b.next === 'clips' ? 'clips' : null;
   });
   return { project };
 });
@@ -304,6 +310,15 @@ route('POST', '/api/projects/:id/transcript/save', async ({ id }, b) => { await 
 route('POST', '/api/projects/:id/transcribe', projectJob('transcribe', 'Transcribe', async (id, b, ctx) => {
   const r = await transcribeProject(id, b, ctx);
   queueDigest(id).catch(() => {});
+  // Make clips was pressed: once the sermon is known, go straight on to finding clips.
+  const after = await getProject(id);
+  if (after?.next === 'clips') {
+    await updateProject(id, (p) => { delete p.next; });
+    if (after.sermon?.confirmed) {
+      jobs.enqueue({ kind: 'propose', label: `Find clips: ${after.title}`, projectId: id, key: `propose:${id}:` }, (c) => proposeClips(id, {}, c));
+      return { ...r, thenClips: true };
+    }
+  }
   return r;
 }));
 // With an AI helper on, a sermon's digest is made right after it's transcribed, so the Sermon page and writing have it early.

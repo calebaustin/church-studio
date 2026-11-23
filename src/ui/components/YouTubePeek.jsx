@@ -9,6 +9,7 @@ import { fmt } from '../api.js';
 const YouTubePeek = forwardRef(function YouTubePeek({ id, start = 0, onTime }, ref) {
   const frame = useRef(null);
   const [t, setT] = useState(start);
+  const [first] = useState(start); // the player loads once; later changes seek instead of reloading it
   const post = (msg) => frame.current?.contentWindow?.postMessage(JSON.stringify(msg), '*');
   useImperativeHandle(ref, () => ({
     seek: (sec) => { post({ event: 'command', func: 'seekTo', args: [sec, true] }); setT(sec); },
@@ -29,8 +30,8 @@ const YouTubePeek = forwardRef(function YouTubePeek({ id, start = 0, onTime }, r
   const origin = encodeURIComponent(window.location.origin);
   return (
     <div className="yt-peek">
-      <iframe ref={frame} title="Video preview" onLoad={listen} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen
-        src={`https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}?enablejsapi=1&rel=0&modestbranding=1&playsinline=1&start=${Math.floor(start)}&origin=${origin}`} />
+      <iframe ref={frame} title="Video preview" onLoad={listen} referrerPolicy="strict-origin-when-cross-origin" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen
+        src={`https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}?enablejsapi=1&rel=0&modestbranding=1&playsinline=1&start=${Math.floor(first)}&origin=${origin}`} />
       <span className="yt-peek-time num" aria-live="off">{fmt(t)}</span>
     </div>
   );

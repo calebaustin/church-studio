@@ -32,7 +32,19 @@ export default function AddVideo({ url, title, onClose, onAdd }) {
   const peek = useRef(null);
   const [now, setNow] = useState(0);
   const len = mode === 'all' ? info?.duration : range.end - range.start;
-  const nudge = (k, d) => setRange((r) => ({ ...r, [k]: Math.max(0, Math.min(info.duration, r[k] + d)) }));
+  // The words right after the start and right before the end, so the quotes follow the times.
+  const quote = (t, after) => {
+    const w = info?.words || [];
+    if (!w.length) return after ? info?.sermon?.startText : info?.sermon?.endText;
+    return (after ? w.filter((x) => x[0] >= t).slice(0, 14) : w.filter((x) => x[0] < t).slice(-14)).map((x) => x[1]).join(' ');
+  };
+  const startQuote = info ? quote(range.start, true) : '';
+  const endQuote = info ? quote(range.end, false) : '';
+  const nudge = (k, d) => {
+    const v = Math.max(0, Math.min(info.duration, range[k] + d));
+    setRange((r) => ({ ...r, [k]: v }));
+    peek.current?.seek(k === 'end' ? Math.max(0, v - 10) : v);
+  };
 
   return (
     <Modal onClose={onClose} width={720} label="Add a sermon">
@@ -50,8 +62,8 @@ export default function AddVideo({ url, title, onClose, onAdd }) {
           {info.captionNote && <div className="banner small row" style={{ gap: 8 }}><Clock size={14} /><span>{info.captionNote}</span></div>}
           <div className="choices">
             <button className={`choice ${mode === 'sermon' ? 'on' : ''}`} onClick={() => setMode('sermon')}>
-              <span className="t"><span className="radio" />Just the sermon</span>
-              <span className="d">{info.sermon ? `Found at ${fmt(info.sermon.start)}. Faster to download.` : 'Set the start and end yourself.'}</span>
+              <span className="t"><span className="radio" />Trim to sermon</span>
+              <span className="d">Downloads the livestream and keeps only the trimmed part.{info.sermon ? ` Found at ${fmt(info.sermon.start)}.` : ' Set the start and end below.'}</span>
             </button>
             <button className={`choice ${mode === 'all' ? 'on' : ''}`} onClick={() => setMode('all')}>
               <span className="t"><span className="radio" />Whole video</span>
@@ -73,12 +85,12 @@ export default function AddVideo({ url, title, onClose, onAdd }) {
                 <button className="btn ghost sm" style={{ minWidth: 52 }} title="Jump the video here" onClick={() => peek.current?.seek(range.start)}>Start</button><Time value={range.start} onChange={(v) => setRange({ ...range, start: v })} />
                 <button className="btn sm" onClick={() => nudge('start', -60)}>−1 min</button><button className="btn sm" onClick={() => nudge('start', 60)}>+1 min</button>
               </div>
-              {info.sermon?.startText && <p className="phrase">“{info.sermon.startText}…”</p>}
+              {startQuote && <p className="phrase">“{startQuote}…”</p>}
               <div className="row wrap">
                 <button className="btn ghost sm" style={{ minWidth: 52 }} title="Jump the video here" onClick={() => peek.current?.seek(Math.max(0, range.end - 10))}>End</button><Time value={range.end} onChange={(v) => setRange({ ...range, end: v })} />
                 <button className="btn sm" onClick={() => nudge('end', -60)}>−1 min</button><button className="btn sm" onClick={() => nudge('end', 60)}>+1 min</button>
               </div>
-              {info.sermon?.endText && <p className="phrase">“…{info.sermon.endText}”</p>}
+              {endQuote && <p className="phrase">“…{endQuote}”</p>}
               {info.chapters.length > 0 && (
                 <div className="row wrap">
                   <span className="small muted">Chapters:</span>

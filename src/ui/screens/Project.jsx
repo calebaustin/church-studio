@@ -5,9 +5,10 @@ import Toggle from '../components/Toggle.jsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp, useHelperFocus } from '../App.jsx';
 import { api, fmt, fmtEta, media } from '../api.js';
-import { Star, ArrowLeft, ArrowRight, Check, Square, Wand2, Download, Trash2, Plus, Send, FolderOpen, Copy, ScissorsLineDashed, Scissors, AudioLines, ChevronDown, FileText, PenLine, Quote, Share2, Clock, BookOpen, Clapperboard } from 'lucide-react';
+import { Star, ArrowLeft, ArrowRight, Check, Square, Wand2, Download, Trash2, Plus, Send, FolderOpen, Copy, ScissorsLineDashed, Scissors, AudioLines, ChevronDown, FileText, PenLine, Quote, Share2, Clock, BookOpen, House } from 'lucide-react';
 import AudioCleanup from '../components/AudioCleanup.jsx';
 import ContentPlan from '../components/ContentPlan.jsx';
+import ProjectHome from '../components/ProjectHome.jsx';
 import ClipEditor from './ClipEditor.jsx';
 import { StatusChip } from './Library.jsx';
 import Filmstrip from '../components/Filmstrip.jsx';
@@ -77,12 +78,13 @@ export default function Project({ id, initialStep, initialClip, initialTime }) {
     load().then((p) => {
       const audioOnly = p.media && !p.media.width;
       const keptClip = p.clips.find((c) => c.status === 'kept' || c.status === 'exported');
-      const fallback = p.status !== 'transcribed' ? 'transcribe' : audioOnly ? 'text' : p.clips.length ? 'clips' : 'sermon';
+      const home = Boolean(p.media?.width) && !['short', 'lyric', 'wide'].includes(p.kind);
+      const fallback = p.status !== 'transcribed' ? (home ? 'home' : 'transcribe') : audioOnly ? 'text' : p.clips.length ? 'clips' : 'sermon';
       // A video that already has kept clips opens in the editor. "Cut more clips" goes back to the picker.
       if (!initialStep && (!audioOnly || p.kind === 'lyric') && keptClip) { setSelected(keptClip.id); setStep('edit'); }
       else if (initialStep === 'edit' && p.clips.length) { setSelected((p.clips.find((c) => c.id === initialClip) || p.clips.find((c) => c.status === 'kept' || c.status === 'exported') || p.clips[0]).id); setStep('edit'); }
       // A link to a step (the transcript, clips, content plan…) opens there once the sermon is transcribed.
-      else if (initialStep && initialStep !== 'edit' && (p.status === 'transcribed' || initialStep === 'transcribe')) setStep(initialStep);
+      else if (initialStep && initialStep !== 'edit' && (p.status === 'transcribed' || initialStep === 'transcribe' || initialStep === 'home')) setStep(initialStep);
       else setStep(fallback);
     }).catch(() => go({ name: 'library' }));
   }, [load]);
@@ -94,10 +96,10 @@ export default function Project({ id, initialStep, initialClip, initialTime }) {
     if (j.kind === 'transcribe') {
       // Shorts, lyric clips and wide videos come back as one clip, so open it in the editor.
       const whole = ['short', 'lyric', 'wide'].includes(p.kind) && p.clips.find((c) => c.status === 'kept');
-      if (whole) { setSelected(whole.id); setStep('edit'); } else setStep(p.media && !p.media.width ? 'text' : 'sermon');
+      if (whole) { setSelected(whole.id); setStep('edit'); } else if (j.result?.thenClips) setStep('clips'); else setStep(p.media && !p.media.width ? 'text' : 'sermon');
     }
     if (j.kind === 'propose') { setStep('clips'); setNotice(j.result?.warning || null); }
-    if (j.kind === 'download' && p.status === 'ready') setStep('transcribe');
+    if (j.kind === 'download' && p.status === 'ready') setStep(p.media?.width && !['short', 'lyric', 'wide'].includes(p.kind) ? 'home' : 'transcribe');
   }), [onJobFinished, id, load]);
 
   const busy = jobs.filter((j) => j.projectId === id && (j.status === 'running' || j.status === 'queued'));
@@ -139,9 +141,10 @@ export default function Project({ id, initialStep, initialClip, initialTime }) {
   ];
   // Sermons get a Sermon page of their own (the content plan), linked to the video but outside its steps.
   const hasPage = project.kind === 'sermon' || !project.kind;
+  // Videos open on a header page: their details, then publish the sermon, make clips, or both.
+  const hasHome = !audioOnly && !['short', 'lyric', 'wide'].includes(project.kind);
   const steps = stepsBase;
   const onPage = step === 'plan';
-  const videoStep = transcribed ? (project.clips.some((c) => c.status === 'kept' || c.status === 'exported') ? 'clips' : audioOnly ? 'text' : 'clips') : 'transcribe';
 
   return (
     <div className="page">
@@ -150,8 +153,17 @@ export default function Project({ id, initialStep, initialClip, initialTime }) {
           {onPage
             ? <button className="btn ghost sm" onClick={() => go({ name: 'projects' })}><ArrowLeft size={15} />All projects</button>
             : <button className="btn ghost sm" onClick={() => go({ name: 'library' })}><ArrowLeft size={15} />Videos</button>}
-          <input className="input" style={{ fontWeight: 650, fontSize: 17, background: 'transparent', border: 0, boxShadow: 'none' }}
+          <input className="input" size={Math.min(40, Math.max(8, project.title.length + 1))} style={{ fontWeight: 650, fontSize: 17, background: 'transparent', border: 0, boxShadow: 'none', width: 'auto', flex: 'none' }}
             defaultValue={project.title} onBlur={(e) => e.target.value.trim() && e.target.value !== project.title && patch({ title: e.target.value.trim() })} />
+          {/* The video's own pages sit with its name: its overview and (for sermons) its Sermon page. */}
+          {(hasHome || hasPage) && (
+            <div className="title-pills" role="group" aria-label="This video's pages">
+              {hasHome && <button className={step === 'home' ? 'on' : ''} aria-pressed={step === 'home'} onClick={async () => { if (step === 'edit' && !(await confirmLeave())) return; setStep('home'); }}><House size={13} aria-hidden="true" />Overview</button>}
+              {hasPage && <button className={`${onPage ? 'on' : ''} ${transcribed ? '' : 'has-tip'}`} aria-pressed={onPage} aria-disabled={!transcribed}
+                title={transcribed ? "This sermon's own page: its points, next steps and everything made from it" : undefined} data-tip={transcribed ? undefined : 'Available after transcribe'}
+                onClick={async () => { if (!transcribed) return; if (step === 'edit' && !(await confirmLeave())) return; go({ name: 'project', id: project.id, step: 'plan' }); }}><BookOpen size={13} aria-hidden="true" />Sermon page</button>}
+            </div>
+          )}
           <StatusChip status={project.status} />
           <button className="btn ghost sm" title="Share this project with a teammate or another Mac" onClick={() => setSharing(true)}><Share2 size={14} />Share</button>
           {!onPage && <button className="btn ghost sm danger" title="Delete this sermon" onClick={async () => {
@@ -159,10 +171,6 @@ export default function Project({ id, initialStep, initialClip, initialTime }) {
             await api.del(`/api/projects/${id}`); go({ name: 'library' });
           }}><Trash2 size={14} />Delete</button>}
         </div>
-        {onPage ? (
-          <button className="btn sm" title="The recording this Sermon page comes from: transcript, clips and exports" onClick={() => go({ name: 'project', id: project.id, step: videoStep })}><Clapperboard size={14} />Video and clips</button>
-        ) : (
-        <div className="row" style={{ gap: 8 }}>
         <div className="steps glass">
           {steps.map(([key, label, done], i) => (
             <button key={key} className={`${step === key ? 'on' : ''} ${done ? 'done' : ''}`}
@@ -172,9 +180,6 @@ export default function Project({ id, initialStep, initialClip, initialTime }) {
             </button>
           ))}
         </div>
-        {hasPage && <button className="btn sm ghost" disabled={!transcribed} title="This sermon's own page: its points, next steps and everything made from it" onClick={async () => { if (step === 'edit' && !(await confirmLeave())) return; go({ name: 'project', id: project.id, step: 'plan' }); }}><BookOpen size={14} />Sermon page</button>}
-        </div>
-        )}
       </div>
       {notice && <div className="banner row between"><span>{notice}</span><button className="btn ghost sm" onClick={() => setNotice(null)}>Dismiss</button></div>}
 
@@ -182,6 +187,7 @@ export default function Project({ id, initialStep, initialClip, initialTime }) {
         <div className="banner row between"><span>Download didn't finish.</span><button className="btn sm" onClick={() => start('download')}>Retry download</button></div>
       )}
 
+      {step === 'home' && <ProjectHome project={project} patch={patch} start={start} setStep={setStep} busy={busy} />}
       {step === 'transcribe' && (
         <TranscribeStep project={project} src={src} player={player} audioOnly={audioOnly} job={jobOf('transcribe') || jobOf('download')} onStart={(range) => start('transcribe', range)} onRead={() => setStep('text')} />
       )}

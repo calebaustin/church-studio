@@ -171,7 +171,9 @@ export async function scoutVideo(url) {
     return {
       id: info.id, title: info.title, duration: info.duration, thumb: info.thumbnail,
       chapters: (info.chapters || []).map((c) => ({ title: c.title, start: c.start_time, end: c.end_time })),
-      sermon, captions: words.length > 0, ...captionWait(info, words.length > 0 && info.live_status !== 'post_live'),
+      sermon, captions: words.length > 0,
+      // Caption words with times, so the start and end quotes can follow the times as they change.
+      words: words.map((w) => [Math.round(w.start * 10) / 10, w.w]), ...captionWait(info, words.length > 0 && info.live_status !== 'post_live'),
     };
   } finally {
     await rm(dir, { recursive: true, force: true });

@@ -6,7 +6,7 @@ import Modal, { ModalHead } from './Modal.jsx';
 
 const dateInput = (d) => { const x = new Date(d); if (Number.isNaN(x.getTime())) return ''; return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
 const titleDate = (d) => { const x = new Date(d); return Number.isNaN(x.getTime()) ? '' : `${x.getMonth() + 1}.${x.getDate()}.${x.getFullYear()}`; };
-const fill = (pattern, p) => pattern.replace('{title}', p.title || '').replace('{preacher}', p.preacher || '').replace('{date}', p.date ? titleDate(p.date) : '')
+export const fill = (pattern, p) => pattern.replace('{title}', p.title || '').replace('{preacher}', p.preacher || '').replace('{date}', p.date ? titleDate(p.date) : '')
   .replace(/\s+\|\s*$/, '').replace(/\|\s+\|/g, '|').replace(/\s{2,}/g, ' ').trim().slice(0, 100);
 
 /**
