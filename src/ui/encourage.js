@@ -32,7 +32,7 @@ export const NOTES = [
   'You shared good news today.',
   'The church is bigger than the building.',
   'Make the most of every opportunity.',
-  'Your work matters, even when no one claps.',
+  'Your work matters, even when no one seems to say so.',
   'Let everything that has breath praise the Lord.',
   "Go tell it. You just did.",
   'Faithful, not famous.',

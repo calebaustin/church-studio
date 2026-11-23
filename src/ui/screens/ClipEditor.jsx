@@ -757,7 +757,7 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
 
           {tab === 'gfx' && (
             <div className="stack" style={{ gap: 14 }}>
-              <CardsPanel clip={clip} set={set} now={outTime} len={outLen} brand={config.brandColors || []} />
+              <CardsPanel clip={clip} set={set} now={outTime} len={outLen} brand={config.brandColors || []} theme={placed} />
               <div className="keycard">
                 <div className="row between"><strong>Logo in the corner</strong>
                   {clip.overlay?.rel ? <button className="btn ghost sm danger" onClick={() => set({ overlay: null })}>Remove</button> : <button className="btn sm" onClick={() => setLibPick('overlay')}>Pick a logo</button>}

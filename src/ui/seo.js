@@ -3,7 +3,8 @@
 const TRANSITIONS = ['also', 'because', 'but', 'so', 'then', 'first', 'second', 'finally', 'however', 'therefore', 'for example', 'for instance', 'in fact', 'instead', 'meanwhile', 'besides', 'still', 'yet', 'after', 'before', 'later', 'next', 'as a result', 'in other words', 'that is why', 'even so', 'at the same time', 'above all', 'in short', 'similarly', 'likewise', 'otherwise'];
 
 const strip = (md) => md.replace(/^>\s?/gm, '').replace(/[#*_`[\]()]/g, ' ');
-const sentencesOf = (t) => t.split(/(?<=[.?!])\s+/).map((s) => s.trim()).filter((s) => s.split(/\s+/).length > 2);
+// Headings and list items end at their line, so they never run into the next sentence.
+const sentencesOf = (t) => t.split(/\n+|(?<=[.?!])\s+/).map((s) => s.replace(/^\s*[-*]\s+|^\s*\d+\.\s+/, '').replace(/\s+/g, ' ').trim()).filter((s) => s.split(/\s+/).length > 2);
 function syllables(word) {
   const w = word.toLowerCase().replace(/[^a-z]/g, '');
   if (w.length <= 3) return 1;
@@ -44,11 +45,14 @@ export function seoChecks(md, { keyphrase = '', title = '', meta = '', slug = ''
     c('Length', words.length >= 600, words.length >= 300, `${words.length} words. 600 or more tends to rank better.`),
     c('Title length', title.length >= 30 && title.length <= 65, title.length >= 20 && title.length <= 75, `${title.length} characters. Aim for 30 to 65.`),
   ];
+  // Where each problem is, so the editor can underline it: the exact sentences or paragraphs (plain text).
+  const spot = (item, list) => (list.length ? { ...item, spots: list } : item);
+  const passiveRe = /\b(is|are|was|were|be|been|being)\s+\w+ed\b/i;
   const read = [
-    c('Short sentences', long <= 0.25, long <= 0.3, `${Math.round(long * 100)}% of sentences are over 20 words. Keep it under 25%.`),
-    c('Short paragraphs', longPara === 0, longPara <= 1, longPara ? `${longPara} paragraph${longPara > 1 ? 's are' : ' is'} over 150 words.` : 'Paragraphs are a comfortable length.'),
+    spot(c('Short sentences', long <= 0.25, long <= 0.3, `${Math.round(long * 100)}% of sentences are over 20 words. Keep it under 25%.`), sents.filter((x) => x.split(/\s+/).length > 20)),
+    spot(c('Short paragraphs', longPara === 0, longPara <= 1, longPara ? `${longPara} paragraph${longPara > 1 ? 's are' : ' is'} over 150 words.` : 'Paragraphs are a comfortable length.'), paras.filter((p) => p.split(/\s+/).length > 150).map((p) => strip(p).replace(/\s+/g, ' ').trim())),
     c('Subheadings', gaps === 0, gaps <= 1, gaps ? 'Add a subheading at least every 300 words.' : 'Text is well broken up.'),
-    c('Active voice', passive <= 0.1, passive <= 0.15, `${Math.round(passive * 100)}% passive voice. Keep it under 10%.`),
+    spot(c('Active voice', passive <= 0.1, passive <= 0.15, `${Math.round(passive * 100)}% passive voice. Keep it under 10%.`), sents.filter((x) => passiveRe.test(x)).map((x) => x.match(passiveRe)[0])),
     c('Transition words', trans >= 0.3, trans >= 0.2, `${Math.round(trans * 100)}% of sentences use them. Aim for 30%.`),
     c('Easy to read', flesch >= 60, flesch >= 50, `Reading ease ${Math.round(flesch)}. 60 or higher reads easily.`),
   ];

@@ -145,7 +145,11 @@ export async function buildJob(project, clip, { preview = false, trackOnly = fal
     // Text pop-ups (times are in the finished clip) and colors for clips with no picture.
     popups: Array.isArray(clip.popups) ? clip.popups.filter((p) => p.text && p.end > p.start) : [],
     // Full-screen lyric or scripture cards, in front of everything.
-    cards: Array.isArray(clip.cards) ? clip.cards.filter((c) => c.end > c.start) : [],
+    cards: await Promise.all((Array.isArray(clip.cards) ? clip.cards.filter((c) => c.end > c.start) : []).map(async (c) => {
+      // A reference or label can have its own font.
+      const lf = c.labelFont ? await fontFile(c.labelFont) : null;
+      return lf?.file ? { ...c, labelFontFile: lf.file, labelFontStyle: lf.style, labelFontIndex: lf.index ?? null } : c;
+    })),
     brandColors: (await loadConfig()).brandColors || [],
     lyric: { colors: (await loadConfig()).brandColors || [] },
   };

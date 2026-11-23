@@ -2022,3 +2022,15 @@ button.tp-tile:active .tp-orb { transform: scale(.92); transition-duration: 120m
 .card-tr .seg { animation: card-tr-in var(--d-snappy, 0.3s) var(--spring-snappy, ease-out) both; transform-origin: left center; }
 @keyframes card-tr-in { from { opacity: 0; transform: scaleX(0.92); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .card-tr .seg { animation: none; } }
+.card-num { flex: none; width: 24px; height: 24px; border-radius: var(--radius-pill); display: grid; place-items: center; font-size: 12px; font-weight: 700; background: var(--accent-soft); color: var(--accent-text); }
+.card-sum { padding-left: 30px; }
+
+/* Blog checks: a check with trouble spots can be clicked to underline them in the post */
+.check-item { border: 0; background: transparent; padding: 4px 6px; margin: -4px -6px; border-radius: var(--radius-sm); cursor: pointer; font: inherit; color: inherit; transition: background var(--fast) var(--ease); }
+.check-item:hover, .check-item.on { background: var(--hover); }
+.check-mark-hint { font-size: 12px; font-weight: 600; color: var(--accent-text); }
+::highlight(cs-trouble) { text-decoration: underline wavy var(--bad); text-decoration-thickness: 1.5px; text-underline-offset: 3px; background: var(--bad-soft); }
+/* A quiet text link that acts like a button (like "From “Sunday's sermon”") */
+.link-btn { border: 0; background: transparent; padding: 4px 6px; font: inherit; color: var(--accent-text); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--accent-text) 40%, transparent); text-underline-offset: 3px; cursor: pointer; border-radius: var(--radius-sm); }
+.link-btn:hover { text-decoration-color: currentColor; background: var(--hover); }
+.rt-btn.danger:hover { color: var(--bad); }

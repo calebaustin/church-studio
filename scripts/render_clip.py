@@ -829,6 +829,10 @@ class Cards:
             label = None
             if str(c.get("label") or "").strip():  # a reference or label, like "Luke 22:19", above or below
                 lt = dict(theme); lt["size"] = float(theme.get("size", 78)) * 0.62
+                # Lined up like the card's own text, not the captions.
+                lt.update({"align": c.get("align") or "center", "maxWidth": float(c.get("width", 0.84)), "anchor": "middle", "position": 0.5})
+                if c.get("labelFontFile"):  # the label's own font
+                    lt.update({"fontFile": c["labelFontFile"], "fontStyle": c.get("labelFontStyle"), "fontIndex": c.get("labelFontIndex")})
                 arr, x, _, _ = card_text_image(str(c["label"]).strip(), lt, W, H, scale=1.0)
                 y = int(H * (0.16 if c.get("labelPos") == "top" else 0.84) - arr.shape[0] / 2)
                 label = (arr, x, y, 1.0)

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Toggle from '../components/Toggle.jsx';
 import ToolIntro from '../components/ToolIntro.jsx';
-import { ArrowLeft, CalendarDays, Copy, FileDown, FileText, Heart, PenLine, Plus, Sparkles, Wand2, Check, RefreshCw, Undo2, Link2, Info, Printer, Mail, Users, ChevronDown } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Copy, FileDown, FileText, Heart, PenLine, Plus, Sparkles, Wand2, Check, RefreshCw, Undo2, Link2, Info, Printer, Mail, Users, ChevronDown, Trash2 } from 'lucide-react';
 import Modal, { ModalHead } from '../components/Modal.jsx';
 import { Masonry } from '../components/Masonry.jsx';
 import { useChurchEvents } from '../components/ChurchEvents.jsx';
@@ -82,18 +82,59 @@ function SeoInfo() {
   );
 }
 
-function Checks({ title, score, list, info }) {
+function Checks({ title, score, list, info, marked, onMark }) {
   return (
     <div className="stack" style={{ gap: 6 }}>
       <div className="row between"><span className="row" style={{ gap: 6 }}><strong>{title}</strong>{info}</span><span className={`chip ${score >= 75 ? 'ok' : score >= 50 ? 'warn' : 'bad'}`}>{score}/100</span></div>
-      {list.map((c) => (
-        <div key={c.label} className="row small" style={{ alignItems: 'flex-start' }}>
-          <span className="dot" style={{ color: c.status === 'good' ? 'var(--ok)' : c.status === 'ok' ? 'var(--warn)' : 'var(--bad)', marginTop: 6 }} />
-          <div className="stack" style={{ gap: 0 }}><span style={{ fontWeight: 600, color: 'var(--ink)' }}>{c.label}</span>{c.status !== 'good' && c.note && <span className="muted">{c.note}</span>}</div>
-        </div>
-      ))}
+      {list.map((c) => {
+        // A check with trouble spots can be clicked to underline them in the post.
+        const canMark = onMark && c.status !== 'good' && c.spots?.length;
+        const inner = (
+          <>
+            <span className="dot" style={{ color: c.status === 'good' ? 'var(--ok)' : c.status === 'ok' ? 'var(--warn)' : 'var(--bad)', marginTop: 6 }} />
+            <div className="stack" style={{ gap: 0, textAlign: 'left' }}><span style={{ fontWeight: 600, color: 'var(--ink)' }}>{c.label}</span>{c.status !== 'good' && c.note && <span className="muted">{c.note}</span>}
+              {canMark && <span className="check-mark-hint">{marked === c.label ? 'Showing in the post. Click to hide.' : `Show ${c.spots.length === 1 ? 'it' : `all ${c.spots.length}`} in the post`}</span>}</div>
+          </>
+        );
+        return canMark
+          ? <button key={c.label} type="button" className={`row small check-item ${marked === c.label ? 'on' : ''}`} style={{ alignItems: 'flex-start' }} onClick={() => onMark(marked === c.label ? null : c)}>{inner}</button>
+          : <div key={c.label} className="row small" style={{ alignItems: 'flex-start' }}>{inner}</div>;
+      })}
     </div>
   );
+}
+
+/** Underlines each trouble spot (plain sentences or phrases) in the editor with a wavy line, without touching the text. */
+function markSpots(root, spots) {
+  if (!globalThis.CSS?.highlights) return 0;
+  CSS.highlights.delete('cs-trouble');
+  if (!root || !spots?.length) return 0;
+  // All the editor's text, with runs of space collapsed, and where each character came from.
+  const map = []; let flat = '';
+  const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+    const t = n.nodeValue;
+    for (let i = 0; i < t.length; i++) {
+      const ch = /\s/.test(t[i]) ? ' ' : t[i];
+      if (ch === ' ' && flat.endsWith(' ')) continue;
+      flat += ch; map.push([n, i]);
+    }
+    if (!flat.endsWith(' ')) { flat += ' '; map.push([n, t.length]); }
+  }
+  const norm = (x) => String(x).replace(/\s+/g, ' ').trim();
+  const ranges = [];
+  for (const sp of spots) {
+    const t = norm(sp); if (!t) continue;
+    const head = t.slice(0, 40); const tail = t.length > 60 ? t.slice(-24) : '';
+    const a = flat.indexOf(head); if (a < 0) continue;
+    let b = a + t.length;
+    if (tail) { const e = flat.indexOf(tail, a + head.length); if (e > 0 && e - a < t.length * 1.6) b = e + tail.length; }
+    b = Math.min(b, map.length - 1);
+    const r = document.createRange();
+    try { r.setStart(map[a][0], map[a][1]); r.setEnd(map[b - 1][0], map[b - 1][1] + 1); ranges.push(r); } catch { /* skip a spot that moved */ }
+  }
+  if (ranges.length) CSS.highlights.set('cs-trouble', new Highlight(...ranges));
+  return ranges.length;
 }
 
 export default function Writing({ project: startProject, kind: startKind }) {
@@ -112,7 +153,7 @@ function WritingEditor({ pid, onBack, startKind }) {
   const [dirty, setDirty] = useState(false);
   const [ideas, setIdeas] = useState(null);
   const [angle, setAngle] = useState('teaching');
-  const [useAi, setUseAi] = useState(false);
+  const [useAi, setUseAi] = useState(Boolean(config.llmProvider) && config.llmProvider !== 'none'); // on when an AI helper is set up
   const [undoBlog, setUndoBlog] = useState(null);
   const [printing, setPrinting] = useState(false);
   const [trashed, setTrashed] = useState(false);
@@ -160,6 +201,42 @@ function WritingEditor({ pid, onBack, startKind }) {
     } catch (e) { toast({ kind: 'error', text: e.message }); }
     setBusy(false);
   };
+
+  // Add a section (steps, a devotional and so on) below the post and above its closing invite.
+  const [addMenu, setAddMenu] = useState(false);
+  const [addWords, setAddWords] = useState(150);
+  const addIn = async () => {
+    setAddMenu(false); setBusy(true);
+    try {
+      const r = await api.post(`/api/writing/${pid}/add-in`, { text: draft.blog, angle, words: addWords });
+      setUndoBlog(draft.blog); set({ blog: r.text });
+      toast({ text: r.notice || `Added “${ANGLES.find((a) => a[0] === angle)[1]}” above the closing invite. Read it over, then save.` });
+    } catch (e) { toast({ kind: 'error', text: e.message }); }
+    setBusy(false);
+  };
+  // Rewrite to raise one score, telling the helper which checks need work.
+  const [focusMenu, setFocusMenu] = useState(false);
+  const [voiceScore, setVoiceScore] = useState(null); // { score, checks }
+  const rewriteFor = async (focus) => {
+    setFocusMenu(false); setBusy(true);
+    const list = focus === 'read' ? checks?.read : focus === 'seo' ? checks?.seo : voiceScore?.checks;
+    const notes = (list || []).filter((c) => c.status !== 'good' && c.note).map((c) => `${c.label}: ${c.note}`);
+    try {
+      const r = await api.post(`/api/writing/${pid}/rewrite-focus`, { text: draft.blog, focus, notes, keyphrase: draft.keyphrase, title: draft.title });
+      setUndoBlog(draft.blog); set({ blog: r.text }); setMarked(null);
+      toast({ text: r.notice || `Rewritten for ${{ read: 'readability', voice: 'your brand voice', seo: 'search' }[focus]}. Check the scores, then save.` });
+    } catch (e) { toast({ kind: 'error', text: e.message }); }
+    setBusy(false);
+  };
+  // Trouble spots underlined in the post (from a clicked check).
+  const [marked, setMarked] = useState(null);
+  useEffect(() => {
+    const root = document.querySelector('.rt-panel [contenteditable]');
+    if (!marked) { markSpots(root, []); return; }
+    const t = setTimeout(() => { if (!markSpots(root, marked.spots)) toast({ text: 'Those spots changed. Click the check again to find them.' }); }, 60);
+    return () => clearTimeout(t);
+  }, [marked]);
+  useEffect(() => () => markSpots(null, []), []);
 
   const generate = async () => {
     setBusy(true);
@@ -252,6 +329,13 @@ function WritingEditor({ pid, onBack, startKind }) {
   };
   const checks = useMemo(() => (draft && kind === 'blog' ? seoChecks(draft.blog, { keyphrase: draft.keyphrase, title: draft.title, meta: draft.metaDescription, slug: draft.slug }) : null), [draft, kind]);
   const placeholders = draft ? ((draft[kind] || '').match(/\[[A-Z][^\]]*\]/g) || []).length : 0;
+  // As the post is edited, underlined spots follow the latest checks (and go away once that check is good).
+  useEffect(() => {
+    if (!marked || !checks) return;
+    const now = [...checks.read, ...checks.seo].find((c) => c.label === marked.label);
+    if (!now?.spots?.length || now.status === 'good') setMarked(null);
+    else if (now.spots.join('|') !== marked.spots.join('|')) setMarked(now);
+  }, [checks]);
 
   return (
     <div className="page">
@@ -260,9 +344,25 @@ function WritingEditor({ pid, onBack, startKind }) {
           <button className="btn ghost sm" onClick={async () => { if (dirty && !window.confirm('Leave without saving your changes?')) return; onBack(); }}><ArrowLeft size={15} />Writing</button>
           <div className="stack" style={{ gap: 0, minWidth: 0 }}>
             <h1 className="truncate" style={{ fontSize: 26 }}>{draft?.title || project?.title || 'Writing'}</h1>
-            <span className="muted small truncate">{standalone ? draft?.source?.type === 'newsletter' ? 'Newsletter' : (draft?.source?.type === 'event' ? `About an event${draft.source.event?.start ? ` on ${new Date(draft.source.event.start).toLocaleDateString([], { month: 'short', day: 'numeric' })}` : ''}` : 'Your own writing') : `From “${project?.title || 'a sermon'}”`}</span>
+            <span className="muted small truncate">{standalone ? draft?.source?.type === 'newsletter' ? 'Newsletter' : (draft?.source?.type === 'event' ? `About an event${draft.source.event?.start ? ` on ${new Date(draft.source.event.start).toLocaleDateString([], { month: 'short', day: 'numeric' })}` : ''}` : 'Your own writing') : 'Writing from a sermon'}</span>
           </div>
         </div>
+        {/* Top right: where this came from (back to that sermon), and the trash for this writing. */}
+        {draft && (
+          <div className="row" style={{ gap: 4 }}>
+            {!standalone && project && (
+              <button className="link-btn small truncate" style={{ maxWidth: 360 }} title="Open the sermon this came from"
+                onClick={async () => { if (dirty && !window.confirm('Leave without saving your changes?')) return; go({ name: 'project', id: pid, step: project.status === 'transcribed' && project.isSermon !== false && (project.kind === 'sermon' || !project.kind) ? 'plan' : undefined }); }}>
+                From “{project.title}”
+              </button>
+            )}
+            {!trashed && <button className="rt-btn danger" title="Move this writing to the trash" aria-label="Move this writing to the trash"
+              onClick={async () => {
+                if (!window.confirm(`Move “${draft.title || project?.title || 'this writing'}” to the trash? You can restore it from the trash.`)) return;
+                try { await api.post('/api/finder/trash', { key: `writing:${pid}` }); toast({ text: 'Moved to the trash.' }); onBack(); } catch (e) { toast({ kind: 'error', text: e.message }); }
+              }}><Trash2 size={15} /></button>}
+          </div>
+        )}
 
       </div>
 
@@ -281,7 +381,7 @@ function WritingEditor({ pid, onBack, startKind }) {
               {placeholders > 0 && <button className="chip warn chip-btn" title="Go to the next spot to fill in" onClick={nextBlank}>{placeholders} spot{placeholders > 1 ? 's' : ''} to fill in</button>}
               <button className="btn sm" onClick={() => copy(true)}><Copy size={13} />Copy formatted</button>
               <div style={{ position: 'relative' }}>
-                <button className="btn sm" data-pop-trigger onClick={() => setRewriteMenu(!rewriteMenu)}><Users size={13} />Rewrite for…</button>
+                <button className="btn sm" data-pop-trigger onClick={() => setRewriteMenu(!rewriteMenu)}><Users size={13} />For an audience…</button>
                 <Popover open={rewriteMenu} onClose={() => setRewriteMenu(false)} align="right" width={300}>
                   <PopList items={AUDIENCE_LIST.map(([id, label, about]) => ({ label, hint: about, value: id }))} onPick={(id) => { setRewriteMenu(false); rewriteForAudience(id); }} />
                 </Popover>
@@ -338,8 +438,31 @@ function WritingEditor({ pid, onBack, startKind }) {
                         {config.llmProvider !== 'none' && (
                           <Toggle checked={useAi} onChange={(e) => setUseAi(e.target.checked)} icon={Sparkles} label="AI helper" small />
                         )}
-                        {undoBlog && <button className="btn ghost sm" onClick={() => { set({ blog: undoBlog }); setUndoBlog(null); }}><Undo2 size={13} />Undo</button>}
-                        <button className="btn primary" disabled={busy} onClick={rewrite}><RefreshCw size={15} className={busy ? 'spin' : ''} />{busy ? (useAi && config.llmProvider !== 'none' ? 'Writing, about a minute…' : 'Writing…') : draft.blog?.trim() ? 'Rewrite post' : 'Write post'}</button>
+                        {undoBlog && <button className="btn ghost sm" onClick={() => { set({ blog: undoBlog }); setUndoBlog(null); setMarked(null); }}><Undo2 size={13} />Undo</button>}
+                        {draft.blog?.trim() ? (<>
+                          <div style={{ position: 'relative' }}>
+                            <button className="btn" data-pop-trigger disabled={busy} onClick={() => setAddMenu(!addMenu)} title="Add a section in this angle below the post, above the closing invite"><Plus size={15} />Add in<ChevronDown size={13} /></button>
+                            <Popover open={addMenu} onClose={() => setAddMenu(false)} align="right" width={300}>
+                              <div className="stack" style={{ gap: 10, padding: 12 }}>
+                                <strong className="small">Add “{ANGLES.find((a) => a[0] === angle)[1]}”</strong>
+                                <span className="small muted">A new section below what's written, above the closing invite, building on the post. Pick another angle to add something else.</span>
+                                <div className="seg" role="group" aria-label="How long">{[[100, 'About 100 words'], [150, '150'], [250, '250']].map(([w, l]) => <button key={w} className={addWords === w ? 'on' : ''} onClick={() => setAddWords(w)}>{l}</button>)}</div>
+                                <button className="btn primary sm" onClick={addIn}><Plus size={13} />Add it</button>
+                              </div>
+                            </Popover>
+                          </div>
+                          <div style={{ position: 'relative' }}>
+                            <button className="btn" data-pop-trigger disabled={busy} onClick={() => setFocusMenu(!focusMenu)} title="Rewrite to raise one score"><Wand2 size={15} />Rewrite for<ChevronDown size={13} /></button>
+                            <Popover open={focusMenu} onClose={() => setFocusMenu(false)} align="right" width={300}>
+                              <PopList onPick={rewriteFor} items={[
+                                { label: 'Readability', hint: `${checks?.readScore ?? '–'}/100 · shorter sentences, active voice, easy flow`, value: 'read' },
+                                ...(voiceScore?.score != null ? [{ label: 'Brand voice', hint: `${voiceScore.score}/100 · your church's own words and themes`, value: 'voice' }] : []),
+                                { label: 'Search', hint: `${checks?.seoScore ?? '–'}/100 · the keyphrase where it counts`, value: 'seo' },
+                              ]} />
+                            </Popover>
+                          </div>
+                        </>) : null}
+                        <button className={`btn ${draft.blog?.trim() ? '' : 'primary'}`} disabled={busy} onClick={rewrite}><RefreshCw size={15} className={busy ? 'spin' : ''} />{busy ? (useAi && config.llmProvider !== 'none' ? 'Writing, about a minute…' : 'Writing…') : draft.blog?.trim() ? 'Full rewrite' : 'Write post'}</button>
                       </span>
                     </div>
                   </div></>}
@@ -371,11 +494,11 @@ function WritingEditor({ pid, onBack, startKind }) {
             </div>
             {kind === 'blog' && checks && (
               <aside className="glass panel stack sticky-col" style={{ gap: 16 }}>
-                <Checks title="Search" score={checks.seoScore} list={checks.seo} info={<SeoInfo />} />
+                <Checks title="Search" score={checks.seoScore} list={checks.seo} info={<SeoInfo />} marked={marked?.label} onMark={setMarked} />
                 <hr className="hairline" />
-                <Checks title="Readability" score={checks.readScore} list={checks.read} />
+                <Checks title="Readability" score={checks.readScore} list={checks.read} marked={marked?.label} onMark={setMarked} />
                 <hr className="hairline" />
-                <VoiceChecks text={draft.blog} />
+                <VoiceChecks text={draft.blog} onScore={setVoiceScore} />
                 <span className="muted small num">{checks.words} words</span>
               </aside>
             )}
@@ -439,13 +562,13 @@ function EmptyPiece({ kind, busy, useAi, project, days, setDays, hasBlog, about,
 }
 
 /** "Sounds like you": how close this draft is to the church's brand voice. */
-function VoiceChecks({ text }) {
+function VoiceChecks({ text, onScore }) {
   const { go } = useApp();
   const [r, setR] = useState(null);
   const t = useRef(null);
   useEffect(() => {
     clearTimeout(t.current);
-    t.current = setTimeout(() => api.post('/api/brand-voice/score', { text }).then(setR).catch(() => {}), 700);
+    t.current = setTimeout(() => api.post('/api/brand-voice/score', { text }).then((x) => { setR(x); onScore?.(x?.ready && !x.short ? x : null); }).catch(() => {}), 700);
     return () => clearTimeout(t.current);
   }, [text]);
   if (!r) return null;

@@ -88,7 +88,7 @@ function grit(ctx) {
 
 // ------------------------------------------------------------------ 3. Circles: a recap with round photos crossing the seams
 function circles(ctx, c) {
-  const S = recap(ctx); const paper = '#EAF3FC'; const navy = '#13284A'; const blue = c[0] && c[0] !== '#2B7F5F' ? c[0] : '#3B8EDB';
+  const S = recap(ctx); const paper = '#EAF3FC'; const navy = '#13284A'; const blue = '#3B8EDB';
   const Hd = T('Avenir Next', 800); const Bd = T('Avenir Next', 500); const HL = left(Hd); const BL = left(Bd);
   const n = S.pts.length + 2;
   const across = Array.from({ length: n - 1 }, (_, k) => ({ frame: true, shape: 'ellipse', x: k + 1, y: k % 2 ? 0.24 : 0.74, w: 0.42, h: 0.42 * R, fill: '#8A94A6', line: 14, stroke: blue }));
@@ -232,7 +232,7 @@ function group(ctx) {
 
 // ------------------------------------------------------------------ 9. Missions: heavy words over photos, a round badge in the corner
 function missions(ctx, c) {
-  const accent = c[1] || '#E8B04B'; const ink = '#FFFFFF';
+  const accent = '#E8B04B'; const ink = '#FFFFFF';
   const Hd = T('Avenir Next Condensed', 800); const Bd = T('Avenir Next', 600);
   const slides = [['Missions is not optional', ''], ['Jesus didn’t call us to stay comfortable', 'He called us to go, to serve and to love.'], ['Every nation, every neighbor', 'The mission field starts across the street.'],
     ['Go, send, or pray', 'Everyone has a part to play.'], ['Welcome to a lifestyle of sending', 'Compassion and faith in action.'], ['We will pray. We will give. We will go.', `Learn more · ${site(ctx)}`]];
@@ -270,13 +270,21 @@ function highlight(ctx) {
 }
 
 // ------------------------------------------------------------------ the list
+// Each one's own colors, in brand-kit order (primary, secondary, text, background, accent), so the
+// "My brand colors" switch in Design can swap them for the church's.
 const LIST = [
-  ['gather', 'Gather sky carousel', gather, 0], ['grit', 'Grit photo carousel', grit, 6], ['circles', 'Round photo recap carousel', circles, 5, true],
-  ['questions', 'Story questions carousel', questions, 0], ['editorial', 'Editorial recap carousel', editorial, 2, true], ['challenge', 'Reading challenge carousel', challenge, 0],
-  ['vision', 'Vision series carousel', vision, 4], ['group', 'Group invite carousel', group, 6], ['missions', 'Missions carousel', missions, 6],
-  ['highlight', 'Highlighted verse carousel', highlight, 0, true],
+  ['gather', 'Gather sky carousel', gather, 0, false, ['#4A9BE0', '#2F6FB5', '#13284A', '#EAF3FC', '#CFE6FF']],
+  ['grit', 'Grit photo carousel', grit, 6, false, null],
+  ['circles', 'Round photo recap carousel', circles, 5, true, ['#3B8EDB', '#7FB6EA', '#13284A', '#EAF3FC', '#3B8EDB']],
+  ['questions', 'Story questions carousel', questions, 0, false, ['#3E8EDE', '#2F6FB5', '#13284A', '#EAF3FC', '#CFE6FF']],
+  ['editorial', 'Editorial recap carousel', editorial, 2, true, ['#6E8196', '#A9C1DA', '#1D2B3D', '#EEF4FA', '#6E8196']],
+  ['challenge', 'Reading challenge carousel', challenge, 0, false, ['#5C8FD6', '#C8473A', '#4A4A4A', '#F7F4EE', '#C8473A']],
+  ['vision', 'Vision series carousel', vision, 4, false, ['#3D7BD9', '#3D7BD9', '#101820', '#E6EEF7', '#3D7BD9']],
+  ['group', 'Group invite carousel', group, 6, false, ['#8A6F45', '#F3E9D7', '#F3E9D7', '#1B1A18', '#F3E9D7']],
+  ['missions', 'Missions carousel', missions, 6, false, ['#E8B04B', '#E8B04B', '#FFFFFF', '#202020', '#E8B04B']],
+  ['highlight', 'Highlighted verse carousel', highlight, 0, true, ['#7FB0E0', '#F6E35A', '#1E2A36', '#D5E7F7', '#F6E35A']],
 ];
-export const CAROUSEL_TEMPLATES2 = LIST.map(([id, name, fn, photos, sermon]) => ({
-  id: `${id}-carousel2`, kind: 'carousel', name, photos, sermon: Boolean(sermon),
+export const CAROUSEL_TEMPLATES2 = LIST.map(([id, name, fn, photos, sermon, colors]) => ({
+  id: `${id}-carousel2`, kind: 'carousel', name, photos, sermon: Boolean(sermon), ...(colors ? { colors } : {}),
   build: (ctx = {}) => fn(ctx, ctx.c || []),
 }));

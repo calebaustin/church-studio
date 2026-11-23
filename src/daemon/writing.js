@@ -821,3 +821,120 @@ async function socialCaptions(projectId, { clipId, about, signal }) {
     `**Caption 3**\nWhat would change this week if you believed this?\n\n${tags(clip.hashtags || ['faith'])}`,
   ].join('\n\n');
 }
+
+// ---------------------------------------------------------------- add in a section, and rewrite for one score
+/**
+ * Split a post into its body and its closing call to action (the "watch the full sermon and join us" line, or a
+ * last short invite), so new writing can go between them.
+ */
+export function splitCta(md) {
+  const paras = String(md || '').trimEnd().split(/\n{2,}/);
+  const isCta = (p) => /\[watch|join (us|\S+.*) for worship|see you (on )?sunday|plan (a|your) visit|we('d| would) love to (see|have) you|\[add: service times\]/i.test(p) && p.split(/\s+/).length < 60;
+  let i = paras.length;
+  while (i > 1 && paras.length - i < 2 && isCta(paras[i - 1])) i--;
+  // A closing section of its own ("## Join us", "## Next steps") belongs with the invite.
+  const head = /^#{2,3}\s+(join us|come (and )?(join|worship|see)|your next step|next steps?|plan (a|your) visit|see you|visit us|we('d| would) love)/i;
+  for (let k = paras.length - 1; k >= Math.max(1, paras.length - 4); k--) if (head.test(paras[k].trim())) { i = Math.min(i, k); break; }
+  return { body: paras.slice(0, i).join('\n\n'), cta: paras.slice(i).join('\n\n') };
+}
+
+const ADD_NOTES = {
+  teaching: 'a short summary of the main points that ties them together',
+  story: 'a short story or illustration from the sermon and what it shows',
+  steps: 'practical, numbered steps a reader can take this week',
+  questions: 'two or three questions the message raises, each answered briefly from the sermon',
+  devotional: 'a short devotional: a Scripture from the sermon, a brief reflection, one question to sit with, and a one-line prayer',
+  newcomer: 'a warm word for someone new to church: what this message means for them, in plain words',
+};
+const ADD_HEADINGS = { teaching: 'Bringing it together', story: 'A story worth remembering', steps: 'Practical steps for this week', questions: 'Questions worth asking', devotional: 'A short devotional', newcomer: 'If you’re new here' };
+
+/**
+ * Add a new section to a written post, in light of what it already says: practical steps, a short devotional and
+ * so on, about `words` long, placed below the writing and above the closing invite.
+ */
+export async function addIn(projectId, { text, angle = 'steps', words = 150, signal } = {}) {
+  const { body, cta } = splitCta(text);
+  if (!body.trim()) throw new Error('Write the post first, then add to it.');
+  const n = Math.max(60, Math.min(400, Number(words) || 150));
+  const cfg = await loadConfig();
+  const sermon = !isStandalone(projectId);
+  // Without a helper, the section comes from the sermon itself: the matching part of a post written that way.
+  const localSection = async () => {
+    if (!sermon) throw new Error('Turn on an AI helper in Settings to add to writing that isn’t from a sermon.');
+    const { project, a } = await load(projectId);
+    const md = blogFor(a, project, { title: 'x', angle });
+    const have = new Set((body.match(/^##\s+.+$/gm) || []).map((h) => h.toLowerCase()));
+    const chunks = md.split(/\n(?=## )/).slice(1).filter((c) => !have.has(c.split('\n')[0].toLowerCase()) && !/\[watch|join .* for worship/i.test(c));
+    let out = ''; let count = 0;
+    for (const c of chunks) { const w = c.split(/\s+/).length; if (count && count + w > n * 1.4) break; out += `${out ? '\n\n' : ''}${c.trim()}`; count += w; if (count >= n) break; }
+    if (!out) out = `## ${ADD_HEADINGS[angle] || 'One more thing'}\n\n[ADD: ${ADD_NOTES[angle] || 'a short section'}.]`;
+    return out;
+  };
+  let section; let local = true; let notice = null;
+  if (providerReady(cfg)) {
+    const guide = voiceGuide(await loadVoice());
+    let source = '';
+    if (sermon) {
+      const digest = await savedDigest(projectId);
+      source = digest ? `Sermon summary:\n${JSON.stringify(digest).slice(0, 6000)}` : `Sermon excerpt:\n${((await getTranscript(projectId))?.words || []).map((w) => w.w).join(' ').slice(0, 9000)}`;
+    }
+    const system = `${POLISH_SYSTEM}\n${guide}\nYou add one new section to a church blog post that is already written.
+Write ${ADD_NOTES[angle] || 'a short section'}, about ${n} words. Start with a "## " subheading. Build on what the post already says
+and don't repeat it. Match its voice. Return only the new section in Markdown.`;
+    const r = await withFallback(cfg, () => complete(cfg, system, `${source}\n\nThe post so far:\n${body}`), localSection);
+    section = String(r.value || '').trim().replace(/^```\w*\n?|```$/g, '').trim();
+    local = r.local;
+    notice = r.notice?.text || null;
+    if (!/^#{2,3}\s/.test(section)) section = `## ${ADD_HEADINGS[angle] || 'One more thing'}\n\n${section}`;
+  } else section = await localSection();
+  return { section, text: [body.trimEnd(), section, cta].filter(Boolean).join('\n\n'), local, notice };
+}
+
+/** Readability fixes that work without a helper: long sentences split at a natural joint. */
+function readableLocal(md) {
+  return mapParagraphs(md, (p) => sentences(p).map((s) => shorten(s.trim(), 20)).join(' '));
+}
+
+/**
+ * Rewrite the post to raise one score: readability (shorter sentences, active voice, transitions), brand voice
+ * (the church's own words and themes) or search (the keyphrase where it counts). `notes` are the checks that need
+ * work, in the words the score panel shows, so the helper knows exactly what to fix.
+ */
+export async function rewriteFocus(projectId, { text, focus = 'read', notes = [], keyphrase = '', title = '' } = {}) {
+  if (!String(text || '').trim()) throw new Error('There’s nothing to rewrite yet.');
+  const cfg = await loadConfig();
+  const { body, cta } = splitCta(text);
+  const join = (t) => [String(t).trim(), cta].filter(Boolean).join('\n\n');
+  const fix = notes.length ? `Fix these, from the post's checks:\n- ${notes.join('\n- ')}` : '';
+  if (!providerReady(cfg)) {
+    if (focus === 'read') return { text: join(readableLocal(body)), local: true, notice: 'Long sentences were split on this Mac. An AI helper does a fuller rewrite.' };
+    throw new Error('Turn on an AI helper in Settings to rewrite for this.');
+  }
+  const guide = voiceGuide(await loadVoice());
+  const aims = {
+    read: 'Make it easier to read: keep most sentences under 20 words, use active voice, add natural transition words, keep paragraphs short, and add a subheading at least every 300 words. Keep every point.',
+    voice: 'Make it sound more like this church: use its own words, themes and tone from the voice guide. Keep every point and fact.',
+    seo: `Help it rank in search for "${keyphrase || title}": use that phrase naturally in the first paragraph and in one subheading, about once every 150 words, and keep the title "${title}" as the H1. Don't stuff it. Keep every point.`,
+  };
+  const system = `${POLISH_SYSTEM}\n${focus === 'voice' || focus === 'read' ? guide : ''}\n${aims[focus] || aims.read}\n${fix}
+You get one part of the post at a time. Keep its heading line exactly, keep every point, and keep about the same number of words. Return only that part, revised, in Markdown.`;
+  // One section at a time: small on-device helpers stay on task and don't drop half the post. A part that comes
+  // back much shorter (or not at all) keeps a local readability fix instead, so nothing is lost.
+  const wc = (t) => String(t).split(/\s+/).filter(Boolean).length;
+  const parts = body.split(/\n(?=## )/);
+  const out = []; let local = 0; let notice = null;
+  for (const part of parts) {
+    const keep = () => (focus === 'read' ? readableLocal(part) : part);
+    const r = await withFallback(cfg, () => complete(cfg, system, part), keep);
+    let v = String(r.value || '').trim().replace(/^```\w*\n?|```$/g, '').trim();
+    if (r.local || wc(v) < wc(part) * 0.7 || wc(v) > wc(part) * 1.4) { v = keep(); local++; }
+    else if (focus === 'read') v = readableLocal(v); // any sentence still too long is split where it naturally joins
+    // Keep the part's own heading (an H1 title or a ## subheading) even if the helper changed or dropped it.
+    const h = part.match(/^#{1,3}\s.+$/m)?.[0];
+    if (h && !v.includes(h.trim())) v = `${h}\n\n${v.replace(/^#{1,3}\s.+\n+/, '')}`;
+    out.push(v);
+    notice = notice || r.notice?.text || null;
+  }
+  const helper = PROVIDER_LABEL(cfg);
+  return { text: join(out.join('\n\n')), local: local === parts.length, notice: notice || (local === parts.length ? `${helper} couldn't rewrite this, so it was fixed on this Mac.` : local ? `${helper} rewrote most of it. ${local} part${local === 1 ? ' was' : 's were'} fixed on this Mac.` : null) };
+}

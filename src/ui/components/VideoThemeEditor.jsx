@@ -82,7 +82,7 @@ export function ColorRow({ label, color, opacity, onColor, onOpacity, hint }) {
   );
 }
 
-function FontPicker({ value, onChange, label = 'Font' }) {
+export function FontPicker({ value, onChange, label = 'Font', width, placeholder }) {
   const { themes } = useApp();
   const current = findFont(themes, value);
   const options = [
@@ -90,7 +90,7 @@ function FontPicker({ value, onChange, label = 'Font' }) {
     ...(themes.systemFonts || []).map((f) => ({ value: f.id, label: f.name, css: f.css, weight: f.weight, group: 'Installed on this Mac' })),
   ];
   if (current && !options.some((o) => o.value === value)) options.unshift({ value, label: current.name, css: current.css, group: 'Current' });
-  return <FontMenu label={label} value={value} onChange={onChange} options={options} />;
+  return <FontMenu label={label} value={value} onChange={onChange} options={options} width={width} placeholder={placeholder} />;
 }
 
 /** All caption style controls, in two parts: how the text is set (font, size, box, alignment, anchor) and how

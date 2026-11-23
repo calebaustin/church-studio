@@ -76,7 +76,8 @@ export function useBrandCtx() {
 /** A new design: blank, or from a template, with church details filled in. brand: use the church's colors. */
 export function newDoc(kind, tpl, ctx, size, { brand = false } = {}) {
   const k = KINDS[kind];
-  const packColors = tpl?.pack ? PACKS[tpl.pack].c : null;
+  // A template's own colors (its pack's, or its own list), which the brand switch swaps for the church's.
+  const packColors = tpl?.colors || (tpl?.pack ? PACKS[tpl.pack].c : null);
   let pages = tpl ? fillChurch(tpl.build(ctx), ctx.church) : [blankPage(kind, ctx)];
   if (brand && packColors) pages = inBrandColors(pages, packColors, ctx.c);
   return {

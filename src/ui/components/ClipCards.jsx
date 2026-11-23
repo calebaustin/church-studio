@@ -1,10 +1,12 @@
 // Full-screen cards for a clip: lyrics, a verse or the words being said, in front of everything for a while.
 // The editor panel (in Graphics) and the live preview. The export draws them the same way (Cards in render_clip.py).
 import { useState } from 'react';
-import { Plus, Trash2, LogIn, LogOut } from 'lucide-react';
+import { Plus, Trash2, LogIn, LogOut, Copy, ChevronDown } from 'lucide-react';
 import Toggle from './Toggle.jsx';
 import ColorField from './ColorField.jsx';
-import CaptionOverlay from './CaptionOverlay.jsx';
+import CaptionOverlay, { findFont } from './CaptionOverlay.jsx';
+import { FontPicker } from './VideoThemeEditor.jsx';
+import { useApp } from '../App.jsx';
 import { fmt } from '../api.js';
 
 const BG_TYPES = [['solid', 'Solid'], ['pattern', 'Pattern'], ['gradient', 'Gradient'], ['mesh', 'Mesh'], ['motion', 'Moving']];
@@ -56,6 +58,7 @@ const reveal = (c, t) => {
 
 /** The live preview of whichever card is showing. */
 export function CardPreview({ cards, outTime, keep, capWords, theme, font, frameWidth, playing, brand }) {
+  const { themes } = useApp();
   const c = (cards || []).find((x) => outTime >= x.start && outTime <= x.end);
   if (!c) return null;
   const { e, tr } = reveal(c, outTime);
@@ -76,21 +79,34 @@ export function CardPreview({ cards, outTime, keep, capWords, theme, font, frame
         ? <div className="clip-card-text" style={{ fontFamily: font?.css, color: theme?.color || '#FFFFFF', fontSize: Math.round(frameWidth * 0.075 * lay.scale / 1.35), width: `${lay.width * 100}%`, textAlign: lay.align, lineHeight: lay.lineHeight ?? 1.18,
           top: `${lay.position * 100}%`, transform: lay.anchor === 'bottom' ? 'translate(-50%, -100%)' : lay.anchor === 'top' ? 'translate(-50%, 0)' : 'translate(-50%, -50%)' }}>{c.text}</div>
         : cardTheme && <CaptionOverlay theme={cardTheme} font={font} words={words} t={outTime} frameWidth={frameWidth} />}
-      {c.label?.trim() && <div className={`clip-card-label ${c.labelPos === 'top' ? 'top' : ''}`} style={{ fontFamily: font?.css, color: theme?.color || '#FFFFFF', fontSize: Math.round(frameWidth * 0.045) }}>{c.label}</div>}
+      {c.label?.trim() && <div className={`clip-card-label ${c.labelPos === 'top' ? 'top' : ''}`} style={{ fontFamily: (c.labelFont ? findFont(themes, c.labelFont) : font)?.css, color: theme?.color || '#FFFFFF', fontSize: Math.round(frameWidth * 0.045), textAlign: lay.align, left: `${(1 - lay.width) * 50}%`, right: `${(1 - lay.width) * 50}%` }}>{c.label}</div>}
     </div>
   );
 }
 
 /** The Graphics tab panel: add cards at the playhead, then set the words, background and transition. */
-export function CardsPanel({ clip, set, now, len, brand }) {
+export function CardsPanel({ clip, set, now, len, brand, theme }) {
   const list = clip.cards || [];
   const [tabs, setTabs] = useState({}); // which page each card shows: words, background or text layout
+  // One card's settings are open at a time (the newest to start); the rest fold down to their header row.
+  const [openId, setOpenId] = useState(null);
+  const shown = openId === null ? list.at(-1)?.id : openId;
   const save = (next) => set({ cards: next });
   const up = (id, patch) => save(list.map((c) => (c.id === id ? { ...c, ...patch } : c)));
   const upBg = (c, patch) => up(c.id, { bg: { type: 'mesh', ...(c.bg || {}), ...patch } });
+  const newId = () => Math.random().toString(36).slice(2, 8);
+  // A copy with the same settings, starting right where this one ends and lasting as long.
+  const duplicate = (c) => {
+    const start = +Math.min(c.end, Math.max(0, len - 0.5)).toFixed(1);
+    const copy = { ...JSON.parse(JSON.stringify(c)), id: newId(), start, end: +Math.min(len, start + Math.max(0.5, c.end - c.start)).toFixed(1) };
+    const at = list.findIndex((x) => x.id === c.id);
+    save([...list.slice(0, at + 1), copy, ...list.slice(at + 1)]);
+    setOpenId(copy.id);
+  };
   const add = () => {
     const start = +Math.min(Math.max(0, now), Math.max(0, len - 1)).toFixed(1);
-    save([...list, { id: Math.random().toString(36).slice(2, 8), start, end: +Math.min(len, start + 5).toFixed(1), text: '', transitionIn: 'none', transitionOut: 'none', bg: { type: 'motion', motion: 'drift', colors: (brand || []).slice(0, 3), dim: 0.15 } }]);
+    setOpenId(null); // the new card (the last one) opens
+    save([...list, { id: newId(), start, end: +Math.min(len, start + 5).toFixed(1), text: '', transitionIn: 'none', transitionOut: 'none', bg: { type: 'motion', motion: 'drift', colors: (brand || []).slice(0, 3), dim: 0.15 } }]);
   };
   return (
     <div className="keycard stack" style={{ gap: 12 }}>
@@ -98,20 +114,30 @@ export function CardsPanel({ clip, set, now, len, brand }) {
         <div className="stack" style={{ gap: 0 }}><strong>Full-screen cards</strong><span className="small muted">Lyrics, a verse or the words being said, in front of everything for a moment.</span></div>
         <button className="btn primary sm" onClick={add}><Plus size={13} />Add at {fmt(now)}</button>
       </div>
-      {list.map((c) => {
+      {list.map((c, ci) => {
+        const open = shown === c.id;
         const cols = colorsOf(c, brand);
         const type = c.bg?.type || 'mesh';
         return (
           <div key={c.id} className="card-row stack" style={{ gap: 10 }}>
             <div className="row wrap" style={{ gap: 6 }}>
+              <span className="card-num" aria-label={`Card ${ci + 1}`}>{ci + 1}</span>
               <span className="small" style={{ fontWeight: 600 }}>From</span>
               <input className="input num card-time" type="number" min="0" step="0.1" value={c.start} onChange={(e) => up(c.id, { start: Number(e.target.value) })} />
               <button className="btn ghost sm" onClick={() => up(c.id, { start: +now.toFixed(1), end: Math.max(c.end, +(now + 1).toFixed(1)) })}>Start here</button>
               <span className="small" style={{ fontWeight: 600 }}>to</span>
               <input className="input num card-time" type="number" min="0" step="0.1" value={c.end} onChange={(e) => up(c.id, { end: Number(e.target.value) })} />
               <button className="btn ghost sm" disabled={now <= c.start} onClick={() => up(c.id, { end: +now.toFixed(1) })}>End here</button>
-              <button className="btn icon sm danger" aria-label="Delete card" style={{ marginLeft: 'auto' }} onClick={() => save(list.filter((x) => x.id !== c.id))}><Trash2 size={14} /></button>
+              <span className="row" style={{ gap: 2, marginLeft: 'auto' }}>
+                <button className="btn icon sm danger" aria-label={`Delete card ${ci + 1}`} title="Delete card" onClick={() => save(list.filter((x) => x.id !== c.id))}><Trash2 size={14} /></button>
+                <button className="btn icon sm" aria-label={`Duplicate card ${ci + 1}`} title="Duplicate: same settings, starting where this one ends" onClick={() => duplicate(c)}><Copy size={14} /></button>
+                <button className="btn icon sm" aria-expanded={open} aria-label={open ? `Fold card ${ci + 1}` : `Open card ${ci + 1}`} title={open ? 'Hide settings' : 'Show settings'} onClick={() => setOpenId(open ? '' : c.id)}>
+                  <ChevronDown size={14} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform var(--fast) var(--ease)' }} />
+                </button>
+              </span>
             </div>
+            {!open && <span className="small muted truncate card-sum">{c.text?.trim() || c.custom ? (c.text?.trim() || 'Your own text') : c.show === 'all' ? 'The words being said, all at once' : 'The words being said'}{c.label?.trim() ? ` · ${c.label.trim()}` : ''}</span>}
+            {open && (<>
             <div className="tabs card-tabs" role="tablist">
               {[['words', 'Words'], ['bg', 'Background'], ['layout', 'Text size and place']].map(([k, l]) => <button key={k} role="tab" aria-selected={(tabs[c.id] || 'words') === k} className={(tabs[c.id] || 'words') === k ? 'on' : ''} onClick={() => setTabs((t) => ({ ...t, [c.id]: k }))}>{l}</button>)}
             </div>
@@ -131,11 +157,13 @@ export function CardsPanel({ clip, set, now, len, brand }) {
               </div>
             )}
             <div className="row wrap" style={{ gap: 8 }}>
+              <FontPicker label="" width={170} placeholder="Caption font" value={c.labelFont || theme?.font || ''} onChange={(id) => up(c.id, { labelFont: id })} />
               <input className="input grow" style={{ minWidth: 160 }} value={c.label || ''} placeholder="Reference or label, like Luke 22:19" onChange={(e) => up(c.id, { label: e.target.value })} />
               {c.label?.trim() && <div className="seg" role="group" aria-label="Label place">{[['top', 'Above'], ['bottom', 'Below']].map(([k, l]) => <button key={k} className={(c.labelPos || 'bottom') === k ? 'on' : ''} onClick={() => up(c.id, { labelPos: k })}>{l}</button>)}</div>}
             </div>
             <div className="stack" style={{ gap: 8 }}>
               <span className="small" style={{ fontWeight: 600 }}>Transition</span>
+              <div className="row wrap" style={{ gap: '8px 20px', alignItems: 'start' }}>
               {[['In', LogIn, trIn(c), 'transitionIn'], ['Out', LogOut, trOut(c), 'transitionOut']].map(([name, Icon, cur, key]) => {
                 const on = cur !== 'none';
                 const isSlide = cur.startsWith('slide');
@@ -147,6 +175,7 @@ export function CardsPanel({ clip, set, now, len, brand }) {
                   </div>
                 );
               })}
+              </div>
             </div>
             </>)}
             {tabs[c.id] === 'bg' && (
@@ -186,6 +215,7 @@ export function CardsPanel({ clip, set, now, len, brand }) {
                 </div>
               );
             })()}
+            </>)}
           </div>
         );
       })}

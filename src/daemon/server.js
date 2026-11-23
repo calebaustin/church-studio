@@ -647,6 +647,8 @@ streamRoute('POST', '/api/writing/:id/rewrite-stream', async ({ id }, b, res, re
   res.end();
 });
 route('POST', '/api/writing/:id/devotional', async ({ id }, b) => { try { return await writing.devotional(id, b.days); } catch (e) { throw new HttpError(400, e.message); } });
+route('POST', '/api/writing/:id/add-in', async ({ id }, b) => { try { return await writing.addIn(id, b || {}); } catch (e) { throw new HttpError(400, e.message); } });
+route('POST', '/api/writing/:id/rewrite-focus', async ({ id }, b) => { try { return await writing.rewriteFocus(id, b || {}); } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/writing/:id/polish', async ({ id }, b) => { try { return await writing.polish(id, b.kind, b.text); } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/writing/:id/save-file', async ({ id }, b) => {
   const p = await getProject(id);

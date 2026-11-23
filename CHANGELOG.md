@@ -2,6 +2,20 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## 0.32.0 · November 23, 2026
+
+- **Easier to juggle full-screen cards.** Each card shows its number in a circle. A fold button hides a card's settings, and opening one card folds the others. A duplicate button makes a copy with the same settings that starts right where the card ends. Transition In and Out share a line when there's room.
+- **A font for the reference.** On a full-screen card's Words page, a small font menu next to Reference or label sets the label's font, like a serif for "Luke 22:19".
+- **Labels line up with their card.** A card's reference or label follows the card's own alignment and width, instead of the caption style's.
+- **Add in.** Once a blog post is written, pick an angle (practical steps, a short devotional, questions and so on), choose about how long, and Add in writes a new section that builds on the post. It goes below the writing and above the closing invite.
+- **Rewrite for readability, brand voice or search.** Rewrite for uses the checks that need work (like "33% of sentences are over 20 words") to raise that one score, a section at a time so nothing gets dropped. Full rewrite writes the whole post again in the chosen angle.
+- **See the trouble spots.** Click a check like Short sentences and the sentences it means are underlined with a squiggle in the post. They follow your edits and go away once the check passes.
+- **The AI helper switch starts on** in blog writing when you've turned on an AI helper in Settings.
+- **Fairer sentence check.** Headings and list items no longer run into the next sentence, so Short sentences counts real sentences.
+- **Where it came from, and a trash can.** At the top right of a sermon's writing, From "sermon title" takes you back to that sermon. Next to it, a trash icon moves the writing to the trash, where you can restore it.
+- **New carousels follow your brand.** With My brand colors on, the ten newer carousels switch to your church's colors too.
+- A gentler encouraging note: "Your work matters, even when no one seems to say so."
+
 ## 0.31.0 · November 23, 2026
 
 - **Zoom the blurred background.** In Framing › Whole frame, the blurred copy behind the shot can be zoomed in and moved on its own, say to put a big soft face up top. Double-click the preview to drag it, or use the sliders.
