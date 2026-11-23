@@ -148,9 +148,9 @@ export default function Project({ id, initialStep, initialClip, initialTime }) {
 
   return (
     <div className="page">
-      <div className="row between wrap">
-        <div className="row grow" style={{ minWidth: 300 }}>
-          {onPage
+      <div className="project-head">
+        <div className="row wrap project-head-top">
+          {initialStep === 'plan'
             ? <button className="btn ghost sm" onClick={() => go({ name: 'projects' })}><ArrowLeft size={15} />All projects</button>
             : <button className="btn ghost sm" onClick={() => go({ name: 'library' })}><ArrowLeft size={15} />Videos</button>}
           <input className="input" size={Math.min(40, Math.max(8, project.title.length + 1))} style={{ fontWeight: 650, fontSize: 17, background: 'transparent', border: 0, boxShadow: 'none', width: 'auto', flex: 'none' }}
@@ -161,7 +161,7 @@ export default function Project({ id, initialStep, initialClip, initialTime }) {
               {hasHome && <button className={step === 'home' ? 'on' : ''} aria-pressed={step === 'home'} onClick={async () => { if (step === 'edit' && !(await confirmLeave())) return; setStep('home'); }}><House size={13} aria-hidden="true" />Overview</button>}
               {hasPage && <button className={`${onPage ? 'on' : ''} ${transcribed ? '' : 'has-tip'}`} aria-pressed={onPage} aria-disabled={!transcribed}
                 title={transcribed ? "This sermon's own page: its points, next steps and everything made from it" : undefined} data-tip={transcribed ? undefined : 'Available after transcribe'}
-                onClick={async () => { if (!transcribed) return; if (step === 'edit' && !(await confirmLeave())) return; go({ name: 'project', id: project.id, step: 'plan' }); }}><BookOpen size={13} aria-hidden="true" />Sermon page</button>}
+                onClick={async () => { if (!transcribed) return; if (step === 'edit' && !(await confirmLeave())) return; setStep('plan'); }}><BookOpen size={13} aria-hidden="true" />Sermon page</button>}
             </div>
           )}
           <StatusChip status={project.status} />
@@ -171,7 +171,7 @@ export default function Project({ id, initialStep, initialClip, initialTime }) {
             await api.del(`/api/projects/${id}`); go({ name: 'library' });
           }}><Trash2 size={14} />Delete</button>}
         </div>
-        <div className="steps glass">
+        <div className="steps glass project-head-steps">
           {steps.map(([key, label, done], i) => (
             <button key={key} className={`${step === key ? 'on' : ''} ${done ? 'done' : ''}`}
               disabled={key !== 'transcribe' && !transcribed || (key === 'edit' && !project.clips.length)}
@@ -198,7 +198,8 @@ export default function Project({ id, initialStep, initialClip, initialTime }) {
             const wasSermon = project.isSermon === true || (project.sermon?.confirmed && project.sermon?.method !== 'whole');
             await patch({ sermon: { ...range, confirmed: true } });
             if (!wasSermon && (project.kind === 'sermon' || !project.kind) && project.isSermon !== false) toast({ keep: false, text: `${project.title} is now a Sermon. Keep working here, or find it later under All projects › Sermons.` });
-            if (audioOnly) setStep('text'); else start('propose', {});
+            // Clips are found from the clips page, where you pick how many, how long and how hard to look.
+            if (audioOnly) setStep('text'); else setStep('clips');
           }} />
       )}
       {step === 'clips' && (
@@ -361,7 +362,7 @@ function SermonStep({ project, transcript, src, player, onConfirm, busy, job, au
             <p className="phrase">“…{transcript.words.filter((w) => w.end <= range.end + 0.05).slice(-18).map((w) => w.w).join(' ')}”</p>
           </div>
           <p className="muted small num">{fmt(range.end - range.start)} long</p>
-          {job ? <InlineJob job={job} label="Finding clips…" /> : <button className="btn primary lg" disabled={!(range.end > range.start)} onClick={() => onConfirm(range)}><Wand2 size={16} />Find clips</button>}
+          {job ? <InlineJob job={job} label="Finding clips…" /> : <button className="btn primary lg" disabled={!(range.end > range.start)} onClick={() => onConfirm(range)}>Next: pick clips<ArrowRight size={16} /></button>}
         </section>
       </div>
     </div>

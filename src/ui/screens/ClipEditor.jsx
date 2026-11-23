@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Toggle from '../components/Toggle.jsx';
-import { Undo2, Redo2, Download, Zap, Plus, Trash2, Crosshair, Play, Pause, Send, FolderOpen, Save, MousePointerClick, Bookmark, X, ScissorsLineDashed, CalendarDays, ChevronDown, AudioWaveform, Captions, CaseUpper, Scissors, PenLine, Gauge as GaugeIcon, Palette } from 'lucide-react';
+import { Undo2, Redo2, Download, Zap, Plus, Trash2, Crosshair, Play, Pause, Send, FolderOpen, Save, MousePointerClick, Bookmark, X, ScissorsLineDashed, CalendarDays, ChevronDown, AudioWaveform, Captions, CaseUpper, Scissors, PenLine, Gauge as GaugeIcon, Palette, RotateCcw, Copy } from 'lucide-react';
 import { useApp, useHelperFocus } from '../App.jsx';
 import { api, fmt, media } from '../api.js';
 import CaptionOverlay, { findFont } from '../components/CaptionOverlay.jsx';
@@ -196,6 +196,7 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
     await patch({ clips: merged(next) });
     h.reset(next);
     setSaved(next);
+    return next;
   };
   const discard = () => { h.reset(saved); setThemeDraft(baseTheme); setThemeDirty(false); };
   const latest = useRef({});
@@ -332,6 +333,28 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
   }
   x = clampX(x, frac);
   const left = Math.min(0, Math.max(-(VW - FW), -(x * VW - FW / 2)));
+  // Digital zoom: the preview shows the zoomed-in part of the shot, the way the export and speaker finding use it.
+  const zoomOk = Boolean(project.media?.width) && (wide || ['auto', 'manual', 'cues'].includes(mode));
+  const zm = zoomOk ? (crop.zoom || null) : null;
+  const zz = Math.max(1, Math.min(4, zm?.z || 1));
+  const zcx = Math.min(1 - 1 / (2 * zz), Math.max(1 / (2 * zz), zm?.cx ?? 0.5));
+  const zcy = Math.min(1 - 1 / (2 * zz), Math.max(1 / (2 * zz), zm?.cy ?? 0.5));
+  const [zooming, setZooming] = useState(false); // the crop grid is up: drag the picture, drag the percent to zoom
+  const zoomBase = useRef(null);
+  const setZoom = (p, opts) => {
+    const n = { z: zz, cx: zcx, cy: zcy, ...p };
+    n.z = Math.round(Math.max(1, Math.min(4, n.z)) * 100) / 100;
+    n.cx = Math.round(Math.min(1 - 1 / (2 * n.z), Math.max(1 / (2 * n.z), n.cx)) * 1000) / 1000;
+    n.cy = Math.round(Math.min(1 - 1 / (2 * n.z), Math.max(1 / (2 * n.z), n.cy)) * 1000) / 1000;
+    set({ crop: { ...crop, zoom: n.z > 1.005 ? n : null } }, opts);
+  };
+  // When the zoom changes, the speaker is found again inside the new frame.
+  const refind = () => { if (mode === 'auto' && !busyKind('track')) run('track'); };
+  const finishZoom = () => { setZooming(false); if (zoomBase.current && (zoomBase.current.z !== zz || zoomBase.current.cx !== zcx || zoomBase.current.cy !== zcy)) refind(); zoomBase.current = null; };
+  const startZoom = () => { if (!zoomOk) return; zoomBase.current = { z: zz, cx: zcx, cy: zcy }; setZooming(true); };
+  // The full shot, sized up by the zoom and shifted so the zoomed part fills the frame.
+  const fullW = (wide ? FW : VW) * zz; const fullH = FH * zz;
+  const zox = (zcx - 1 / (2 * zz)) * fullW; const zoy = (zcy - 1 / (2 * zz)) * fullH;
   const canvasMode = mode === 'fit' || mode === 'stack3' || mode === 'split' || mode === 'lyric' || !project.media?.width;
   const setCrop = (p) => set({ crop: { ...crop, ...p } });
   const addCue = () => {
@@ -343,9 +366,15 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
   const updateCue = (i, p) => setCrop({ cues: cues.map((c, k) => (k === i ? { ...c, ...p } : c)) });
   const removeCue = (i) => { setCrop({ cues: cues.filter((_, k) => k !== i) }); setSelCue(null); };
   const canDrag = !wide && (mode === 'manual' || (mode === 'cues' && selCue != null && cues[selCue]));
-  const onPointerDown = (e) => { drag.current = { x0: e.clientX, start: x, moved: false }; e.currentTarget.setPointerCapture(e.pointerId); };
+  const onPointerDown = (e) => { drag.current = { x0: e.clientX, y0: e.clientY, start: x, zx: zcx, zy: zcy, moved: false, first: true }; e.currentTarget.setPointerCapture(e.pointerId); };
   const onPointerMove = (e) => {
     const d = drag.current;
+    if (d && zooming) { // drag the picture to put the person in place
+      const dx = e.clientX - d.x0; const dy = e.clientY - d.y0;
+      if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
+      if (d.moved) { setZoom({ cx: d.zx - dx / fullW, cy: d.zy - dy / fullH }, { quiet: !d.first }); d.first = false; }
+      return;
+    }
     if (!d || !canDrag) return;
     const dx = e.clientX - d.x0;
     if (Math.abs(dx) > 4) d.moved = true;
@@ -353,7 +382,7 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
     const nx = Math.round(clampX(d.start - dx / VW, frac) * 1000) / 1000;
     if (mode === 'manual') setCrop({ x: nx }); else updateCue(selCue, { x: nx });
   };
-  const onPointerUp = () => { const d = drag.current; drag.current = null; if (!d?.moved) toggle(); };
+  const onPointerUp = () => { const d = drag.current; drag.current = null; if (!d?.moved && !zooming) toggle(); };
 
   const busyKind = (k) => jobs.some((j) => j.kind === k && j.key?.endsWith(clip.id));
   const run = async (kind) => {
@@ -369,6 +398,51 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
   const working = project.clips.filter((c) => c.status === 'kept' || c.status === 'exported' || c.id === clip.id);
   const wi = working.findIndex((c) => c.id === clip.id);
   const [exportAll, setExportAll] = useState(false);
+
+  // ---- shared look and panel defaults
+  // How a clip looks, apart from its words and timing. "Use settings for all clips" copies these to the others.
+  const displayOf = (c) => {
+    const { cues: _c, anchors: _a, x: _x, ...cropStyle } = c.crop || {};
+    return {
+      videoTheme: c.videoTheme || null, captions: c.captions !== false, progressBar: c.progressBar || null,
+      capY: c.capY ?? null, capWidth: c.capWidth ?? null, capSize: c.capSize ?? null,
+      hookY: c.hookY ?? null, hookSize: c.hookSize ?? null, hookWidth: c.hookWidth ?? null, hookFont: c.hookFont ?? null, hideHook: Boolean(c.hideHook),
+      look: c.look || null, audioCleanup: c.audioCleanup, overlay: c.overlay || null, cropStyle,
+    };
+  };
+  const shareAll = async () => {
+    const others = project.clips.filter((c) => c.id !== clip.id && (c.status === 'kept' || c.status === 'exported'));
+    if (!others.length) return;
+    try {
+      const next = await save(); // saves an edited caption style as a theme first, so every clip can use it
+      const { cropStyle, ...d } = displayOf(next);
+      const clips = project.clips.map((c) => {
+        if (c.id === next.id) return { ...c, ...next };
+        if (!others.some((o) => o.id === c.id)) return c;
+        const keep = { cues: c.crop?.cues, anchors: c.crop?.anchors, x: c.crop?.x };
+        return { ...c, ...d, crop: { ...cropStyle, ...Object.fromEntries(Object.entries(keep).filter(([, v]) => v != null)) }, edited: true };
+      });
+      await patch({ clips, videoTheme: next.videoTheme || undefined });
+      toast({ text: `Used this clip's settings for ${others.length} other clip${others.length === 1 ? '' : 's'}.` });
+    } catch (e) { toast({ kind: 'error', text: e.message }); }
+  };
+  // Each panel can go back to its defaults (the sermon's or your brand's caption theme for captions). Undo puts it back.
+  const defaultTheme = themes.video.find((t) => t.id === (project.videoTheme || config.videoTheme)) || themes.video[0];
+  const REVERT = {
+    text: { title: 'Set the hook style and place back to the defaults', run: () => { set({ hookY: null, hookSize: null, hookWidth: null, hookFont: null, hideHook: false }); setThemeDraft(defaultTheme); setThemeDirty(false); } },
+    look: { title: 'Set the captions back to your default theme', run: () => { set({ videoTheme: null, captions: true, progressBar: null, capY: null, capWidth: null, capSize: null }); setThemeDraft(defaultTheme); setThemeDirty(false); } },
+    crop: { title: 'Set framing back to Follow speaker', run: () => set({ crop: { mode: 'auto', smooth: 0 } }) },
+    video: { title: 'Set the video look back to the original', run: () => set({ look: null }) },
+    sound: { title: "Set the sound back to the sermon's setting", run: () => set({ audioCleanup: undefined }) },
+    popups: { title: 'Remove all pop-ups', confirm: true, run: () => set({ popups: [] }) },
+    gfx: { title: 'Remove the full-screen cards, logo, intro and end cards', confirm: true, run: () => set({ cards: [], overlay: null, introCard: null, endCard: null }) },
+  };
+  const revertPanel = (k) => {
+    const r = REVERT[k];
+    if (r.confirm && !window.confirm(`${r.title}? Undo puts them back.`)) return;
+    r.run();
+    toast({ text: 'Set back to the defaults. Undo puts it back.' });
+  };
 
   // ---- edit templates
   const applySettings = (st) => {
@@ -476,10 +550,26 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
 
       <div className={`editor ${wide ? 'wide' : ''}`}>
         <div className="stack sticky-col">
-          <div className={`vframe ${canDrag ? 'draggable' : ''}`} style={{ width: FW, aspectRatio: wide ? '16 / 9' : undefined }} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
-            title={canDrag ? 'Drag sideways to aim the frame. Click to play or pause.' : 'Click to play or pause'}>
+          <div className={`vframe ${canDrag || zooming ? 'draggable' : ''} ${zooming ? 'zooming' : ''}`} style={{ width: FW, aspectRatio: wide ? '16 / 9' : undefined }} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
+            onDoubleClick={() => { if (!zooming) startZoom(); }}
+            title={zooming ? 'Drag to move the picture' : canDrag ? 'Drag sideways to aim the frame. Click to play or pause. Double-click to zoom.' : zoomOk ? 'Click to play or pause. Double-click to zoom in.' : 'Click to play or pause'}>
+            {zooming && (
+              <div className="zoom-grid" aria-hidden="false">
+                <i className="v1" /><i className="v2" /><i className="h1" /><i className="h2" />
+                <div className="zoom-bar" onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+                  <span className="zoom-pct num" title="Drag left or right to zoom" onPointerDown={(e) => {
+                    e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId);
+                    const x0 = e.clientX; const z0 = zz; let first = true;
+                    const mv = (ev) => { setZoom({ z: z0 + (ev.clientX - x0) / 120 }, { quiet: !first }); first = false; };
+                    const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); };
+                    window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
+                  }}>{Math.round(zz * 100)}%</span>
+                  <button type="button" onClick={finishZoom}>Done</button>
+                </div>
+              </div>
+            )}
             <video ref={video} src={media(project.id, project.proxy || project.sourceFile)} preload="auto" playsInline
-              style={canvasMode && !(wide && project.media?.width) ? { opacity: 0, width: 2, height: 2 } : { ...(wide ? { height: FH, width: FW, left: 0, objectFit: 'contain' } : { height: FH, width: VW, left }), filter: lookFilter(clip.look) }} />
+              style={canvasMode && !(wide && project.media?.width) ? { opacity: 0, width: 2, height: 2 } : { ...(wide ? { height: fullH, width: fullW, left: -zox, top: -zoy, objectFit: 'contain' } : { height: fullH, width: fullW, left: left - zox, top: -zoy }), filter: lookFilter(clip.look) }} />
             {canvasMode && !(wide && project.media?.width) && <CanvasFrame video={video} mode={project.media?.width ? mode : 'lyric'} colors={config.brandColors} bg={crop.bg} gap={crop.gap} split={crop.split} width={FW} height={Math.round(FH)} filter={lookFilter(clip.look)} />}
             {clip.look?.blur > 0 && project.media?.width > 0 && (wide || ['auto', 'manual', 'cues'].includes(mode)) && <div className="look-blur" style={{ backdropFilter: `blur(${(2 + clip.look.blur * 8).toFixed(1)}px)`, WebkitBackdropFilter: `blur(${(2 + clip.look.blur * 8).toFixed(1)}px)` }} aria-hidden="true" />}
             {clip.look?.wash?.amount > 0 && project.media?.width > 0 && <div className="look-wash" aria-hidden="true" style={{ background: clip.look.wash.color || '#2B7F5F', opacity: clip.look.wash.amount }} />}
@@ -516,6 +606,7 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
             <Scrubber value={Math.min(rel, len)} max={len} onChange={seekRel} words={capWords} marks={mode === 'cues' ? cues.map((c, i) => ({ t: c.t, on: i === selCue })) : []} label="Clip position" />
             <span className="mono num" style={{ flex: 'none' }}>{fmt(outTime)}/{fmt(outLen)}</span>
           </div>
+          {working.length > 1 && <button className="btn sm" style={{ justifySelf: 'start' }} title="Copies this clip's look to every clip from this sermon: hook style and place, captions, framing style, video and sound. Words, hook text and timing stay as they are." onClick={shareAll}><Copy size={14} />Use settings for all clips</button>}
           {mode === 'auto' && !track && !busyKind('track') && <p className="muted small" style={{ width: FW }}>Showing the center until the speaker is found.</p>}
           {current?.export && (
             <div className="banner info" style={{ width: FW, flexWrap: 'wrap' }}>
@@ -529,9 +620,10 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
         <section className={`glass strong panel ${aiWorking === 'clip' ? 'ai-wave' : ''}`}>
           <div className="tabs">
             {/* Grouped: the words, then everything you see, then the sound. */}
-            {[['words', 'Words & trim'], '|', ['text', 'Title & hook'], ['look', 'Captions'], ['crop', 'Framing'], ...(project.media?.width > 0 ? [['video', 'Video']] : []), ['popups', 'Pop-ups'], ['gfx', 'Graphics'], '|', ['sound', 'Sound']].map((t, i) => (t === '|'
+            {[['words', 'Words & trim'], '|', ['text', 'Title & hook'], ['look', 'Captions'], ['crop', 'Framing'], ['popups', 'Pop-ups'], ['gfx', 'Graphics'], '|', ...(project.media?.width > 0 ? [['video', 'Video']] : []), ['sound', 'Sound']].map((t, i) => (t === '|'
               ? <span key={`sep${i}`} className="tab-sep" aria-hidden="true" />
               : <button key={t[0]} className={tab === t[0] ? 'on' : ''} onClick={() => setTab(t[0])}>{t[1]}</button>))}
+            {REVERT[tab] && <button className="rt-btn tabs-revert" title={REVERT[tab].title} aria-label={REVERT[tab].title} onClick={() => revertPanel(tab)}><RotateCcw size={14} /></button>}
           </div>
 
           {tab === 'words' && <WordsTab words={words} fillersList={transcript.fillers} clip={clip} set={set} cut={cut} rel={rel} outLen={outLen} seek={(t) => { video.current.currentTime = t; }}
@@ -601,7 +693,6 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
                       set({ videoTheme: theme.id });
                       toast({ text: `Saved caption template “${theme.name}”.` });
                     }}><Save size={14} />Save caption template</button>
-                    <button className="btn sm" onClick={() => patch({ videoTheme: clip.videoTheme || themeDraft.id })}>Use for every clip in this sermon</button>
                     {themeDirty && <button className="btn ghost sm" onClick={() => { setThemeDraft(baseTheme); setThemeDirty(false); }}>Reset style</button>}
                   </div>
                 </>
@@ -679,6 +770,20 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
           {tab === 'crop' && (
             <div className="stack" style={{ gap: 14 }}>
               {wide && project.media?.width > 0 && <div className="keycard small muted">Wide clips keep the whole shot, just like the export.</div>}
+              {zoomOk && (
+                <div className="keycard stack" style={{ gap: 10 }}>
+                  <div className="row between"><strong className="small">Digital zoom</strong>
+                    <span className="row" style={{ gap: 6 }}>
+                      <button className="btn sm" onClick={() => (zooming ? finishZoom() : startZoom())}>{zooming ? 'Done' : 'Adjust in the preview'}</button>
+                      <button className="rt-btn" title="Show the whole shot again" aria-label="Show the whole shot again" disabled={zz <= 1} onClick={() => { set({ crop: { ...crop, zoom: null } }); refind(); }}><RotateCcw size={13} /></button>
+                    </span>
+                  </div>
+                  <span className="hint">For a video filmed too far out. Double-click the preview, drag the percent left or right to zoom, then drag the picture until the person is in place.{mode === 'auto' ? ' The speaker is found again in the new frame.' : ''}</span>
+                  <label className="field small">Zoom · {Math.round(zz * 100)}%
+                    <input type="range" min="1" max="3" step="0.05" value={zz} onChange={(e) => setZoom({ z: Number(e.target.value) })} onPointerUp={refind} onKeyUp={refind} />
+                  </label>
+                </div>
+              )}
               {!(wide && project.media?.width > 0) && (<>
               <div className="choices">
                 {[['auto', 'Follow speaker', 'Moves with the preacher.'],
@@ -992,7 +1097,7 @@ function VideoTab({ look, blurOk, brand, onChange }) {
     <div className="stack" style={{ gap: 14 }}>
       <StudioLook look={look} blurOk={blurOk} onChange={onChange} startOpen />
       <div className="keycard stack" style={{ gap: 10 }}>
-        <div className="row between"><strong className="small">Quick fixes</strong>{['exposure', 'contrast', 'saturation', 'warmth'].some((k) => l[k]) && <button className="btn ghost sm" onClick={() => set({ exposure: 0, contrast: 0, saturation: 0, warmth: 0 })}>Reset</button>}</div>
+        <div className="row between"><strong className="small">Quick fixes</strong><button className="rt-btn" title="Set the quick fixes back to normal" aria-label="Set the quick fixes back to normal" disabled={!['exposure', 'contrast', 'saturation', 'warmth'].some((k) => l[k])} onClick={() => set({ exposure: 0, contrast: 0, saturation: 0, warmth: 0 })}><RotateCcw size={13} /></button></div>
         <div className="grid2" style={{ gap: 10 }}>
           {fix('exposure', 'Exposure', 'Darker', 'Brighter')}
           {fix('contrast', 'Contrast', 'Flatter', 'Punchier')}
@@ -1022,17 +1127,19 @@ function StudioLook({ look, blurOk, onChange, startOpen = false }) {
   const summary = [LOOKS.find(([k]) => k === l.preset)?.[1], l.light > 0 && 'lighting lift', l.blur > 0 && 'background blur'].filter((x) => x && x !== 'Original').join(' · ');
   return (
     <div className="keycard stack" style={{ gap: 10 }}>
-      <button className="row between photo-edits-head" aria-expanded={open} onClick={() => setOpen(!open)}>
-        <span className="stack" style={{ gap: 0, textAlign: 'left' }}><strong className="small">Studio look</strong><span className="muted" style={{ fontSize: 12 }}>{summary || 'Color, lighting and a soft background'}</span></span>
-        <ChevronDown size={14} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform var(--fast) var(--ease)' }} />
-      </button>
+      <div className="row" style={{ gap: 6 }}>
+        <button className="row between photo-edits-head grow" aria-expanded={open} onClick={() => setOpen(!open)}>
+          <span className="stack" style={{ gap: 0, textAlign: 'left' }}><strong className="small">Studio look</strong><span className="muted" style={{ fontSize: 12 }}>{summary || 'Color, lighting and a soft background'}</span></span>
+          <ChevronDown size={14} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform var(--fast) var(--ease)' }} />
+        </button>
+        <button className="rt-btn" title="Set the studio look back to the original" aria-label="Set the studio look back to the original" disabled={l.preset === 'none' && !l.light && !l.blur} onClick={() => set({ preset: 'none', strength: 1, light: 0, blur: 0 })}><RotateCcw size={13} /></button>
+      </div>
       {open && (
         <>
           <div className="look-grid">{LOOKS.map(([k, label]) => <button key={k} className={`pill-choice ${l.preset === k ? 'on' : ''}`} onClick={() => set({ preset: k })}>{label}</button>)}</div>
           {l.preset !== 'none' && <label className="field small">Look strength · {Math.round(l.strength * 100)}%<input type="range" min="0.1" max="1" step="0.05" value={l.strength} onChange={(e) => set({ strength: Number(e.target.value) })} /></label>}
           <label className="field small">Lighting lift · {Math.round(l.light * 100)}%<input type="range" min="0" max="1" step="0.05" value={l.light} onChange={(e) => set({ light: Number(e.target.value) })} /><span className="hint">Brightens faces and shadows without blowing out bright spots.</span></label>
           {blurOk && <label className="field small">Background blur · {Math.round(l.blur * 100)}%<input type="range" min="0" max="1" step="0.05" value={l.blur} onChange={(e) => set({ blur: Number(e.target.value) })} /><span className="hint">Softens the edges of the frame and keeps the middle sharp, where the speaker is.</span></label>}
-          {hasLook(l) && <button className="btn ghost sm" style={{ justifySelf: 'start' }} onClick={() => onChange(null)}>Back to original</button>}
           <span className="hint">The preview is close. The export applies it exactly, under your captions and graphics.</span>
         </>
       )}

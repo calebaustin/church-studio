@@ -19,7 +19,7 @@ export default function ContentPlan({ project, setStep, onChange }) {
   const { go, toast, trackJob, onJobFinished, config, saveConfig, ai } = useApp();
   const [linking, setLinking] = useState(false);
   // A Sermon is its own project type (same rule as the engine: the sermon was found, or marked by hand).
-  const sermonType = typeof project.isSermon === 'boolean' ? project.isSermon : (project.kind === 'sermon' || !project.kind) && Boolean(project.sermon?.confirmed) && project.sermon?.method !== 'whole';
+  const sermonType = typeof project.isSermon === 'boolean' ? project.isSermon : (project.kind === 'sermon' || !project.kind) && (Boolean(project.range) || (Boolean(project.sermon?.confirmed) && project.sermon?.method !== 'whole'));
   const markSermon = async (v) => { await api.patch(`/api/projects/${project.id}`, { isSermon: v }); onChange?.(); toast({ text: v ? `${project.title} is now a Sermon. Find it under All projects › Sermons too.` : 'Taken out of Sermons. It stays in Videos.' }); };
   const [plan, setPlan] = useState(null);
   const [showIdeas, setShowIdeas] = useState(false);

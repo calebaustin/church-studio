@@ -93,47 +93,62 @@ function FontPicker({ value, onChange, label = 'Font' }) {
   return <FontMenu label={label} value={value} onChange={onChange} options={options} />;
 }
 
-/** All caption style controls. Used in Settings and live in the clip editor. */
+/** All caption style controls, in two parts: how the text is set (font, size, box, alignment, anchor) and how
+ * the words are shown (the spoken word, colors, outline, shadow). Used in Settings and live in the clip editor. */
 export function CaptionStyleFields({ draft, set }) {
+  const label = (t) => <span className="small" style={{ fontWeight: 600, color: 'var(--ink)' }}>{t}</span>;
+  const anchor = draft.anchor || 'middle';
   return (
-    <div className="stack" style={{ gap: 14 }}>
-      <FontPicker value={draft.font} onChange={(id) => set({ font: id })} />
-      <div className="stack" style={{ gap: 6 }}>
-        <span className="small" style={{ fontWeight: 600, color: 'var(--ink)' }}>How the spoken word stands out</span>
-        <div className="seg">
-          {[['color', 'Color'], ['pill', 'Pill'], ['box', 'Box behind line']].map(([k, l]) => (
-            <button key={k} className={draft.highlight === k ? 'on' : ''} onClick={() => set({ highlight: k })}>{l}</button>
-          ))}
-        </div>
-      </div>
-      <div className="token-grid">
-        <ColorRow label="Spoken words" color={draft.color} opacity={draft.colorOpacity} onColor={(v) => set({ color: v })} onOpacity={(v) => set({ colorOpacity: v })} />
-        <ColorRow label="Word being said" color={draft.active} opacity={draft.activeOpacity} onColor={(v) => set({ active: v })} onOpacity={(v) => set({ activeOpacity: v })} />
-        <div className="stack" style={{ gap: 4 }}>
-          <Toggle checked={draft.future != null} onChange={(e) => set({ future: e.target.checked ? draft.color : null, futureOpacity: e.target.checked ? 0.45 : 1 })} icon={Highlighter} label="Different look for upcoming words" small />
-          {draft.future != null && <ColorRow label="Upcoming words" color={draft.future} opacity={draft.futureOpacity} onColor={(v) => set({ future: v })} onOpacity={(v) => set({ futureOpacity: v })} />}
-        </div>
-        {draft.highlight !== 'color'
-          ? <ColorRow label={draft.highlight === 'pill' ? 'Pill' : 'Box'} color={draft.boxColor} opacity={draft.boxOpacity} onColor={(v) => set({ boxColor: v })} onOpacity={(v) => set({ boxOpacity: v })} />
-          : <ColorRow label="Outline" color={draft.outlineColor} opacity={draft.outlineOpacity} onColor={(v) => set({ outlineColor: v })} onOpacity={(v) => set({ outlineOpacity: v })} />}
-      </div>
-      <div className="token-grid">
-        <label className="field">Size · {draft.size}<input type="range" min="36" max="130" value={draft.size} onChange={(e) => set({ size: Number(e.target.value) })} /></label>
-        <label className="field">Words on screen · up to {draft.words}<input type="range" min="1" max="8" value={draft.words} onChange={(e) => set({ words: Number(e.target.value) })} /></label>
-        <label className="field">Position · {Math.round(draft.position * 100)}% down<input type="range" min="0.08" max="0.9" step="0.01" value={draft.position} onChange={(e) => set({ position: Number(e.target.value) })} /></label>
-        <label className="field">Text width · {Math.round((draft.maxWidth ?? 0.86) * 100)}%<input type="range" min="0.4" max="0.95" step="0.01" value={draft.maxWidth ?? 0.86} onChange={(e) => set({ maxWidth: Number(e.target.value) })} /></label>
-        <label className="field">Line spacing · {(draft.lineHeight ?? 1.12).toFixed(2)}<input type="range" min="0.9" max="1.6" step="0.02" value={draft.lineHeight ?? 1.12} onChange={(e) => set({ lineHeight: Number(e.target.value) })} /></label>
-        {draft.highlight === 'color' && <label className="field">Outline thickness · {draft.outline}<input type="range" min="0" max="14" value={draft.outline} onChange={(e) => set({ outline: Number(e.target.value) })} /></label>}
-        <label className="field">Shadow · {Math.round(draft.shadow * 100)}%<input type="range" min="0" max="0.9" step="0.05" value={draft.shadow} onChange={(e) => set({ shadow: Number(e.target.value) })} /></label>
-        <div className="stack" style={{ gap: 6 }}>
-          <span className="small" style={{ fontWeight: 600, color: 'var(--ink)' }}>Alignment</span>
-          <div className="seg">
-            <button className={draft.align !== 'left' ? 'on' : ''} onClick={() => set({ align: 'center' })}>Centered</button>
-            <button className={draft.align === 'left' ? 'on' : ''} onClick={() => set({ align: 'left' })}>Left</button>
+    <div className="stack" style={{ gap: 18 }}>
+      <section className="stack" style={{ gap: 12 }}>
+        <h4 className="eyebrow">Font format</h4>
+        <FontPicker value={draft.font} onChange={(id) => set({ font: id })} />
+        <div className="token-grid">
+          <label className="field">Size · {draft.size}<input type="range" min="36" max="130" value={draft.size} onChange={(e) => set({ size: Number(e.target.value) })} /></label>
+          <label className="field">Words on screen · up to {draft.words}<input type="range" min="1" max="8" value={draft.words} onChange={(e) => set({ words: Number(e.target.value) })} /></label>
+          <label className="field">Text width · {Math.round((draft.maxWidth ?? 0.86) * 100)}%<input type="range" min="0.4" max="0.95" step="0.01" value={draft.maxWidth ?? 0.86} onChange={(e) => set({ maxWidth: Number(e.target.value) })} /></label>
+          <label className="field">Line spacing · {(draft.lineHeight ?? 1.12).toFixed(2)}<input type="range" min="0.9" max="1.6" step="0.02" value={draft.lineHeight ?? 1.12} onChange={(e) => set({ lineHeight: Number(e.target.value) })} /></label>
+          <label className="field">Position · {Math.round(draft.position * 100)}% down<input type="range" min="0.08" max="0.9" step="0.01" value={draft.position} onChange={(e) => set({ position: Number(e.target.value) })} /></label>
+          <Toggle checked={draft.uppercase} onChange={(e) => set({ uppercase: e.target.checked })} icon={CaseUpper} label="ALL CAPS" small style={{ alignSelf: 'end' }} />
+          <div className="stack" style={{ gap: 6 }}>
+            {label('Alignment')}
+            <div className="seg">
+              {[['left', 'Left'], ['center', 'Centered'], ['right', 'Right']].map(([k, l]) => <button key={k} className={(draft.align || 'center') === k ? 'on' : ''} onClick={() => set({ align: k })}>{l}</button>)}
+            </div>
+          </div>
+          <div className="stack" style={{ gap: 6 }}>
+            {label('Pinned to')}
+            <div className="seg">
+              {[['top', 'Top'], ['middle', 'Middle'], ['bottom', 'Bottom']].map(([k, l]) => <button key={k} className={anchor === k ? 'on' : ''} onClick={() => set({ anchor: k })}>{l}</button>)}
+            </div>
+            <span className="hint">{anchor === 'bottom' ? 'The bottom edge stays put, so longer lines grow upward, away from the app buttons.' : anchor === 'top' ? 'The top edge stays put, so longer lines grow downward.' : 'Longer lines grow out from the middle.'}</span>
           </div>
         </div>
-        <Toggle checked={draft.uppercase} onChange={(e) => set({ uppercase: e.target.checked })} icon={CaseUpper} label="ALL CAPS" small style={{alignSelf: 'end'}} />
-      </div>
+      </section>
+      <section className="stack" style={{ gap: 12 }}>
+        <h4 className="eyebrow">Captions display</h4>
+        <div className="stack" style={{ gap: 6 }}>
+          {label('How the spoken word stands out')}
+          <div className="seg">
+            {[['color', 'Color'], ['pill', 'Pill'], ['box', 'Box behind line']].map(([k, l]) => (
+              <button key={k} className={draft.highlight === k ? 'on' : ''} onClick={() => set({ highlight: k })}>{l}</button>
+            ))}
+          </div>
+        </div>
+        <div className="token-grid">
+          <ColorRow label="Spoken words" color={draft.color} opacity={draft.colorOpacity} onColor={(v) => set({ color: v })} onOpacity={(v) => set({ colorOpacity: v })} />
+          <ColorRow label="Word being said" color={draft.active} opacity={draft.activeOpacity} onColor={(v) => set({ active: v })} onOpacity={(v) => set({ activeOpacity: v })} />
+          <div className="stack" style={{ gap: 4 }}>
+            <Toggle checked={draft.future != null} onChange={(e) => set({ future: e.target.checked ? draft.color : null, futureOpacity: e.target.checked ? 0.45 : 1 })} icon={Highlighter} label="Different look for upcoming words" small />
+            {draft.future != null && <ColorRow label="Upcoming words" color={draft.future} opacity={draft.futureOpacity} onColor={(v) => set({ future: v })} onOpacity={(v) => set({ futureOpacity: v })} />}
+          </div>
+          {draft.highlight !== 'color'
+            ? <ColorRow label={draft.highlight === 'pill' ? 'Pill' : 'Box'} color={draft.boxColor} opacity={draft.boxOpacity} onColor={(v) => set({ boxColor: v })} onOpacity={(v) => set({ boxOpacity: v })} />
+            : <ColorRow label="Outline" color={draft.outlineColor} opacity={draft.outlineOpacity} onColor={(v) => set({ outlineColor: v })} onOpacity={(v) => set({ outlineOpacity: v })} />}
+          {draft.highlight === 'color' && <label className="field">Outline thickness · {draft.outline}<input type="range" min="0" max="14" value={draft.outline} onChange={(e) => set({ outline: Number(e.target.value) })} /></label>}
+          <label className="field">Shadow · {Math.round(draft.shadow * 100)}%<input type="range" min="0" max="0.9" step="0.05" value={draft.shadow} onChange={(e) => set({ shadow: Number(e.target.value) })} /></label>
+        </div>
+      </section>
     </div>
   );
 }
@@ -165,7 +180,7 @@ export function HookStyleFields({ draft, set }) {
 const BLANK = {
   name: 'My theme', font: 'montserrat-semibold', size: 72, color: '#FFFFFF', colorOpacity: 1, active: '#FFD54A', activeOpacity: 1,
   future: null, futureOpacity: 1, outline: 4, outlineColor: '#000000', outlineOpacity: 1, shadow: 0.3, position: 0.7, words: 3,
-  uppercase: false, highlight: 'color', boxColor: '#FFFFFF', boxOpacity: 0.92, align: 'center', maxWidth: 0.86, lineHeight: 1.15,
+  uppercase: false, highlight: 'color', boxColor: '#FFFFFF', boxOpacity: 0.92, align: 'center', anchor: 'bottom', maxWidth: 0.86, lineHeight: 1.15,
 };
 
 export default function VideoThemeEditor({ selectedId, onPick, pickLabel = 'Use this theme' }) {

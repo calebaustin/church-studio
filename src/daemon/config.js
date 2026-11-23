@@ -42,6 +42,7 @@ export const DEFAULTS = {
   brandFonts: { heading: 'Montserrat', body: 'Montserrat' },
   brandColorsSet: false, // the brand checklist: colors were chosen on purpose
   brandFontsSet: false,
+  starredFonts: [], // fonts kept at the top of every font menu, after the brand's heading and body
   socialLinks: {}, // { facebook, instagram, youtube, ... } found by Jumpstart or added by hand
   backupAuto: false, // a weekly backup, kept four deep
   backupLibrary: false, // include the brand library in backups

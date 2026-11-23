@@ -79,12 +79,16 @@ export default function CaptionOverlay({ theme, font, hookFont, words, t, frameW
   const box = theme.highlight === 'box';
   const pill = theme.highlight === 'pill';
   const left = theme.align === 'left';
+  const right = theme.align === 'right';
+  // The anchor edge stays put as lines are added: bottom grows upward, top downward, middle both ways.
+  const anchor = theme.anchor || 'middle';
   const maxW = (theme.maxWidth ?? 0.86) * 100;
   const color = rgba(theme.color, theme.colorOpacity ?? 1);
   const active = rgba(theme.active, theme.activeOpacity ?? 1);
   const future = rgba(theme.future || theme.color, theme.futureOpacity ?? theme.colorOpacity ?? 1);
   const style = {
     top: `${(theme.position ?? 0.68) * 100}%`,
+    transform: anchor === 'bottom' ? 'translateY(-100%)' : anchor === 'top' ? 'none' : 'translateY(-50%)',
     left: `${(100 - maxW) / 2}%`, right: `${(100 - maxW) / 2}%`,
     fontFamily: font?.css || 'system-ui',
     fontWeight: font?.weight || 800,
@@ -100,7 +104,7 @@ export default function CaptionOverlay({ theme, font, hookFont, words, t, frameW
     <div className="cap-layer">
       {hook && showHook && <Hook theme={theme} font={hookFont || font} scale={scale} text={hook} onPlace={editing === 'hook' ? onPlace : null} />}
       {(ev || editing === 'captions') && (
-        <div data-place="captions" className={`cap ${box ? 'box' : ''} ${left ? 'left' : ''} ${editing === 'captions' ? 'placing' : ''}`} style={style}
+        <div data-place="captions" className={`cap ${box ? 'box' : ''} ${left ? 'left' : ''} ${right ? 'right' : ''} ${editing === 'captions' ? 'placing' : ''}`} style={style}
           onPointerDown={editing === 'captions' ? (e) => startDrag(e, onPlace, 'cap-move', theme) : undefined} title={editing === 'captions' ? 'Drag to move the captions' : undefined}>
           <span className="inner" style={box ? { background: rgba(theme.boxColor, theme.boxOpacity ?? 0.92) } : undefined}>
             {!ev && <span className="w" style={{ color, opacity: 0.6 }}>Captions show here</span>}

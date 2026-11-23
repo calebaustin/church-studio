@@ -96,28 +96,28 @@ const VIDEO_BUILTINS = [
   {
     id: 'soft-pill', name: 'Soft Pill', builtin: true,
     font: 'montserrat-semibold', size: 72, color: '#FFFFFF', active: '#FFFFFF', future: '#FFFFFF', futureOpacity: 0.45,
-    outline: 0, outlineColor: '#000000', shadow: 0.3, position: 0.16, words: 6, uppercase: false,
+    outline: 0, outlineColor: '#000000', shadow: 0.3, position: 0.12, anchor: 'top', words: 6, uppercase: false,
     highlight: 'pill', boxColor: '#E9A47C', boxOpacity: 0.95, align: 'left', maxWidth: 0.72, lineHeight: 1.22,
   },
   {
     id: 'clean-white', name: 'Clean White', builtin: true,
     font: 'avenir-heavy', size: 78, color: '#FFFFFF', active: '#FFD54A', outline: 6, outlineColor: '#000000',
-    shadow: 0.35, position: 0.68, words: 3, uppercase: false, highlight: 'color', boxColor: '#FFD54A',
+    shadow: 0.35, position: 0.72, anchor: 'bottom', words: 3, uppercase: false, highlight: 'color', boxColor: '#FFD54A',
   },
   {
     id: 'bold-sunday', name: 'Bold Sunday', builtin: true,
     font: 'arial-black', size: 84, color: '#FFFFFF', active: '#7CE0FF', outline: 7, outlineColor: '#0B1020',
-    shadow: 0.4, position: 0.66, words: 2, uppercase: true, highlight: 'color', boxColor: '#7CE0FF',
+    shadow: 0.4, position: 0.7, anchor: 'bottom', words: 2, uppercase: true, highlight: 'color', boxColor: '#7CE0FF',
   },
   {
     id: 'soft-box', name: 'Soft Box', builtin: true,
     font: 'helvetica-bold', size: 70, color: '#111111', active: '#111111', outline: 0, outlineColor: '#FFFFFF',
-    shadow: 0, position: 0.72, words: 4, uppercase: false, highlight: 'box', boxColor: '#FFFFFF',
+    shadow: 0, position: 0.76, anchor: 'bottom', words: 4, uppercase: false, highlight: 'box', boxColor: '#FFFFFF',
   },
   {
     id: 'scripture', name: 'Scripture Serif', builtin: true,
     font: 'georgia-bold', size: 72, color: '#FFFDF5', active: '#F2C46D', outline: 5, outlineColor: '#1A140A',
-    shadow: 0.45, position: 0.7, words: 4, uppercase: false, highlight: 'color', boxColor: '#F2C46D',
+    shadow: 0.45, position: 0.74, anchor: 'bottom', words: 4, uppercase: false, highlight: 'color', boxColor: '#F2C46D',
   },
 ].map((t) => ({ ...CAPTION_DEFAULTS, ...t }));
 

@@ -196,7 +196,8 @@ export async function downloadToProject(url, ctx, existingProject = null, range 
     });
   }
   const part = range && range.end > range.start ? range : (project.range || null);
-  if (part) await updateProject(project.id, (p) => { p.range = { start: part.start, end: part.end }; });
+  // Trimmed to the sermon: it's a Sermon from the start (its own type, with a Sermon page once transcribed).
+  if (part) await updateProject(project.id, (p) => { p.range = { start: part.start, end: part.end }; if ((p.kind === 'sermon' || !p.kind) && p.isSermon !== false) p.isSermon = true; });
   await updateProject(project.id, (p) => { p.status = 'downloading'; });
   ctx.progress(2, part ? 'Starting the sermon download' : 'Starting the download');
   const out = file(project.id, 'source.mp4');

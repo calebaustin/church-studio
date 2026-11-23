@@ -310,14 +310,11 @@ route('POST', '/api/projects/:id/transcript/save', async ({ id }, b) => { await 
 route('POST', '/api/projects/:id/transcribe', projectJob('transcribe', 'Transcribe', async (id, b, ctx) => {
   const r = await transcribeProject(id, b, ctx);
   queueDigest(id).catch(() => {});
-  // Make clips was pressed: once the sermon is known, go straight on to finding clips.
+  // Make clips was pressed: once the sermon is known, the project opens on its clips page to find them.
   const after = await getProject(id);
   if (after?.next === 'clips') {
     await updateProject(id, (p) => { delete p.next; });
-    if (after.sermon?.confirmed) {
-      jobs.enqueue({ kind: 'propose', label: `Find clips: ${after.title}`, projectId: id, key: `propose:${id}:` }, (c) => proposeClips(id, {}, c));
-      return { ...r, thenClips: true };
-    }
+    if (after.sermon?.confirmed) return { ...r, thenClips: true };
   }
   return r;
 }));

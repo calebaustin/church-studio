@@ -188,6 +188,17 @@ function BrandKit({ lib, reload }) {
           <FontMenu label="Heading font" value={fonts.heading} options={families} onChange={(v) => saveConfig({ brandFonts: { ...fonts, heading: v }, brandFontsSet: true })} />
           <FontMenu label="Body font" value={fonts.body} options={families} onChange={(v) => saveConfig({ brandFonts: { ...fonts, body: v }, brandFontsSet: true })} />
         </div>
+        <div className="stack" style={{ gap: 8 }}>
+          <span className="field-label">Starred fonts <span className="hint">Kept at the top of every font menu, after your heading and body fonts. They aren't part of your brand templates.</span></span>
+          <div className="row wrap" style={{ gap: 8 }}>
+            {(config.starredFonts || []).map((f) => (
+              <span key={f} className="chip font-star"><Star size={11} aria-hidden="true" /><span style={{ fontFamily: `'${f}'` }}>{f}</span>
+                <button className="kit-x static" aria-label={`Unstar ${f}`} onClick={() => saveConfig({ starredFonts: (config.starredFonts || []).filter((x) => x !== f) })}><X size={10} /></button>
+              </span>
+            ))}
+            <FontMenu value="" width={220} placeholder="Star a font" options={families.filter((o) => !(config.starredFonts || []).includes(o.value))} onChange={(v) => saveConfig({ starredFonts: [...new Set([...(config.starredFonts || []), v])] })} />
+          </div>
+        </div>
         <div className="kit-previews">
           <div className="kit-sample" style={{ background: primary }}>
             <span className="kit-tag" style={{ color: on(primary) }}>Website</span>

@@ -40,7 +40,7 @@ export default function ProjectHome({ project, patch, start, setStep, busy }) {
     ['Exports', false],
   ];
 
-  // Make clips starts the whole process: transcribe, then (once the sermon is known) find clips.
+  // Make clips starts the process: transcribe, then the clips page (once the sermon is known) to find them.
   const makeClips = async () => {
     if (working) { setStep(working.kind === 'propose' ? 'clips' : 'transcribe'); return; }
     if (!transcribed) {
@@ -48,7 +48,6 @@ export default function ProjectHome({ project, patch, start, setStep, busy }) {
       await start('transcribe', { cleanup: project.audioCleanup || null });
       setStep('transcribe');
     } else if (!project.sermon?.confirmed) setStep('sermon');
-    else if (!project.clips.length) { await start('propose', {}); setStep('clips'); }
     else setStep('clips');
   };
   const clipsLabel = working ? 'See progress' : !transcribed ? 'Make clips' : !project.sermon?.confirmed ? 'Find the sermon' : project.clips.length ? 'Open clips' : 'Find clips';
@@ -71,10 +70,10 @@ export default function ProjectHome({ project, patch, start, setStep, busy }) {
         </div>
         {!form ? <div className="skeleton" style={{ height: 64 }} /> : (
           <div className="project-home-fields">
-            <label className="field">Sermon title<input className="input" value={form.title} placeholder="In Remembrance" onChange={(e) => set('title', e.target.value)} onBlur={(e) => save({ sermonTitle: e.target.value })} /></label>
-            <label className="field">Preacher<input className="input" value={form.preacher} placeholder="Chris Parker" onChange={(e) => set('preacher', e.target.value)} onBlur={(e) => save({ preacher: e.target.value })} /></label>
+            <label className="field">Sermon title<input className="input" value={form.title} placeholder="Add the sermon title" onChange={(e) => set('title', e.target.value)} onBlur={(e) => save({ sermonTitle: e.target.value })} /></label>
+            <label className="field">Preacher<input className="input" value={form.preacher} placeholder="Add the preacher" onChange={(e) => set('preacher', e.target.value)} onBlur={(e) => save({ preacher: e.target.value })} /></label>
             <label className="field">Preached on<input className="input" type="date" value={dateInput(form.date)} onChange={(e) => { const d = e.target.value ? new Date(`${e.target.value}T12:00`).toISOString() : null; set('date', d); save({ preachedOn: d }); }} /></label>
-            <label className="field">Series <span className="hint">Optional</span><input className="input" value={form.series} placeholder="Psalms of Ascent" onChange={(e) => set('series', e.target.value)} onBlur={(e) => save({ series: e.target.value })} /></label>
+            <label className="field"><span className="row" style={{ gap: 6 }}>Series<span className="hint">Optional</span></span><input className="input" value={form.series} placeholder="Add a series" onChange={(e) => set('series', e.target.value)} onBlur={(e) => save({ series: e.target.value })} /></label>
           </div>
         )}
       </section>

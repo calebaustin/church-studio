@@ -11,7 +11,8 @@ import { normalizeWords } from './scripture.js';
  * A Sermon is a project type: a sermon recording whose sermon has been found (its range confirmed), or one
  * someone marked as a sermon. Older projects count by the same rule, so nothing needs converting.
  */
-export const isSermon = (p) => (typeof p?.isSermon === 'boolean' ? p.isSermon : (p?.kind === 'sermon' || !p?.kind) && Boolean(p?.sermon?.confirmed) && p?.sermon?.method !== 'whole');
+// A recording trimmed to the sermon when it was downloaded is a Sermon from the start.
+export const isSermon = (p) => (typeof p?.isSermon === 'boolean' ? p.isSermon : (p?.kind === 'sermon' || !p?.kind) && (Boolean(p?.range) || (Boolean(p?.sermon?.confirmed) && p?.sermon?.method !== 'whole')));
 
 export function projectDir(id) {
   if (!/^[a-z0-9-]+$/i.test(id)) throw new Error('Bad project id');

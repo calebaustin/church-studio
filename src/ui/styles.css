@@ -245,7 +245,7 @@ input[type='color'] { width: 34px; height: 30px; border: 1px solid var(--line-st
 .chip.warn { color: var(--warn); background: var(--warn-soft); }
 .chip.bad { color: var(--bad); background: var(--bad-soft); }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; display: inline-block; flex: none; }
-.seg { display: inline-flex; padding: 3px; border-radius: var(--radius-pill); background: var(--hover); border: 1px solid var(--line); gap: 2px; }
+.seg { display: inline-flex; justify-self: start; align-self: start; max-width: 100%; padding: 3px; border-radius: var(--radius-pill); background: var(--hover); border: 1px solid var(--line); gap: 2px; }
 .seg button { border: 0; background: transparent; min-height: 30px; padding: 0 14px; border-radius: var(--radius-pill); cursor: pointer; color: var(--muted); font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
 .seg button:hover { color: var(--ink); }
 .seg button.on { background: var(--surface-solid); color: var(--ink); box-shadow: var(--shadow-chip); }
@@ -328,6 +328,7 @@ input[type='color'] { width: 34px; height: 30px; border: 1px solid var(--line-st
 .vframe.draggable { cursor: grab; }
 .cap { position: absolute; left: 7%; right: 7%; text-align: center; transform: translateY(-50%); paint-order: stroke fill; pointer-events: none; }
 .cap.left { text-align: left; }
+.cap.right { text-align: right; }
 .cap span.w { transition: color 60ms linear; }
 .cap span.pill { border-radius: .22em; padding: .02em .22em; margin: 0 -.06em; }
 .cap.box .inner { display: inline-block; padding: .18em .5em; border-radius: .3em; }
@@ -1931,8 +1932,16 @@ button.tp-tile:active .tp-orb { transform: scale(.92); transition-duration: 120m
 @keyframes card-drift { from { transform: translate3d(-3%, -2%, 0) scale(1.02); } to { transform: translate3d(3%, 2%, 0) scale(1.06); } }
 @keyframes card-glow { from { transform: rotate(-4deg) scale(1.05); } to { transform: rotate(4deg) scale(1.1); } }
 @keyframes card-rise { from { transform: translate3d(0, 3%, 0); } to { transform: translate3d(0, -3%, 0); } }
+.clip-card-bg.moving.wave { animation-name: card-wave; animation-timing-function: ease-in-out; }
+.clip-card-bg.moving.pulse { animation-name: card-pulse; }
+.clip-card-bg.moving.sweep { animation-name: card-sweep; animation-direction: normal; animation-timing-function: linear; }
+.clip-card-bg.moving.scroll { animation-name: card-scroll; animation-direction: normal; animation-timing-function: linear; }
+@keyframes card-wave { from { transform: translate3d(-4%, 2%, 0) skewY(-2deg); } to { transform: translate3d(4%, -2%, 0) skewY(2deg); } }
+@keyframes card-pulse { from { transform: scale(1.02); } to { transform: scale(1.12); } }
+@keyframes card-sweep { from { transform: translate3d(-6%, 0, 0) scale(1.06); } to { transform: translate3d(6%, 0, 0) scale(1.06); } }
+@keyframes card-scroll { from { transform: translate3d(-5%, -5%, 0); } to { transform: translate3d(5%, 5%, 0); } }
 .clip-card-dim { position: absolute; inset: 0; background: rgb(var(--shade-rgb)); }
-.clip-card-text { position: relative; width: 84%; text-align: center; font-weight: 700; line-height: 1.18; white-space: pre-wrap; text-shadow: 0 2px 6px rgba(var(--shade-rgb), .35); }
+.clip-card-text { position: absolute; left: 50%; text-align: center; font-weight: 700; line-height: 1.18; white-space: pre-wrap; text-shadow: 0 2px 6px rgba(var(--shade-rgb), .35); }
 .card-row { padding: 12px; border-radius: 14px; background: var(--field); box-shadow: inset 0 0 0 1px var(--line); }
 .card-time { width: 74px; min-height: 30px; padding: 0 8px; }
 @media (prefers-reduced-motion: reduce) { .clip-card-bg.moving { animation: none; } }
@@ -1983,3 +1992,29 @@ button.tp-tile:active .tp-orb { transform: scale(.92); transition-duration: 120m
 .has-tip { position: relative; }
 .has-tip::after { content: attr(data-tip); position: absolute; top: calc(100% + 8px); left: 50%; translate: -50% 0; white-space: nowrap; padding: 5px 10px; border-radius: var(--radius-sm); background: var(--toast-bg); color: var(--toast-text); font-size: 12px; font-weight: 500; pointer-events: none; opacity: 0; scale: 0.96; transition: opacity var(--fast) var(--ease), scale var(--fast) var(--ease); z-index: 20; }
 .has-tip:hover::after, .has-tip:focus-visible::after { opacity: 1; scale: 1; }
+
+/* A project's header: its name and pages on top, the steps on a row of their own */
+.project-head { display: grid; gap: 10px; }
+.project-head-top { gap: 8px; min-width: 0; }
+.project-head-steps { justify-self: start; max-width: 100%; }
+.tabs-revert { margin-left: auto; align-self: center; flex: none; }
+.font-role { margin-left: auto; padding-left: 10px; font-family: var(--font-sans); font-size: 11px; font-weight: 600; color: var(--muted); }
+.font-item { display: flex; align-items: center; }
+.font-star { gap: 6px; padding-right: 4px; }
+.kit-x.static { position: static; width: 16px; height: 16px; }
+
+/* Digital zoom: a crop grid over the preview while you drag the picture and the zoom */
+.vframe.zooming { cursor: grab; outline: 2px solid var(--white); outline-offset: -2px; }
+.vframe.zooming:active { cursor: grabbing; }
+.zoom-grid { position: absolute; inset: 0; z-index: 6; pointer-events: none; }
+.zoom-grid i { position: absolute; background: color-mix(in srgb, var(--white) 55%, transparent); }
+.zoom-grid .v1, .zoom-grid .v2 { top: 0; bottom: 0; width: 1px; }
+.zoom-grid .v1 { left: 33.33%; } .zoom-grid .v2 { left: 66.66%; }
+.zoom-grid .h1, .zoom-grid .h2 { left: 0; right: 0; height: 1px; }
+.zoom-grid .h1 { top: 33.33%; } .zoom-grid .h2 { top: 66.66%; }
+.zoom-bar { position: absolute; top: 12px; left: 50%; translate: -50% 0; display: flex; border-radius: var(--radius-sm); overflow: hidden; background: var(--overlay); color: var(--white); pointer-events: auto; font-size: 13px; }
+.zoom-bar > * { padding: 6px 12px; border: 0; background: transparent; color: inherit; font: inherit; font-weight: 600; }
+.zoom-bar button { cursor: pointer; border-left: 1px solid color-mix(in srgb, var(--white) 25%, transparent); }
+.zoom-pct { cursor: ew-resize; user-select: none; touch-action: none; }
+
+.card-tabs { margin: 0; }

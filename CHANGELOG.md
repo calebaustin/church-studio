@@ -2,6 +2,22 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## 0.30.0 · November 23, 2026
+
+- **A tidier project header.** The video's name, Overview, Sermon page, Share and Delete sit on the top row, and the steps from Transcribe to Transcript always have a row of their own, so nothing collides on a big screen.
+- **Overview and Sermon page stay in the video.** Switching between them no longer jumps to All projects, and Sermon page keeps working after you visit Overview.
+- **Trimmed sermons are Sermons right away.** A video downloaded with Trim to sermon counts as a Sermon from the start.
+- **Clearer details on Overview.** Empty fields say what goes there instead of showing sample names, and Optional sits next to Series.
+- **Find clips opens the clips page** instead of starting right away, so you can set how many, how long and how hard to look first. Find the sermon's button is now Next: pick clips.
+- **Use settings for all clips.** A button under the preview copies this clip's look to every clip from the sermon: hook style and place, captions, framing style, video and sound. Words, hook text and timing stay as they are.
+- **Set any panel back to defaults.** A small revert button at the top right of the editor's panels, and on Studio look and Quick fixes. Undo puts it back.
+- **Video sits with Sound** on the right of the editor's tabs.
+- **Digital zoom.** In Framing, zoom in on a video filmed too far out. Double-click the preview for a crop grid: drag the percent left or right to zoom, then drag the picture until the person is in place. Follow speaker finds the speaker again in the new frame.
+- **Captions, organized.** Font format (font, size, width, spacing, position, alignment, where it's pinned, ALL CAPS) and Captions display (how the spoken word stands out, colors, outline, shadow). Choices are only as wide as they need to be.
+- **Right alignment and pinning for captions.** Pin captions to the top, middle or bottom: the pinned edge stays put as lines are added. Built-in themes pin to the bottom, so captions grow upward, away from the app's buttons.
+- **Your fonts first.** Every font menu starts with your brand's heading and body fonts, then fonts you've starred. Star fonts in Brand library › Brand kit, without adding them to your brand templates.
+- **Full-screen cards, more ways.** Solid and Pattern come first. Patterns now include checker and stripes, with a size slider. Moving backgrounds have a speed slider and four new motions: Wave, Pulse, Light sweep and Moving pattern. Each card has pages for its words, background, and text size and place, so a whole verse can fit on one card.
+
 ## 0.29.0 · November 23, 2026
 
 - **A home page for every video.** A video now opens on Overview: its details (sermon title, preacher, date and series, filled in where Church Studio can tell, and yours to change), then what's next. Publish the trimmed sermon to YouTube as its own video, with its title and playlist, or make clips. Do one or both, and each shows how far along it is.

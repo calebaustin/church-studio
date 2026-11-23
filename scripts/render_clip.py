@@ -61,7 +61,20 @@ def has_audio(video: str) -> bool:
 
 # ---------------------------------------------------------------- tracking
 
-def detect_faces(video: str, start: float, dur: float, src_w: int, src_h: int, fps: float = 6.0):
+def zoom_rect(crop: dict, src_w: int, src_h: int):
+    """Digital zoom: the part of the shot to use, as an ffmpeg crop filter and its size. crop.zoom = {z, cx, cy}:
+    how far in (1 = the whole shot) and the middle of the part kept, 0..1 across and down."""
+    zm = crop.get("zoom") or {}
+    z = max(1.0, min(4.0, float(zm.get("z", 1) or 1)))
+    if z < 1.01:
+        return "", src_w, src_h
+    zw, zh = int(src_w / z) // 2 * 2, int(src_h / z) // 2 * 2
+    zx = int(max(0, min(src_w - zw, float(zm.get("cx", 0.5)) * src_w - zw / 2)))
+    zy = int(max(0, min(src_h - zh, float(zm.get("cy", 0.5)) * src_h - zh / 2)))
+    return f"crop={zw}:{zh}:{zx}:{zy},", zw, zh
+
+
+def detect_faces(video: str, start: float, dur: float, src_w: int, src_h: int, fps: float = 6.0, pre: str = ""):
     """(t, [(cx, cy, w, h) normalised 0..1]) per sample, one ffmpeg pass of small grey frames."""
     base = cv2.data.haarcascades
     frontal = cv2.CascadeClassifier(base + "haarcascade_frontalface_default.xml")
@@ -70,7 +83,7 @@ def detect_faces(video: str, start: float, dur: float, src_w: int, src_h: int, f
     fh = int(src_h * fw / src_w) // 2 * 2
     proc = subprocess.Popen(
         [FFMPEG, "-loglevel", "error", "-ss", f"{start:.3f}", "-t", f"{dur:.3f}", "-i", video,
-         "-an", "-vf", f"fps={fps},scale={fw}:{fh}", "-f", "rawvideo", "-pix_fmt", "gray", "-"],
+         "-an", "-vf", f"{pre}fps={fps},scale={fw}:{fh}", "-f", "rawvideo", "-pix_fmt", "gray", "-"],
         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
     )
     samples = []
@@ -390,7 +403,8 @@ class Captions:
             d.rounded_rectangle([pad * 0.4, pad * 0.4, img_w - pad * 0.4, img_h - pad * 0.4], radius=r, fill=box_color)
         y = pad
         for ln, lw in zip(lines, widths):
-            x = pad if self.theme.get("align") == "left" else (img_w - lw) / 2
+            align = self.theme.get("align")
+            x = pad if align == "left" else (img_w - pad - lw) if align == "right" else (img_w - lw) / 2
             for idx, tok, w in ln:
                 is_active = idx == wi
                 fill = active if is_active else (color if idx < wi else future)
@@ -417,9 +431,14 @@ class Captions:
         cy = self.H * float(th.get("position", 0.68))
         if th.get("align") == "left":
             x0 = int(self.W * (1 - float(th.get("maxWidth", 0.86))) / 2 - pad)
+        elif th.get("align") == "right":
+            x0 = int(self.W * (1 + float(th.get("maxWidth", 0.86))) / 2 + pad - img_w)
         else:
             x0 = int(cx - img_w / 2)
-        y0 = int(cy - img_h / 2)
+        # The anchor is the edge that stays put as lines are added: bottom grows upward, top grows downward,
+        # middle grows both ways. Themes saved before anchors existed stay centered.
+        anchor = th.get("anchor") or "middle"
+        y0 = int(cy - img_h + pad) if anchor == "bottom" else int(cy - pad) if anchor == "top" else int(cy - img_h / 2)
         self.cache[key] = (arr, x0, y0)
         if len(self.cache) > 400:
             self.cache.pop(next(iter(self.cache)))
@@ -648,11 +667,13 @@ class CardBackground:
         self.X, self.Y = xx / self.w, yy / self.h
         self.motion = bg.get("motion", "drift")
         self.pattern = bg.get("pattern", "dots")
+        self.pscale = max(0.4, min(2.5, float(bg.get("scale", 1) or 1)))
+        self.speed = max(0.25, min(3.0, float(bg.get("speed", 1) or 1)))
         self.dim = max(0.0, min(0.7, float(bg.get("dim", 0.18))))
         self.static = None if self.type == "motion" else self._draw(0.0)
 
     def frame(self, t: float):
-        return self.static if self.static is not None else self._draw(t)
+        return self.static if self.static is not None else self._draw(t * self.speed)
 
     def _blob(self, img, cx, cy, r, col, k=1.0):
         d = ((self.X - cx) ** 2 + ((self.Y - cy) * self.h / self.w) ** 2) / (r * r)
@@ -662,7 +683,9 @@ class CardBackground:
     def _draw(self, t: float):
         c0, c1, c2 = self.c
         base = np.ones((self.h, self.w, 3), np.float32) * c0
-        kind = self.type if self.type != "motion" else {"drift": "mesh", "glow": "gradient", "bokeh": "gradient"}.get(self.motion, "mesh")
+        moving = self.type == "motion"
+        kind = self.type if not moving else {"drift": "mesh", "glow": "gradient", "bokeh": "gradient", "wave": "gradient",
+                                             "pulse": "gradient", "sweep": "gradient", "scroll": "solid"}.get(self.motion, "mesh")
         if kind == "gradient":
             ang = 2.35 + (t * 0.12 if self.type == "motion" else 0.0)
             v = np.clip((self.X - 0.5) * np.cos(ang) + (self.Y - 0.5) * np.sin(ang) + 0.5, 0, 1)[:, :, None]
@@ -674,26 +697,45 @@ class CardBackground:
             base = self._blob(base, 0.22 + 0.1 * np.sin(m * 0.35), 0.28 + 0.06 * np.cos(m * 0.27), 0.42, c1, 0.85)
             base = self._blob(base, 0.78 + 0.08 * np.cos(m * 0.31), 0.72 + 0.07 * np.sin(m * 0.22), 0.45, c2, 0.75)
             base = self._blob(base, 0.8 + 0.06 * np.sin(m * 0.4 + 1), 0.18 + 0.05 * np.cos(m * 0.33), 0.3, c1, 0.5)
+        if moving and self.motion == "wave":  # soft bands flowing slowly across
+            v = (0.5 + 0.5 * np.sin((self.Y * 2.6 + self.X * 0.8) * np.pi * 2 - t * 0.6))[:, :, None] * 0.45
+            base = base * (1 - v) + c2[None, None, :] * v
+        if moving and self.motion == "pulse":  # a glow in the middle that breathes in and out
+            base = self._blob(base, 0.5, 0.5, 0.36 + 0.07 * np.sin(t * 0.9), c2, 0.45 + 0.2 * np.sin(t * 0.9))
+        if moving and self.motion == "sweep":  # a soft beam of light passing across now and then
+            p = (t * 0.09) % 1.6 - 0.3
+            dd = (self.X * 0.8 + self.Y * 0.4) - p * 1.2
+            a = (np.exp(-(dd / 0.11) ** 2) * 0.4)[:, :, None]
+            base = base * (1 - a) + 255.0 * a
         if self.type == "motion" and self.motion == "bokeh":
             for i in range(7):  # soft lights rising slowly
                 x = (i * 0.37 + 0.11) % 1.0
                 y = 1.1 - ((t * 0.025 + i * 0.19) % 1.3)
                 base = self._blob(base, x, y, 0.07 + 0.03 * (i % 3), c2, 0.35)
         out = cv2.resize(np.clip(base, 0, 255).astype(np.uint8), (self.W, self.H), interpolation=cv2.INTER_CUBIC)
-        if self.type == "pattern":
+        if self.type == "pattern" or (moving and self.motion == "scroll"):
             ov = out.copy()
-            step = max(12, self.W // 14)
+            step = max(12, int(self.W // 14 * self.pscale))
             col = tuple(int(v) for v in c1)
+            # A scrolling pattern slides slowly on a diagonal; a still one sits put.
+            off = int((t * step * 0.25) % (step * 2)) if moving else 0
             if self.pattern == "lines":
-                for k in range(-self.H, self.W, step):
-                    cv2.line(ov, (k, 0), (k + self.H, self.H), col, max(2, step // 10), cv2.LINE_AA)
+                for k in range(-self.H - step * 2, self.W + step, step):
+                    cv2.line(ov, (k + off, 0), (k + off + self.H, self.H), col, max(2, step // 10), cv2.LINE_AA)
             elif self.pattern == "grid":
-                for k in range(0, max(self.W, self.H), step):
-                    cv2.line(ov, (k, 0), (k, self.H), col, 1, cv2.LINE_AA)
-                    cv2.line(ov, (0, k), (self.W, k), col, 1, cv2.LINE_AA)
+                for k in range(-step * 2, max(self.W, self.H) + step, step):
+                    cv2.line(ov, (k + off, 0), (k + off, self.H), col, 1, cv2.LINE_AA)
+                    cv2.line(ov, (0, k + off), (self.W, k + off), col, 1, cv2.LINE_AA)
+            elif self.pattern == "checker":
+                for r, yy in enumerate(range(-step * 2 + off, self.H, step)):
+                    for xx in range(-step * 2 + off + (r % 2) * step, self.W, step * 2):
+                        cv2.rectangle(ov, (xx, yy), (xx + step, yy + step), col, -1)
+            elif self.pattern == "stripes":
+                for xx in range(-step * 2 + off, self.W, step * 2):
+                    cv2.rectangle(ov, (xx, 0), (xx + step, self.H), col, -1)
             else:
-                for yy in range(step // 2, self.H, step):
-                    for xx in range(step // 2 + (step // 2 if (yy // step) % 2 else 0), self.W, step):
+                for yy in range(step // 2 - step * 2 + off, self.H, step):
+                    for xx in range(step // 2 - step * 2 + off + (step // 2 if (yy // step) % 2 else 0), self.W, step):
                         cv2.circle(ov, (xx, yy), max(2, step // 9), col, -1, cv2.LINE_AA)
             out = cv2.addWeighted(ov, 0.35, out, 0.65, 0)
         if self.dim > 0:
@@ -710,13 +752,14 @@ class StaticText:
 
 
 def card_text_image(text: str, th: dict, W: int, H: int, scale: float = 1.5):
-    """Your own words on a card: the caption font and color, as large as fits 84% of the width and 60% of the height."""
+    """Your own words on a card: the caption font and color, as large as fits the card's text width (84% unless
+    set) and 80% of the height, aligned and placed like captions (centered in the middle unless set)."""
     k = min(W, H) / 1080
     lines_in = [ln.strip() for ln in str(text).split("\n") if ln.strip()]
     size = int(float(th.get("size", 78)) * scale * k)
     for _ in range(14):
         font = load_font(th["fontFile"], th.get("fontStyle"), max(12, size), th.get("fontIndex"))
-        maxw = W * 0.84
+        maxw = W * float(th.get("maxWidth", 0.84))
         lines = []
         for para in lines_in:
             cur = ""
@@ -731,7 +774,7 @@ def card_text_image(text: str, th: dict, W: int, H: int, scale: float = 1.5):
                 lines.append(cur)
         asc, desc = font.getmetrics()
         lh = int((asc + desc) * 1.18)
-        if lh * len(lines) <= H * 0.6 or size <= 24 * k:
+        if lh * len(lines) <= H * 0.8 or size <= 24 * k:
             break
         size = int(size * 0.88)
     pad = int(30 * k)
@@ -740,12 +783,19 @@ def card_text_image(text: str, th: dict, W: int, H: int, scale: float = 1.5):
     img = Image.new("RGBA", (max(2, w), max(2, h)), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     fg = hex_rgba(th.get("color", "#FFFFFF"))
+    align = th.get("align", "center")
     for i, ln in enumerate(lines):
-        x = (w - font.getlength(ln)) / 2
+        lw = font.getlength(ln)
+        x = pad if align == "left" else (w - pad - lw) if align == "right" else (w - lw) / 2
         d.text((x + 2 * k, pad + i * lh + 3 * k), ln, font=font, fill=(0, 0, 0, 90))
         d.text((x, pad + i * lh), ln, font=font, fill=fg)
     arr = np.array(img)
-    return arr, (W - arr.shape[1]) // 2, (H - arr.shape[0]) // 2, 1.0
+    mw = float(th.get("maxWidth", 0.84))
+    x0 = int(W * (1 - mw) / 2 - pad) if align == "left" else int(W * (1 + mw) / 2 + pad - arr.shape[1]) if align == "right" else (W - arr.shape[1]) // 2
+    cy = H * float(th.get("position", 0.5))
+    anchor = th.get("anchor") or "middle"
+    y0 = int(cy - arr.shape[0] + pad) if anchor == "bottom" else int(cy - pad) if anchor == "top" else int(cy - arr.shape[0] / 2)
+    return arr, max(0, x0), max(0, min(H - arr.shape[0], y0)), 1.0
 
 
 class Cards:
@@ -763,7 +813,11 @@ class Cards:
             if e <= s:
                 continue
             th = dict(theme)
-            th.update({"size": float(theme.get("size", 78)) * float(c.get("scale", 1.35)), "position": 0.5, "maxWidth": 0.84, "words": int(c.get("words", 14)), "maxChars": 30, "sentences": True, "align": "center"})
+            # The card's own text layout: size, width, where it sits, alignment and which edge stays put.
+            th.update({"size": float(theme.get("size", 78)) * float(c.get("scale", 1.35)), "position": float(c.get("position", 0.5)),
+                       "anchor": c.get("anchor") or "middle", "maxWidth": float(c.get("width", 0.84)), "words": int(c.get("words", 14)),
+                       "maxChars": int(30 * float(c.get("width", 0.84)) / 0.84), "sentences": True, "align": c.get("align") or "center",
+                       "lineHeight": float(c.get("lineHeight", theme.get("lineHeight", 1.12)))})
             text = str(c.get("text") or "").strip()
             if text:  # your own text, like a verse: one centered block, sized to fit, no word-by-word highlight
                 caps = StaticText(card_text_image(text, th, W, H))
@@ -938,6 +992,10 @@ def main() -> None:
         mode = "lyric"
     if mode == "lyric":
         src_w, src_h = W, H
+    # Digital zoom: everything after this (finding the speaker, framing) works on the zoomed-in part of the shot.
+    zoom_vf = ""
+    if mode != "lyric":
+        zoom_vf, src_w, src_h = zoom_rect(crop, src_w, src_h)
 
     crop_w = min(src_w, int(src_h * W / H) // 2 * 2)
     crop_frac = crop_w / src_w
@@ -947,7 +1005,7 @@ def main() -> None:
     info = {"mode": mode}
     follow = glide = None
     if mode == "auto" and crop_frac < 0.98 and mode != "lyric":
-        picks = pick_speaker(detect_faces(src, start, dur, src_w, src_h), crop.get("anchors"), job.get("speakerPrior"))
+        picks = pick_speaker(detect_faces(src, start, dur, src_w, src_h, pre=zoom_vf), crop.get("anchors"), job.get("speakerPrior"))
         follow, f_info = camera_path(picks, n_frames, fps, crop_frac)
         glide, g_info = glide_path(picks, n_frames, fps, crop_frac)
         # 0 = follow closely, 1 = one smooth glide; anything between blends the two paths.
@@ -1073,7 +1131,7 @@ def main() -> None:
     pops = Popups(job.get("popups"), W, H, theme, (job.get("lyric") or {}).get("colors", ["#D9A441"])[1] if len((job.get("lyric") or {}).get("colors", [])) > 1 else "#D9A441")
     dec = None if lyric else subprocess.Popen(
         [FFMPEG, "-loglevel", "error", "-ss", f"{start:.3f}", "-t", f"{dur:.3f}", "-i", src, "-an",
-         "-vf", f"fps={fps}", "-f", "rawvideo", "-pix_fmt", "bgr24", "-"],
+         "-vf", f"{zoom_vf}fps={fps}", "-f", "rawvideo", "-pix_fmt", "bgr24", "-"],
         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
     )
     size = src_w * src_h * 3

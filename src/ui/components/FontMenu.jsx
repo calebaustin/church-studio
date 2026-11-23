@@ -23,11 +23,27 @@ export function useFamilies() {
  * Searchable font menu. Each name is shown in its own typeface.
  * options: [{value, label, css, group}]
  */
-export default function FontMenu({ value, onChange, options, label, align = 'left', width = '100%' }) {
+export default function FontMenu({ value, onChange, options: allOptions, label, align = 'left', width = '100%', placeholder = 'Choose a font' }) {
   const { reloadThemes } = useApp();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState(false);
+  const { config } = useApp();
+  // Your brand's fonts sit at the top of every font menu: heading, body, then the fonts you've starred.
+  const options = useMemo(() => {
+    const fam = (o) => o.family || String(o.css || o.value || '').replace(/['"]/g, '').split(',')[0].trim();
+    const bf = config?.brandFonts || {};
+    const picks = [[bf.heading, 'Heading'], [bf.body, 'Body'], ...(config?.starredFonts || []).map((f) => [f, 'Starred'])].filter(([f]) => f);
+    const seen = new Set();
+    const top = [];
+    for (const [f, role] of picks) {
+      const match = allOptions.find((o) => o.value === value && fam(o) === f) || allOptions.find((o) => fam(o) === f);
+      if (!match || seen.has(match.value)) continue;
+      seen.add(match.value);
+      top.push({ ...match, label: `${match.label}`, role, group: 'Your brand' });
+    }
+    return [...top, ...allOptions.filter((o) => !seen.has(o.value))];
+  }, [allOptions, config?.brandFonts, config?.starredFonts, value]);
   const current = options.find((o) => o.value === value);
   const shown = options.filter((o) => !q || o.label.toLowerCase().includes(q.toLowerCase())).slice(0, 300);
   const groups = [...new Set(shown.map((o) => o.group))];
@@ -35,7 +51,7 @@ export default function FontMenu({ value, onChange, options, label, align = 'lef
     <div className="stack" style={{ gap: 6, position: 'relative', width }}>
       {label && <span className="field-label">{label}</span>}
       <button type="button" className="font-trigger" data-pop-trigger onClick={() => { if (!open) reloadThemes().catch(() => {}); setOpen(!open); }}>
-        <span className="truncate" style={{ fontFamily: current?.css }}>{current?.label || 'Choose a font'}</span>
+        <span className="truncate" style={{ fontFamily: current?.css }}>{current?.label || placeholder}</span>
         <ChevronDown size={15} />
       </button>
       <Popover open={open} onClose={() => setOpen(false)} align={align} width={300}>
@@ -50,7 +66,7 @@ export default function FontMenu({ value, onChange, options, label, align = 'lef
               <span className="cp-group-name" style={{ padding: '8px 10px 2px' }}>{g}</span>
               {shown.filter((o) => o.group === g).map((o) => (
                 <button key={o.value} type="button" className={`pop-item font-item ${o.value === value ? 'on' : ''}`} style={{ fontFamily: o.css, fontWeight: o.weight }}
-                  onClick={() => { onChange(o.value); setOpen(false); setQ(''); }}>{o.label}</button>
+                  onClick={() => { onChange(o.value); setOpen(false); setQ(''); }}>{o.label}{o.role && <span className="font-role">{o.role}</span>}</button>
               ))}
             </div>
           ))}
