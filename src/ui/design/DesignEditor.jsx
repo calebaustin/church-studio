@@ -4,6 +4,7 @@ import {
   ArrowLeft, ArrowRight, BringToFront, Check, ChevronDown, ChevronLeft, ChevronRight, Circle, Copy, Download, Grid3x3, Image as ImageIcon,
   Magnet, Minus, MonitorUp, Hexagon, Scaling, Smartphone, Laptop, Eraser, ImageOff, Play, RefreshCw, Plus, QrCode, Redo2, SendToBack, Shapes, Square, Trash2, Type, Undo2, Shuffle, X,
   Send, FlipHorizontal2, FlipVertical2, Link2, AlignLeft, AlignCenter, AlignRight, Palette, Scissors,
+  Sparkles, Layers2, PenLine,
 } from 'lucide-react';
 import { useApp, useHelperFocus } from '../App.jsx';
 import { api } from '../api.js';
@@ -85,6 +86,7 @@ export default function DesignEditor({ id, onClose }) {
   const [picker, setPicker] = useState(null);
   const [erasing, setErasing] = useState(null); // library path of the picture being cleared
   const [cutting, setCutting] = useState(null); // library path of the picture to cut subjects out of
+  const [popping, setPopping] = useState(null); // the photo to make a subject pop from (a shadow or outline behind them)
   const [saved, setSaved] = useState(true);
   // "Change X to Y everywhere?": offered after a color or font change settles, when the old value is used elsewhere.
   // The shape panel: Basic, Accents and Arrows, side by side. Swipe between them or pick a tab.
@@ -865,6 +867,8 @@ export default function DesignEditor({ id, onClose }) {
               )}
               {item.type === 'image' && !/\.svg$/i.test(item.rel) && <button className="btn sm" onClick={() => setErasing(item.rel)}><Eraser size={13} />Erase background</button>}
               {item.type === 'image' && !/\.svg$/i.test(item.rel) && <button className="btn sm" title="Keep just the people or things you pick" onClick={() => setCutting(item.rel)}><Scissors size={13} />Cut out subjects</button>}
+              {item.type === 'image' && !/\.svg$/i.test(item.rel) && !item.fx && <button className="btn sm" title="Put a colored shadow or an outline behind a person, right on this photo" onClick={() => setPopping(item)}><Sparkles size={13} />Make a subject pop</button>}
+              {item.type === 'image' && item.fx && <SubjectFx fx={item.fx} colors={colors} onChange={(fx) => setItem({ fx }, { record: false })} />}
               {item.type === 'image' && !/\.svg$/i.test(item.rel) && <PhotoEdits value={item.adjust} colors={colors} onChange={(adjust) => setItem({ adjust }, { record: false })} />}
               {item.type === 'image' && /\.svg$/i.test(item.rel) && <SvgColors item={item} cache={cache.current} swatches={colors} onChange={(recolor) => setItem({ recolor }, { record: false })} />}
               {item.type === 'qr' && (
@@ -971,6 +975,14 @@ export default function DesignEditor({ id, onClose }) {
         </aside>
       </div>
 
+      {popping && <SubjectCutout rel={popping.rel} pop onClose={() => setPopping(null)} onSaved={(out) => {
+        // The subject, cut out and laid exactly over the photo, with a shadow behind it. The photo stays under it.
+        const photo = popping; setPopping(null);
+        const it = { id: uid(), type: 'image', rel: out.rel, x: photo.x, y: photo.y, w: photo.w, opacity: 1, fx: { shadow: { style: 'solid', color: colors[1] || '#D9A441', x: 0.04, y: 0.015, opacity: 1, blur: 0.4 } } };
+        update((d) => { const list = d.pages[pi].items; const at = list.findIndex((x) => x.id === photo.id); list.splice(at < 0 ? list.length : at + 1, 0, it); return d; });
+        setSel(it.id);
+        toast({ text: 'Your subject now has a shadow. Change it, or add an outline, on the right.' });
+      }} />}
       {cutting && <SubjectCutout rel={cutting} onClose={() => setCutting(null)} onSaved={(out) => { setCutting(null); setItem({ rel: out.rel }); toast({ text: 'Cut out. The copy is in your brand library, next to the original.' }); }} />}
       {erasing && <BackgroundEraser rel={erasing} onClose={() => setErasing(null)} onSaved={(out) => { setErasing(null); setItem({ rel: out.rel }); toast({ text: 'Background erased. The copy is in your brand library.' }); }} />}
       {picker && (
@@ -1076,4 +1088,39 @@ function syncLinks(prev, next) {
       Object.assign(other, it, { id: keepId, x: +(keepX + dx).toFixed(4) });
     }
   }
+}
+
+/** A cut-out subject's shadow and outline, to make a person pop from a photo. */
+function SubjectFx({ fx, colors, onChange }) {
+  const sh = fx.shadow; const ol = fx.outline;
+  const setSh = (p) => onChange({ ...fx, shadow: { style: 'solid', color: colors[1] || '#D9A441', x: 0.04, y: 0.015, opacity: 1, blur: 0.4, ...(sh || {}), ...p } });
+  const setOl = (p) => onChange({ ...fx, outline: { color: '#FFFFFF', width: 12, ...(ol || {}), ...p } });
+  return (
+    <div className="keycard stack" style={{ gap: 10 }}>
+      <Toggle checked={Boolean(sh)} onChange={(e) => (e.target.checked ? setSh({}) : onChange({ ...fx, shadow: null }))} icon={Layers2} label="Subject shadow" small />
+      {sh && (
+        <>
+          <div className="row wrap" style={{ gap: 10 }}>
+            <div className="seg" role="group" aria-label="Shadow style">{[['solid', 'Solid'], ['blur', 'Soft']].map(([k, l]) => <button key={k} className={(sh.style || 'solid') === k ? 'on' : ''} onClick={() => setSh({ style: k, ...(k === 'blur' && sh.style !== 'blur' ? { color: '#000000', opacity: 0.55 } : {}) })}>{l}</button>)}</div>
+            <ColorField value={sh.color || '#000000'} swatches={colors} onChange={(c) => setSh({ color: c })} />
+          </div>
+          <div className="token-grid">
+            <label className="field small">Across · {Math.round((sh.x ?? 0.04) * 100)}<input type="range" min="-0.2" max="0.2" step="0.005" value={sh.x ?? 0.04} onChange={(e) => setSh({ x: Number(e.target.value) })} /></label>
+            <label className="field small">Down · {Math.round((sh.y ?? 0.015) * 100)}<input type="range" min="-0.2" max="0.2" step="0.005" value={sh.y ?? 0.015} onChange={(e) => setSh({ y: Number(e.target.value) })} /></label>
+            {sh.style === 'blur' && <label className="field small">Softness · {Math.round((sh.blur ?? 0.4) * 100)}%<input type="range" min="0.05" max="1" step="0.05" value={sh.blur ?? 0.4} onChange={(e) => setSh({ blur: Number(e.target.value) })} /></label>}
+            <label className="field small">Opacity · {Math.round((sh.opacity ?? 1) * 100)}%<input type="range" min="0.1" max="1" step="0.05" value={sh.opacity ?? 1} onChange={(e) => setSh({ opacity: Number(e.target.value) })} /></label>
+          </div>
+        </>
+      )}
+      <hr className="hairline" />
+      <Toggle checked={Boolean(ol)} onChange={(e) => (e.target.checked ? setOl({}) : onChange({ ...fx, outline: null }))} icon={PenLine} label="Subject outline" small />
+      {ol && (
+        <div className="row wrap" style={{ gap: 10, alignItems: 'end' }}>
+          <ColorField value={ol.color || '#FFFFFF'} swatches={colors} onChange={(c) => setOl({ color: c })} />
+          <label className="field small grow">Thickness · {ol.width ?? 12}px<input type="range" min="2" max="60" step="1" value={ol.width ?? 12} onChange={(e) => setOl({ width: Number(e.target.value) })} /></label>
+        </div>
+      )}
+      <span className="hint">The photo stays underneath, so you can move or remove the shadow anytime.</span>
+    </div>
+  );
 }

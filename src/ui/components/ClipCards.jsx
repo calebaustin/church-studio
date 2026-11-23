@@ -1,7 +1,8 @@
 // Full-screen cards for a clip: lyrics, a verse or the words being said, in front of everything for a while.
 // The editor panel (in Graphics) and the live preview. The export draws them the same way (Cards in render_clip.py).
 import { useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, LogIn, LogOut } from 'lucide-react';
+import Toggle from './Toggle.jsx';
 import ColorField from './ColorField.jsx';
 import CaptionOverlay from './CaptionOverlay.jsx';
 import { fmt } from '../api.js';
@@ -13,6 +14,9 @@ const MOTIONS = [['drift', 'Drift'], ['glow', 'Glow'], ['bokeh', 'Soft lights'],
 // How long one pass of each moving background takes in the preview, at normal speed.
 const MOTION_SECONDS = { drift: 18, glow: 14, bokeh: 22, wave: 10, pulse: 6, sweep: 9, scroll: 12 };
 const TRANSITIONS = [['fade', 'Fade'], ['blur', 'Blur'], ['slide', 'Slide']];
+// How a card comes in and goes out. Cards made before these were separate use their one transition for both.
+const trIn = (c) => (c.transitionIn !== undefined ? c.transitionIn : c.transition || 'fade') || 'none';
+const trOut = (c) => (c.transitionOut !== undefined ? c.transitionOut : c.transition || 'fade') || 'none';
 // Where a slide comes in from, and its name in the export.
 const SLIDES = [['slide-down', 'Top'], ['slide-left', 'Right'], ['slide-up', 'Bottom'], ['slide-right', 'Left']];
 
@@ -42,15 +46,19 @@ function bgStyle(c, brand) {
 /** A card's text layout, with the defaults the export uses. */
 const cardLayout = (c) => ({ scale: c.scale ?? 1.35, width: c.width ?? 0.84, position: c.position ?? 0.5, align: c.align || 'center', anchor: c.anchor || 'middle', lineHeight: c.lineHeight ?? null });
 
-/** How far a card is in (0..1) at output time t, eased like the export. */
-const reveal = (c, t) => { const r = Math.max(0, Math.min(1, (t - c.start) / 0.45, (c.end - t) / 0.45)); return 1 - (1 - r) ** 3; };
+/** Which transition is playing at output time t and how far along it is (0..1), eased like the export. */
+const reveal = (c, t) => {
+  const entering = t - c.start < c.end - t;
+  const tr = entering ? trIn(c) : trOut(c);
+  const r = tr === 'none' ? 1 : Math.max(0, Math.min(1, (entering ? t - c.start : c.end - t) / 0.45));
+  return { e: 1 - (1 - r) ** 3, tr };
+};
 
 /** The live preview of whichever card is showing. */
 export function CardPreview({ cards, outTime, keep, capWords, theme, font, frameWidth, playing, brand }) {
   const c = (cards || []).find((x) => outTime >= x.start && outTime <= x.end);
   if (!c) return null;
-  const e = reveal(c, outTime);
-  const tr = c.transition || 'fade';
+  const { e, tr } = reveal(c, outTime);
   const from = { 'slide-up': [0, 100], 'slide-down': [0, -100], 'slide-left': [100, 0], 'slide-right': [-100, 0] }[tr];
   const style = tr.startsWith('slide') ? { transform: `translate(${(1 - e) * from[0]}%, ${(1 - e) * from[1]}%)` } : { opacity: e, filter: tr === 'blur' && e < 1 ? `blur(${((1 - e) * 14).toFixed(1)}px)` : undefined };
   // Card time is output time; caption words are clip time. Map them across the cuts.
@@ -82,7 +90,7 @@ export function CardsPanel({ clip, set, now, len, brand }) {
   const upBg = (c, patch) => up(c.id, { bg: { type: 'mesh', ...(c.bg || {}), ...patch } });
   const add = () => {
     const start = +Math.min(Math.max(0, now), Math.max(0, len - 1)).toFixed(1);
-    save([...list, { id: Math.random().toString(36).slice(2, 8), start, end: +Math.min(len, start + 5).toFixed(1), text: '', transition: 'fade', bg: { type: 'motion', motion: 'drift', colors: (brand || []).slice(0, 3), dim: 0.15 } }]);
+    save([...list, { id: Math.random().toString(36).slice(2, 8), start, end: +Math.min(len, start + 5).toFixed(1), text: '', transitionIn: 'none', transitionOut: 'none', bg: { type: 'motion', motion: 'drift', colors: (brand || []).slice(0, 3), dim: 0.15 } }]);
   };
   return (
     <div className="keycard stack" style={{ gap: 12 }}>
@@ -93,7 +101,6 @@ export function CardsPanel({ clip, set, now, len, brand }) {
       {list.map((c) => {
         const cols = colorsOf(c, brand);
         const type = c.bg?.type || 'mesh';
-        const slide = (c.transition || '').startsWith('slide');
         return (
           <div key={c.id} className="card-row stack" style={{ gap: 10 }}>
             <div className="row wrap" style={{ gap: 6 }}>
@@ -127,10 +134,19 @@ export function CardsPanel({ clip, set, now, len, brand }) {
               <input className="input grow" style={{ minWidth: 160 }} value={c.label || ''} placeholder="Reference or label, like Luke 22:19" onChange={(e) => up(c.id, { label: e.target.value })} />
               {c.label?.trim() && <div className="seg" role="group" aria-label="Label place">{[['top', 'Above'], ['bottom', 'Below']].map(([k, l]) => <button key={k} className={(c.labelPos || 'bottom') === k ? 'on' : ''} onClick={() => up(c.id, { labelPos: k })}>{l}</button>)}</div>}
             </div>
-            <div className="row wrap" style={{ gap: 8 }}>
-              <span className="small" style={{ fontWeight: 600 }}>Comes in with</span>
-              <div className="seg" role="group" aria-label="Transition">{TRANSITIONS.map(([k, l]) => <button key={k} className={(k === 'slide' ? slide : (c.transition || 'fade') === k) ? 'on' : ''} onClick={() => up(c.id, { transition: k === 'slide' ? 'slide-up' : k })}>{l}</button>)}</div>
-              {slide && <div className="seg" role="group" aria-label="Slide in from">{SLIDES.map(([k, l]) => <button key={k} className={c.transition === k ? 'on' : ''} onClick={() => up(c.id, { transition: k })}>{l}</button>)}</div>}
+            <div className="stack" style={{ gap: 8 }}>
+              <span className="small" style={{ fontWeight: 600 }}>Transition</span>
+              {[['In', LogIn, trIn(c), 'transitionIn'], ['Out', LogOut, trOut(c), 'transitionOut']].map(([name, Icon, cur, key]) => {
+                const on = cur !== 'none';
+                const isSlide = cur.startsWith('slide');
+                return (
+                  <div key={key} className="row wrap card-tr" style={{ gap: 8 }}>
+                    <Toggle checked={on} onChange={(e) => up(c.id, { [key]: e.target.checked ? 'fade' : 'none' })} icon={Icon} label={name} small />
+                    {on && <div className="seg" role="group" aria-label={`Transition ${name.toLowerCase()}`}>{TRANSITIONS.map(([k, l]) => <button key={k} className={(k === 'slide' ? isSlide : cur === k) ? 'on' : ''} onClick={() => up(c.id, { [key]: k === 'slide' ? 'slide-up' : k })}>{l}</button>)}</div>}
+                    {on && isSlide && <div className="seg" role="group" aria-label={`Slide ${name.toLowerCase()} ${name === 'In' ? 'from' : 'toward'}`}>{SLIDES.map(([k, l]) => <button key={k} className={cur === k ? 'on' : ''} onClick={() => up(c.id, { [key]: k })}>{l}</button>)}</div>}
+                  </div>
+                );
+              })}
             </div>
             </>)}
             {tabs[c.id] === 'bg' && (

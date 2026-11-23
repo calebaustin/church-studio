@@ -2018,3 +2018,7 @@ button.tp-tile:active .tp-orb { transform: scale(.92); transition-duration: 120m
 .zoom-pct { cursor: ew-resize; user-select: none; touch-action: none; }
 
 .card-tabs { margin: 0; }
+/* Card transitions: the choices grow in beside a switch once it's on */
+.card-tr .seg { animation: card-tr-in var(--d-snappy, 0.3s) var(--spring-snappy, ease-out) both; transform-origin: left center; }
+@keyframes card-tr-in { from { opacity: 0; transform: scaleX(0.92); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .card-tr .seg { animation: none; } }

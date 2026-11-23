@@ -78,8 +78,20 @@ function CanvasFrame({ video, mode, bg, gap, width, height, colors, split, filte
           const amt = bg?.blur ?? 0.6;
           ctx.filter = `blur(${Math.max(1, 18 * amt)}px) brightness(${0.9 - 0.25 * amt})`;
           // A little larger than the frame, so the blur doesn't fade at the edges.
-          const o = H * 0.06; const cw = (H + 2 * o) * ar;
-          ctx.drawImage(v, (W - cw) / 2, -o, cw, H + 2 * o);
+          const o = H * 0.06;
+          const z = bg?.zoom;
+          if (z && (z.z > 1.005 || z.cx != null)) {
+            // Zoomed and moved: the part of the shot it covers, the frame's shape, matching the export.
+            const vw = v.videoWidth; const vh = v.videoHeight;
+            let rh = vh / Math.max(1, z.z || 1); let rw = rh * W / H;
+            if (rw > vw) { rw = vw; rh = rw * H / W; }
+            const x0 = Math.max(0, Math.min(vw - rw, (z.cx ?? 0.5) * vw - rw / 2));
+            const y0 = Math.max(0, Math.min(vh - rh, (z.cy ?? 0.5) * vh - rh / 2));
+            ctx.drawImage(v, x0, y0, rw, rh, -o * W / H, -o, W + 2 * o * W / H, H + 2 * o);
+          } else {
+            const cw = (H + 2 * o) * ar;
+            ctx.drawImage(v, (W - cw) / 2, -o, cw, H + 2 * o);
+          }
           ctx.filter = 'none';
           if (mode === 'stack3') { // same background above and below, like the export
             ctx.save(); ctx.translate(0, H); ctx.scale(1, -1);
@@ -335,26 +347,46 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
   const left = Math.min(0, Math.max(-(VW - FW), -(x * VW - FW / 2)));
   // Digital zoom: the preview shows the zoomed-in part of the shot, the way the export and speaker finding use it.
   const zoomOk = Boolean(project.media?.width) && (wide || ['auto', 'manual', 'cues'].includes(mode));
-  const zm = zoomOk ? (crop.zoom || null) : null;
+  // Whole frame on a blurred copy of the video: that blurred background can be zoomed and moved on its own,
+  // say to put a big soft face up top behind the sharp shot.
+  const bgZoomOk = Boolean(project.media?.width) && !wide && mode === 'fit' && crop.bg?.type !== 'color';
+  const zoomTarget = zoomOk ? 'shot' : bgZoomOk ? 'bg' : null;
+  const zm = zoomTarget === 'shot' ? (crop.zoom || null) : zoomTarget === 'bg' ? (crop.bg?.zoom || null) : null;
   const zz = Math.max(1, Math.min(4, zm?.z || 1));
-  const zcx = Math.min(1 - 1 / (2 * zz), Math.max(1 / (2 * zz), zm?.cx ?? 0.5));
-  const zcy = Math.min(1 - 1 / (2 * zz), Math.max(1 / (2 * zz), zm?.cy ?? 0.5));
+  // How much of the shot the zoomed part covers (0..1 across and down). The shot's own zoom keeps its shape;
+  // the blurred background is the frame's shape.
+  const spanOf = (z) => {
+    if (zoomTarget !== 'bg') return [1 / z, 1 / z];
+    const out = FW / FH; let sh = 1 / z; let sw = sh * out / A;
+    if (sw > 1) { sw = 1; sh = A / out; }
+    return [sw, sh];
+  };
+  const [spanW, spanH] = spanOf(zz);
+  const clampC = (v, span) => Math.min(1 - span / 2, Math.max(span / 2, v));
+  const zcx = clampC(zm?.cx ?? 0.5, spanW);
+  const zcy = clampC(zm?.cy ?? 0.5, spanH);
   const [zooming, setZooming] = useState(false); // the crop grid is up: drag the picture, drag the percent to zoom
   const zoomBase = useRef(null);
   const setZoom = (p, opts) => {
     const n = { z: zz, cx: zcx, cy: zcy, ...p };
     n.z = Math.round(Math.max(1, Math.min(4, n.z)) * 100) / 100;
-    n.cx = Math.round(Math.min(1 - 1 / (2 * n.z), Math.max(1 / (2 * n.z), n.cx)) * 1000) / 1000;
-    n.cy = Math.round(Math.min(1 - 1 / (2 * n.z), Math.max(1 / (2 * n.z), n.cy)) * 1000) / 1000;
-    set({ crop: { ...crop, zoom: n.z > 1.005 ? n : null } }, opts);
+    const [sw, sh] = spanOf(n.z);
+    n.cx = Math.round(clampC(n.cx, sw) * 1000) / 1000;
+    n.cy = Math.round(clampC(n.cy, sh) * 1000) / 1000;
+    const keep = n.z > 1.005 || (zoomTarget === 'bg' && (Math.abs(n.cx - 0.5) > 0.002 || Math.abs(n.cy - 0.5) > 0.002));
+    if (zoomTarget === 'bg') set({ crop: { ...crop, bg: { ...(crop.bg || { type: 'blur' }), zoom: keep ? n : null } } }, opts);
+    else set({ crop: { ...crop, zoom: keep ? n : null } }, opts);
   };
-  // When the zoom changes, the speaker is found again inside the new frame.
-  const refind = () => { if (mode === 'auto' && !busyKind('track')) run('track'); };
+  // When the shot's zoom changes, the speaker is found again inside the new frame.
+  const refind = () => { if (zoomTarget === 'shot' && mode === 'auto' && !busyKind('track')) run('track'); };
   const finishZoom = () => { setZooming(false); if (zoomBase.current && (zoomBase.current.z !== zz || zoomBase.current.cx !== zcx || zoomBase.current.cy !== zcy)) refind(); zoomBase.current = null; };
-  const startZoom = () => { if (!zoomOk) return; zoomBase.current = { z: zz, cx: zcx, cy: zcy }; setZooming(true); };
+  const startZoom = () => { if (!zoomTarget) return; zoomBase.current = { z: zz, cx: zcx, cy: zcy }; setZooming(true); };
   // The full shot, sized up by the zoom and shifted so the zoomed part fills the frame.
-  const fullW = (wide ? FW : VW) * zz; const fullH = FH * zz;
-  const zox = (zcx - 1 / (2 * zz)) * fullW; const zoy = (zcy - 1 / (2 * zz)) * fullH;
+  const shotZ = zoomTarget === 'shot' ? zz : 1;
+  const fullW = (wide ? FW : VW) * shotZ; const fullH = FH * shotZ;
+  const zox = zoomTarget === 'shot' ? (zcx - 1 / (2 * zz)) * fullW : 0; const zoy = zoomTarget === 'shot' ? (zcy - 1 / (2 * zz)) * fullH : 0;
+  // Dragging moves the picture: how far one pixel on screen moves the zoomed part, as a share of the shot.
+  const panX = zoomTarget === 'bg' ? spanW / FW : 1 / fullW; const panY = zoomTarget === 'bg' ? spanH / FH : 1 / fullH;
   const canvasMode = mode === 'fit' || mode === 'stack3' || mode === 'split' || mode === 'lyric' || !project.media?.width;
   const setCrop = (p) => set({ crop: { ...crop, ...p } });
   const addCue = () => {
@@ -372,7 +404,7 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
     if (d && zooming) { // drag the picture to put the person in place
       const dx = e.clientX - d.x0; const dy = e.clientY - d.y0;
       if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
-      if (d.moved) { setZoom({ cx: d.zx - dx / fullW, cy: d.zy - dy / fullH }, { quiet: !d.first }); d.first = false; }
+      if (d.moved) { setZoom({ cx: d.zx - dx * panX, cy: d.zy - dy * panY }, { quiet: !d.first }); d.first = false; }
       return;
     }
     if (!d || !canDrag) return;
@@ -398,6 +430,29 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
   const working = project.clips.filter((c) => c.status === 'kept' || c.status === 'exported' || c.id === clip.id);
   const wi = working.findIndex((c) => c.id === clip.id);
   const [exportAll, setExportAll] = useState(false);
+
+  // The zoom controls: the shot's digital zoom, or the blurred background's in Whole frame.
+  const zoomPanel = (
+                <div className="keycard stack" style={{ gap: 10 }}>
+                  <div className="row between"><strong className="small">{zoomTarget === 'bg' ? 'Blurred background' : 'Digital zoom'}</strong>
+                    <span className="row" style={{ gap: 6 }}>
+                      <button className="btn sm" onClick={() => (zooming ? finishZoom() : startZoom())}>{zooming ? 'Done' : 'Adjust in the preview'}</button>
+                      <button className="rt-btn" title={zoomTarget === 'bg' ? 'Center the background again' : 'Show the whole shot again'} aria-label={zoomTarget === 'bg' ? 'Center the background again' : 'Show the whole shot again'} disabled={!zm}
+                        onClick={() => { if (zoomTarget === 'bg') set({ crop: { ...crop, bg: { ...(crop.bg || {}), zoom: null } } }); else { set({ crop: { ...crop, zoom: null } }); refind(); } }}><RotateCcw size={13} /></button>
+                    </span>
+                  </div>
+                  <span className="hint">{zoomTarget === 'bg'
+                    ? 'Zoom into the blurred copy behind the shot and move it, say to put a big soft face up top. Double-click the preview, drag the percent to zoom, then drag the picture.'
+                    : `For a video filmed too far out. Double-click the preview, drag the percent left or right to zoom, then drag the picture until the person is in place.${mode === 'auto' ? ' The speaker is found again in the new frame.' : ''}`}</span>
+                  <label className="field small">Zoom · {Math.round(zz * 100)}%
+                    <input type="range" min="1" max={zoomTarget === 'bg' ? 4 : 3} step="0.05" value={zz} onChange={(e) => setZoom({ z: Number(e.target.value) })} onPointerUp={refind} onKeyUp={refind} />
+                  </label>
+                  {zoomTarget === 'bg' && <div className="token-grid">
+                    <label className="field small">Across · {Math.round(zcx * 100)}%<input type="range" min="0" max="1" step="0.01" value={zcx} onChange={(e) => setZoom({ cx: Number(e.target.value) })} /></label>
+                    <label className="field small">Up and down · {Math.round(zcy * 100)}%<input type="range" min="0" max="1" step="0.01" value={zcy} onChange={(e) => setZoom({ cy: Number(e.target.value) })} /></label>
+                  </div>}
+                </div>
+  );
 
   // ---- shared look and panel defaults
   // How a clip looks, apart from its words and timing. "Use settings for all clips" copies these to the others.
@@ -552,7 +607,7 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
         <div className="stack sticky-col">
           <div className={`vframe ${canDrag || zooming ? 'draggable' : ''} ${zooming ? 'zooming' : ''}`} style={{ width: FW, aspectRatio: wide ? '16 / 9' : undefined }} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
             onDoubleClick={() => { if (!zooming) startZoom(); }}
-            title={zooming ? 'Drag to move the picture' : canDrag ? 'Drag sideways to aim the frame. Click to play or pause. Double-click to zoom.' : zoomOk ? 'Click to play or pause. Double-click to zoom in.' : 'Click to play or pause'}>
+            title={zooming ? 'Drag to move the picture' : canDrag ? 'Drag sideways to aim the frame. Click to play or pause. Double-click to zoom.' : zoomTarget === 'bg' ? 'Click to play or pause. Double-click to zoom and move the blurred background.' : zoomOk ? 'Click to play or pause. Double-click to zoom in.' : 'Click to play or pause'}>
             {zooming && (
               <div className="zoom-grid" aria-hidden="false">
                 <i className="v1" /><i className="v2" /><i className="h1" /><i className="h2" />
@@ -770,20 +825,7 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
           {tab === 'crop' && (
             <div className="stack" style={{ gap: 14 }}>
               {wide && project.media?.width > 0 && <div className="keycard small muted">Wide clips keep the whole shot, just like the export.</div>}
-              {zoomOk && (
-                <div className="keycard stack" style={{ gap: 10 }}>
-                  <div className="row between"><strong className="small">Digital zoom</strong>
-                    <span className="row" style={{ gap: 6 }}>
-                      <button className="btn sm" onClick={() => (zooming ? finishZoom() : startZoom())}>{zooming ? 'Done' : 'Adjust in the preview'}</button>
-                      <button className="rt-btn" title="Show the whole shot again" aria-label="Show the whole shot again" disabled={zz <= 1} onClick={() => { set({ crop: { ...crop, zoom: null } }); refind(); }}><RotateCcw size={13} /></button>
-                    </span>
-                  </div>
-                  <span className="hint">For a video filmed too far out. Double-click the preview, drag the percent left or right to zoom, then drag the picture until the person is in place.{mode === 'auto' ? ' The speaker is found again in the new frame.' : ''}</span>
-                  <label className="field small">Zoom · {Math.round(zz * 100)}%
-                    <input type="range" min="1" max="3" step="0.05" value={zz} onChange={(e) => setZoom({ z: Number(e.target.value) })} onPointerUp={refind} onKeyUp={refind} />
-                  </label>
-                </div>
-              )}
+              {zoomTarget === 'shot' && zoomPanel}
               {!(wide && project.media?.width > 0) && (<>
               <div className="choices">
                 {[['auto', 'Follow speaker', 'Moves with the preacher.'],
@@ -881,6 +923,7 @@ export default function ClipEditor({ project, transcript, onTranscript, clipId, 
                       <span className="hint">Great for interviews, panels and two hosts. Slide each one until that person is centered.</span>
                     </div>
                   )}
+                  {zoomTarget === 'bg' && zoomPanel}
                   {mode === 'stack3' && <label className="field">Space between · {crop.gap ?? 18}px<input type="range" min="0" max="60" value={crop.gap ?? 18} onChange={(e) => setCrop({ gap: Number(e.target.value) })} /></label>}
                 </div>
               )}

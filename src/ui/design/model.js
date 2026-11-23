@@ -509,6 +509,59 @@ function edited(img, adjust, key, cache) {
   return c;
 }
 
+// ---------------------------------------------------------------- subject shadow and outline
+/** A cut-out subject's shape filled with one color, kept until the color changes. */
+function silhouette(img, color, key, cache) {
+  const id = `sil:${key}:${color}`;
+  if (cache[id]) return cache[id];
+  const k = Math.min(1, 1600 / Math.max(img.width, img.height));
+  const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
+  const g = c.getContext('2d');
+  g.fillStyle = color; g.fillRect(0, 0, c.width, c.height);
+  g.globalCompositeOperation = 'destination-in'; g.drawImage(img, 0, 0, c.width, c.height);
+  for (const old of Object.keys(cache)) if (old.startsWith(`sil:${key}:`) && old !== id) delete cache[old];
+  cache[id] = c;
+  return c;
+}
+/** A smooth outline around a cut-out subject: its shape grown by r pixels (of the silhouette), one color. */
+function outlineOf(img, color, r, key, cache) {
+  const id = `out:${key}:${color}:${r}`;
+  if (cache[id]) return cache[id];
+  const sil = silhouette(img, color, key, cache);
+  const c = document.createElement('canvas'); c.width = sil.width + r * 2; c.height = sil.height + r * 2;
+  const g = c.getContext('2d');
+  // Stamping the shape in a ring, then filling the inside, grows it evenly with round corners.
+  const steps = Math.max(16, Math.min(48, Math.round(r * 2)));
+  for (let i = 0; i < steps; i++) { const a = (i / steps) * Math.PI * 2; g.drawImage(sil, r + Math.cos(a) * r, r + Math.sin(a) * r); }
+  for (let rr = r * 0.5; rr > 0.5; rr *= 0.5) for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2; g.drawImage(sil, r + Math.cos(a) * rr, r + Math.sin(a) * rr); }
+  g.drawImage(sil, r, r);
+  for (const old of Object.keys(cache)) if (old.startsWith(`out:${key}:`) && old !== id) delete cache[old];
+  cache[id] = c;
+  return c;
+}
+/** Draws a subject's shadow and outline under it. fx: { shadow: { color, style: 'solid'|'blur', blur, x, y, opacity }, outline: { color, width } } */
+function drawSubjectFx(ctx, img, fx, key, x, y, w, h, k, cache) {
+  if (!fx || !img) return;
+  const sh = fx.shadow;
+  if (sh) {
+    const sil = silhouette(img, sh.color || '#000000', key, cache);
+    ctx.save();
+    ctx.globalAlpha *= sh.opacity ?? 1;
+    if (sh.style === 'blur') ctx.filter = `blur(${Math.max(1, (sh.blur ?? 0.4) * w * 0.08)}px)`;
+    ctx.drawImage(sil, x + (sh.x ?? 0.04) * w, y + (sh.y ?? 0.02) * w, w, h);
+    ctx.restore();
+  }
+  const ol = fx.outline;
+  if (ol && (ol.width ?? 12) > 0) {
+    const pagePx = (ol.width ?? 12) * k; // the outline's thickness on the page
+    const sil = silhouette(img, ol.color || '#FFFFFF', key, cache);
+    const r = Math.max(1, Math.round(pagePx * sil.width / w));
+    const o = outlineOf(img, ol.color || '#FFFFFF', r, key, cache);
+    const sc = w / sil.width;
+    ctx.drawImage(o, x - r * sc, y - r * sc, o.width * sc, o.height * sc);
+  }
+}
+
 // ---------------------------------------------------------------- pattern backgrounds
 export const PATTERNS = [['checker', 'Checker'], ['grid', 'Grid'], ['dots', 'Dots'], ['stripes', 'Stripes']];
 function drawPattern(ctx, W, H, bg, colors) {
@@ -694,6 +747,7 @@ export function renderPage(canvas, doc, pg, scale, cache, { skip, placeholders =
       const w = it.w * W; const h = img ? (img.height / img.width) * w : w;
       const x = it.x * W - w / 2; const y = it.y * H - h / 2;
       if (img && it.id !== skip) {
+        if (it.fx && it.type === 'image') drawSubjectFx(ctx, cache[it.rel], it.fx, it.rel, x, y, w, h, k, cache);
         if (it.radius) { roundRect(ctx, x, y, w, h, it.radius * k); ctx.clip(); }
         ctx.drawImage(img, x, y, w, h);
       }

@@ -832,14 +832,20 @@ class Cards:
                 arr, x, _, _ = card_text_image(str(c["label"]).strip(), lt, W, H, scale=1.0)
                 y = int(H * (0.16 if c.get("labelPos") == "top" else 0.84) - arr.shape[0] / 2)
                 label = (arr, x, y, 1.0)
-            self.items.append((s, e, c.get("transition", "fade"), caps, CardBackground(c.get("bg") or {}, W, H, brand), label))
+            # How it comes in and goes out: fade, blur, a slide, or none (it just appears). Cards made before
+            # In and Out were separate use their one transition for both.
+            legacy = c.get("transition", "fade")
+            tin, tout = c.get("transitionIn", legacy) or "none", c.get("transitionOut", legacy) or "none"
+            self.items.append((s, e, (tin, tout), caps, CardBackground(c.get("bg") or {}, W, H, brand), label))
 
     def apply(self, img, t: float):
-        for s, e, tr, caps, bg, label in self.items:
+        for s, e, (tin, tout), caps, bg, label in self.items:
             if t < s or t > e:
                 continue
             d = 0.45
-            r = max(0.0, min(1.0, (t - s) / d, (e - t) / d))
+            entering = (t - s) < (e - t)
+            tr = tin if entering else tout
+            r = 1.0 if tr == "none" else max(0.0, min(1.0, ((t - s) if entering else (e - t)) / d))
             ease = 1 - (1 - r) ** 3
             card = bg.frame(t - s).copy()
             for arr, x, y, op in caps.at(t):
@@ -994,7 +1000,8 @@ def main() -> None:
         src_w, src_h = W, H
     # Digital zoom: everything after this (finding the speaker, framing) works on the zoomed-in part of the shot.
     zoom_vf = ""
-    if mode != "lyric":
+    # The shot's zoom applies where the editor offers it: following or fixed framing, and wide clips.
+    if mode in ("auto", "manual", "cues") or (W > H and mode == "fit"):
         zoom_vf, src_w, src_h = zoom_rect(crop, src_w, src_h)
 
     crop_w = min(src_w, int(src_h * W / H) // 2 * 2)
@@ -1167,10 +1174,20 @@ def main() -> None:
                     bg = np.empty((H, W, 3), dtype=np.uint8)
                     bg[:] = bg_color
                 else:  # blurred "cover" copy of the video itself
-                    cover_w = max(W // 4, int(src_w * (H // 4) / src_h))
-                    small = cv2.resize(frame, (cover_w, H // 4), interpolation=cv2.INTER_AREA)
-                    xo = (cover_w - W // 4) // 2
-                    bg = cv2.GaussianBlur(small[:, xo:xo + W // 4], (0, 0), max(0.5, 14 * blur_amt))
+                    bz = bg_cfg.get("zoom") or None
+                    if bz:  # zoomed in and moved: the part of the shot it covers, the frame's shape
+                        rh = src_h / max(1.0, float(bz.get("z", 1) or 1)); rw = rh * W / H
+                        if rw > src_w:
+                            rw = float(src_w); rh = rw * H / W
+                        bx = int(max(0, min(src_w - rw, float(bz.get("cx", 0.5)) * src_w - rw / 2)))
+                        by = int(max(0, min(src_h - rh, float(bz.get("cy", 0.5)) * src_h - rh / 2)))
+                        part = frame[by:by + max(2, int(rh)), bx:bx + max(2, int(rw))]
+                        bg = cv2.GaussianBlur(cv2.resize(part, (W // 4, H // 4), interpolation=cv2.INTER_AREA), (0, 0), max(0.5, 14 * blur_amt))
+                    else:
+                        cover_w = max(W // 4, int(src_w * (H // 4) / src_h))
+                        small = cv2.resize(frame, (cover_w, H // 4), interpolation=cv2.INTER_AREA)
+                        xo = (cover_w - W // 4) // 2
+                        bg = cv2.GaussianBlur(small[:, xo:xo + W // 4], (0, 0), max(0.5, 14 * blur_amt))
                     bg = (cv2.resize(bg, (W, H)) * (0.9 - 0.25 * blur_amt)).astype(np.uint8)
                     if mode == "stack3":  # same background above and below: mirror the top half down
                         half = H // 2

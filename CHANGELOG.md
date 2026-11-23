@@ -2,6 +2,13 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## 0.31.0 · November 23, 2026
+
+- **Zoom the blurred background.** In Framing › Whole frame, the blurred copy behind the shot can be zoomed in and moved on its own, say to put a big soft face up top. Double-click the preview to drag it, or use the sliders.
+- **Make a subject pop.** In Design, pick a photo and press Make a subject pop. Click the people to use and Church Studio puts a shadow behind them, right on the photo. Make it a solid color or soft and blurred, move it across and down, and set its opacity. Add a smooth outline in any color and thickness too. Great for sermon graphics, thumbnails and youth event posts.
+- **Ten new carousels.** Gather (sky blue, bold white type), Grit (black-and-white photos with heavy words), a round-photo sermon recap, story questions, a quiet editorial recap, a reading challenge with hand-drawn circles, a vision series in browser cards, a group invite on dark photos, a missions call and a highlighted verse. Find them in Design › Carousels.
+- **Card transitions, In and Out.** "Comes in with" is now Transition, with its own switch for In and for Out. Each starts off, so the card just appears and goes. Turn one on to choose Fade, Blur or Slide (and which side a slide uses). Cards you've already made keep the transition they had.
+
 ## 0.30.0 · November 23, 2026
 
 - **A tidier project header.** The video's name, Overview, Sermon page, Share and Delete sit on the top row, and the steps from Transcribe to Transcript always have a row of their own, so nothing collides on a big screen.

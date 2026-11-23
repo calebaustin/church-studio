@@ -17,6 +17,7 @@ import { PACKS as PACKS1, PACK_TEMPLATES } from '../design/packs.js';
 import { PACKS2, PACK2_TEMPLATES, inBrandColors } from '../design/packs2.js';
 import { PACKS3, PACK3_TEMPLATES } from '../design/packs3.js';
 import { CAROUSEL_TEMPLATES } from '../design/carousels.js';
+import { CAROUSEL_TEMPLATES2 } from '../design/carousels2.js';
 import { TEXT_TEMPLATES } from '../design/textposts.js';
 import { MORE_TEMPLATES } from '../design/packs4.js';
 
@@ -37,7 +38,7 @@ export function photoCount(t) {
   return photoCounts.get(t.id);
 }
 const EVENT_READY = new Set(['post-event', 'flyer-event', ...Object.keys(PACKS1).map((k) => `${k}-event`)]);
-export const TEMPLATES = [...PACK3_TEMPLATES, ...PACK2_TEMPLATES, ...BASE_TEMPLATES.map((t) => (EVENT_READY.has(t.id) ? { ...t, event: true } : t)), ...PACK_TEMPLATES.map((t) => (EVENT_READY.has(t.id) ? { ...t, event: true, photos: 1 } : t)), ...CAROUSEL_TEMPLATES, ...TEXT_TEMPLATES, ...MORE_TEMPLATES];
+export const TEMPLATES = [...PACK3_TEMPLATES, ...PACK2_TEMPLATES, ...BASE_TEMPLATES.map((t) => (EVENT_READY.has(t.id) ? { ...t, event: true } : t)), ...PACK_TEMPLATES.map((t) => (EVENT_READY.has(t.id) ? { ...t, event: true, photos: 1 } : t)), ...CAROUSEL_TEMPLATES2, ...CAROUSEL_TEMPLATES, ...TEXT_TEMPLATES, ...MORE_TEMPLATES];
 
 export { cohesive } from '../design/model.js';
 

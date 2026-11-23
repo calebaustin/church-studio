@@ -10,11 +10,11 @@ const libUrl = (rel) => `/library/${rel.split('/').map(encodeURIComponent).join(
  * Cut people or things out of a picture: Church Studio finds each subject, you click the ones to keep, and it
  * saves them on a see-through background next to the original (the original stays). onSaved({ rel }).
  */
-export default function SubjectCutout({ rel, onClose, onSaved }) {
+export default function SubjectCutout({ rel, onClose, onSaved, pop = false }) {
   const [found, setFound] = useState(null); // { subjects: [{ index, box, mask }] }
   const [error, setError] = useState(null);
   const [picked, setPicked] = useState(new Set());
-  const [crop, setCrop] = useState(true);
+  const [crop, setCrop] = useState(!pop); // to make a subject pop, it stays the photo's size so it lines up
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     api.post('/api/library/subjects', { rel }).then((r) => { setFound(r); setPicked(new Set(r.subjects.map((s) => s.index))); }).catch((e) => setError(e.message));
@@ -28,10 +28,10 @@ export default function SubjectCutout({ rel, onClose, onSaved }) {
   return (
     <Modal onClose={onClose} width={760} label="Cut out subjects"
       footer={<div className="row between" style={{ gap: 8 }}>
-        <Toggle checked={crop} onChange={(e) => setCrop(e.target.checked)} icon={Scissors} label="Trim to the subjects" small />
-        <button className="btn primary" disabled={busy || !picked.size} onClick={save}><Scissors size={15} />{busy ? 'Cutting out…' : `Cut out ${picked.size === subjects.length && subjects.length > 1 ? 'all' : picked.size || ''}`.trim()}</button>
+        {pop ? <span className="small muted">The photo stays under them.</span> : <Toggle checked={crop} onChange={(e) => setCrop(e.target.checked)} icon={Scissors} label="Trim to the subjects" small />}
+        <button className="btn primary" disabled={busy || !picked.size} onClick={save}><Scissors size={15} />{busy ? 'Cutting out…' : pop ? 'Make them pop' : `Cut out ${picked.size === subjects.length && subjects.length > 1 ? 'all' : picked.size || ''}`.trim()}</button>
       </div>}>
-      <ModalHead title="Cut out subjects" sub="Click the people or things to keep. They're saved on a see-through background next to the original." />
+      <ModalHead title={pop ? 'Make a subject pop' : 'Cut out subjects'} sub={pop ? 'Click the people to give a shadow or outline. They stand out from the photo.' : "Click the people or things to keep. They're saved on a see-through background next to the original."} />
       {error && <div className="banner bad">{error}</div>}
       {!found && !error && <div className="skeleton" style={{ height: 360 }} aria-label="Finding the subjects…" />}
       {found && !subjects.length && <p className="muted">No clear subject in this picture. Pictures of people, pets or objects against a background work best.</p>}
