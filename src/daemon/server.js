@@ -10,6 +10,7 @@ import { ROOT, PROJECTS_DIR, toolStatus, repairTool, run, tool } from './tools.j
 import { loadConfig, saveConfig, mask, KEY_GUIDE } from './config.js';
 import * as jobs from './jobs.js';
 import { listProjects, getProject, updateProject, deleteProject, getTranscript, projectDir, createProject, file as fileOf, setTranscriptWord, replaceTranscriptWords } from './projects.js';
+import * as icons from './icons.js';
 import { channelDetails, listChannel, downloadToProject, importLocalFile, replaceSource, scoutVideo } from './youtube.js';
 import { transcribeProject } from './transcribe.js';
 import { proposeClips } from './pipeline.js';
@@ -647,6 +648,10 @@ streamRoute('POST', '/api/writing/:id/rewrite-stream', async ({ id }, b, res, re
   res.end();
 });
 route('POST', '/api/writing/:id/devotional', async ({ id }, b) => { try { return await writing.devotional(id, b.days); } catch (e) { throw new HttpError(400, e.message); } });
+// Icons and shapes from the open-source sets bundled with the app: search offline, then save one to the library as SVG.
+route('GET', '/api/icons/search', async (_p, _b, url) => ({ icons: icons.searchIcons({ q: url.searchParams.get('q') || '', set: url.searchParams.get('set') || '', style: url.searchParams.get('style') || '' }) }));
+route('GET', '/api/icons/sets', async () => ({ sets: icons.iconSets() }));
+route('POST', '/api/icons/save', async (_p, b) => { try { return await icons.saveIcon(String(b.id || ''), b.color); } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/writing/:id/add-in', async ({ id }, b) => { try { return await writing.addIn(id, b || {}); } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/writing/:id/rewrite-focus', async ({ id }, b) => { try { return await writing.rewriteFocus(id, b || {}); } catch (e) { throw new HttpError(400, e.message); } });
 route('POST', '/api/writing/:id/polish', async ({ id }, b) => { try { return await writing.polish(id, b.kind, b.text); } catch (e) { throw new HttpError(400, e.message); } });

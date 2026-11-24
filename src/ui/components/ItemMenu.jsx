@@ -14,7 +14,7 @@ const DELETE = {
   writing: { label: 'Move to trash', trash: true },
   file: { label: 'Move to Trash', macTrash: true }, // a Brand library file: to the Mac's Trash, so it can be put back
 };
-const LIB_FOLDERS = ['Photos', 'Logos', 'Graphics', 'Brand', 'Writing', 'Audio'];
+const LIB_FOLDERS = ['Photos', 'Logos', 'Graphics', 'Icons', 'Brand', 'Writing', 'Audio'];
 const day = (d) => (d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '');
 
 /**

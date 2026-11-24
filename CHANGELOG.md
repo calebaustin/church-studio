@@ -2,6 +2,10 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## 0.33.0 · November 23, 2026
+
+- **Icons and shapes.** In Design, Icons opens a search across more than 25,000 icons and shapes from four open-source sets (Tabler, Lucide, Phosphor and Material Design Icons). It works offline. Search plain words like cross, dove, praying hands or calendar, and filter by line, solid or two-tone, or by set. Pick a color first if you like. The icon is saved to your brand library's new Icons folder as an SVG, and every color in it can be changed afterward. The sets are credited in Settings › Thank you.
+
 ## 0.32.0 · November 23, 2026
 
 - **Easier to juggle full-screen cards.** Each card shows its number in a circle. A fold button hides a card's settings, and opening one card folds the others. A duplicate button makes a copy with the same settings that starts right where the card ends. Transition In and Out share a line when there's room.

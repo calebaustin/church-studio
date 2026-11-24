@@ -12,6 +12,7 @@ import ColorField from '../components/ColorField.jsx';
 import FontMenu, { useFamilies } from '../components/FontMenu.jsx';
 import BackgroundEraser from '../components/BackgroundEraser.jsx';
 import SubjectCutout from '../components/SubjectCutout.jsx';
+import IconPicker from '../components/IconPicker.jsx';
 import LibraryPicker from '../components/LibraryPicker.jsx';
 import Popover, { PopList } from '../components/Popover.jsx';
 import { applyMap, shuffleMap } from './shuffle.js';
@@ -86,6 +87,7 @@ export default function DesignEditor({ id, onClose }) {
   const [picker, setPicker] = useState(null);
   const [erasing, setErasing] = useState(null); // library path of the picture being cleared
   const [cutting, setCutting] = useState(null); // library path of the picture to cut subjects out of
+  const [iconsOpen, setIconsOpen] = useState(false); // the icon and shape search
   const [popping, setPopping] = useState(null); // the photo to make a subject pop from (a shadow or outline behind them)
   const [saved, setSaved] = useState(true);
   // "Change X to Y everywhere?": offered after a color or font change settles, when the old value is used elsewhere.
@@ -664,6 +666,7 @@ export default function DesignEditor({ id, onClose }) {
           <div className="row wrap" style={{ gap: 6 }}>
             <button className="btn sm" onClick={() => setPicker('photo')}><ImageIcon size={13} />Photo</button>
             <button className="btn sm" onClick={() => setPicker('logo')}><Shapes size={13} />Logo</button>
+            <button className="btn sm" title="Search over 25,000 icons and shapes" onClick={() => setIconsOpen(true)}><Sparkles size={13} />Icons</button>
             <button className="btn sm" onClick={() => addItem({ id: uid(), type: 'qr', url: 'https://', x: 0.5, y: 0.7, w: 0.22, color: onColor(fill) })}><QrCode size={13} />QR code</button>
           </div>
         </aside>
@@ -975,6 +978,11 @@ export default function DesignEditor({ id, onClose }) {
         </aside>
       </div>
 
+      {iconsOpen && <IconPicker colors={colors} onClose={() => setIconsOpen(false)} onPick={(r) => {
+        setIconsOpen(false);
+        addItem({ id: uid(), type: 'image', rel: r.rel, x: 0.5, y: 0.5, w: 0.24, opacity: 1 });
+        toast({ text: `Added “${r.name}”. Change its colors on the right.` });
+      }} />}
       {popping && <SubjectCutout rel={popping.rel} pop onClose={() => setPopping(null)} onSaved={(out) => {
         // The subject, cut out and laid exactly over the photo, with a shadow behind it. The photo stays under it.
         const photo = popping; setPopping(null);
