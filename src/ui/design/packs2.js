@@ -388,6 +388,6 @@ export function inBrandColors(pages, packColors, brand) {
   return pages.map((pg) => ({
     ...pg,
     bg: { ...pg.bg, color: sw(pg.bg?.color), color2: sw(pg.bg?.color2), from: sw(pg.bg?.from), to: sw(pg.bg?.to), colors: pg.bg?.type === 'mesh' ? [brand[0], brand[1], brand[4] || brand[0], brand[3] || brand[1], brand[2] || brand[0]] : pg.bg?.colors?.map(sw) },
-    items: pg.items.map((it) => ({ ...it, id: uid(), fill: sw(it.fill), color: sw(it.color), stroke: sw(it.stroke) })),
+    items: pg.items.map((it) => ({ ...it, id: uid(), fill: sw(it.fill), color: sw(it.color), stroke: sw(it.stroke), ...(it.fx && it.type === 'text' ? { fx: Object.fromEntries(Object.entries(it.fx).map(([k, v]) => [k, v && { ...v, color: sw(v.color) }])) } : {}) })),
   }));
 }

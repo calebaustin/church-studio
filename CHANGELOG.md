@@ -2,6 +2,16 @@
 
 Every update keeps your sermons, designs, drafts and settings. Before a new version runs for the first time, Church Studio saves a backup of your settings.
 
+## 0.34.0 · November 24, 2026
+
+- **Seven new sermon series packs.** Ember, Vintner, Sunrise, Blueprint, Refrain, Dusk and Orbit. Each comes as five slides (series title, welcome, scripture, giving or get connected, see you next week), the same set as a carousel, and single welcome, giving and see you next week cards and event slides. Your church's name, times and website are filled in. With My brand colors on, only each pack's signature color changes, so text stays easy to read.
+- **Text styles.** Any text in Design can have a shadow (hard or soft, any color and direction), an outline or hollow letters, each letter in its own circle (rings or solid dots), or a shape behind it (pill, rounded or square, around the whole text or each line). Start from a ready look, then adjust.
+- **New accent shapes.** Grid lines, sun rays and an asterisk, with settings for columns, number of lines and thickness.
+- **A middle color for blends.** A blend background can fade through a third color, like a sunset.
+- **QR codes you can change.** Select a QR code to type a new link (press Update code or Enter to make the new code), or pick your website, giving or connect page in one click. Change the code's color, add a background color behind it, or swap the two. A note appears when the colors are too close for phones to read.
+- **Apply my brand.** In a design's colors, one click puts your brand colors on every background, shape, text style and QR code, and your brand fonts on all text, on every page. Grays, black and white stay, and any text that stops reading clearly gets a readable color. Undo puts it all back.
+- **Brand colors in every color picker.** Every color choice in Design now offers your brand colors next to the design's own, and Shuffle and "change everywhere" also reach text styles, QR codes and blend middle colors.
+
 ## 0.33.0 · November 23, 2026
 
 - **Icons and shapes.** In Design, Icons opens a search across more than 25,000 icons and shapes from four open-source sets (Tabler, Lucide, Phosphor and Material Design Icons). It works offline. Search plain words like cross, dove, praying hands or calendar, and filter by line, solid or two-tone, or by set. Pick a color first if you like. The icon is saved to your brand library's new Icons folder as an SVG, and every color in it can be changed afterward. The sets are credited in Settings › Thank you.

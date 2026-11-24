@@ -17,9 +17,14 @@ export const contrast = (a, b) => { const x = lumOf(a); const y = lumOf(b); retu
 /** Every place a color is used on one page: [holder, key] pairs, like eachUse in the editor. */
 function slots(pg) {
   const out = [];
-  for (const it of pg.items || []) for (const k of ['color', 'fill', 'stroke']) if (norm(it[k])) out.push([it, k]);
+  for (const it of pg.items || []) {
+    for (const k of ['color', 'fill', 'stroke']) if (norm(it[k])) out.push([it, k]);
+    if (it.type === 'qr' && norm(it.bg)) out.push([it, 'bg']);
+    // Text styles: shadow, outline, circles and the shape behind each have a color.
+    if (it.fx && it.type === 'text') for (const v of Object.values(it.fx)) if (v && norm(v.color)) out.push([v, 'color']);
+  }
   if (pg.bg) {
-    for (const k of ['color', 'color2', 'from', 'to']) if (norm(pg.bg[k])) out.push([pg.bg, k]);
+    for (const k of ['color', 'color2', 'from', 'via', 'to']) if (norm(pg.bg[k])) out.push([pg.bg, k]);
     if (Array.isArray(pg.bg.colors)) pg.bg.colors.forEach((c, i) => { if (norm(c)) out.push([pg.bg.colors, i]); });
   }
   return out;
@@ -73,4 +78,35 @@ export function applyMap(pg, map, origin = {}) {
     const c = norm(o[k]); const from = origin[c] || c;
     if (map[from]) o[k] = map[from];
   }
+}
+
+const chroma = (hex) => { const v = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)); return Math.max(...v) - Math.min(...v); };
+
+/**
+ * Puts a whole design in the brand colors. Every colorful color moves to a brand color (the most used one to the
+ * first brand color, and so on), while blacks, whites and grays stay. Then any text that no longer reads on its
+ * page gets the most readable brand color, or black or white.
+ */
+export function applyBrandAll(pages, brand) {
+  const pal = [...new Set((brand || []).map(norm).filter(Boolean))];
+  if (!pal.length) return 0;
+  const n = new Map();
+  for (const pg of pages) for (const [o, k] of slots(pg)) { const c = norm(o[k]); if (chroma(c) >= 24) n.set(c, (n.get(c) || 0) + 1); }
+  const colorful = [...n.entries()].sort((a, b) => b[1] - a[1]).map(([c]) => c);
+  const accents = pal.filter((c) => chroma(c) >= 24);
+  const use = accents.length ? accents : pal;
+  const map = Object.fromEntries(colorful.map((c, i) => [c, use[i % use.length]]));
+  let changed = 0;
+  for (const pg of pages) {
+    for (const [o, k] of slots(pg)) { const c = norm(o[k]); if (map[c] && map[c] !== c) { o[k] = map[c]; changed++; } }
+    const bg = bgOf(pg);
+    if (!bg) continue;
+    for (const it of pg.items || []) {
+      if (it.type !== 'text' || !norm(it.color) || it.fx?.bg) continue;
+      if (contrast(norm(it.color), bg) >= 3) continue;
+      const pick = [...pal, '#ffffff', '#141414'].sort((a, b) => contrast(b, bg) - contrast(a, bg))[0];
+      it.color = pick; changed++;
+    }
+  }
+  return changed;
 }

@@ -4,7 +4,7 @@ import {
   ArrowLeft, ArrowRight, BringToFront, Check, ChevronDown, ChevronLeft, ChevronRight, Circle, Copy, Download, Grid3x3, Image as ImageIcon,
   Magnet, Minus, MonitorUp, Hexagon, Scaling, Smartphone, Laptop, Eraser, ImageOff, Play, RefreshCw, Plus, QrCode, Redo2, SendToBack, Shapes, Square, Trash2, Type, Undo2, Shuffle, X,
   Send, FlipHorizontal2, FlipVertical2, Link2, AlignLeft, AlignCenter, AlignRight, Palette, Scissors,
-  Sparkles, Layers2, PenLine,
+  Sparkles, Layers2, PenLine, CircleDot, RectangleHorizontal,
 } from 'lucide-react';
 import { useApp, useHelperFocus } from '../App.jsx';
 import { api } from '../api.js';
@@ -15,8 +15,8 @@ import SubjectCutout from '../components/SubjectCutout.jsx';
 import IconPicker from '../components/IconPicker.jsx';
 import LibraryPicker from '../components/LibraryPicker.jsx';
 import Popover, { PopList } from '../components/Popover.jsx';
-import { applyMap, shuffleMap } from './shuffle.js';
-import { ACCENTS, ARROWS, MORE_BASIC, DEVICE_ASPECT, KINDS, PATTERNS, RESIZE_TARGETS, SHAPES, STROKED, shapeIcon, resizeDesign, blankPage, cohesive, loadAssets, onColor, page as newPage, renderPage, shape as newShape, svgColors, text as newText, uid } from './model.js';
+import { applyBrandAll, applyMap, contrast, norm, shuffleMap } from './shuffle.js';
+import { ACCENTS, ARROWS, MORE_BASIC, DEVICE_ASPECT, KINDS, PATTERNS, RESIZE_TARGETS, SHAPES, STROKED, TEXT_STYLES, THICK, shapeIcon, resizeDesign, blankPage, cohesive, loadAssets, onColor, page as newPage, renderPage, shape as newShape, svgColors, text as newText, uid } from './model.js';
 import { snapMove } from './snap.js';
 import PhotoEdits from './PhotoEdits.jsx';
 import Layers, { label as layerLabel } from './Layers.jsx';
@@ -52,9 +52,13 @@ function eachUse(doc, kind, from, fn) {
   const eq = (v) => typeof v === 'string' && sameVal(v, from);
   for (const pg of doc?.pages || []) {
     if (kind === 'font') { for (const it of pg.items) if (it.type === 'text' && eq(it.font)) fn(it, 'font'); continue; }
-    for (const it of pg.items) for (const k of ['color', 'fill', 'stroke']) if (eq(it[k])) fn(it, k);
+    for (const it of pg.items) {
+      for (const k of ['color', 'fill', 'stroke']) if (eq(it[k])) fn(it, k);
+      if (it.type === 'qr' && eq(it.bg)) fn(it, 'bg');
+      if (it.type === 'text' && it.fx) for (const v of Object.values(it.fx)) if (v && eq(v.color)) fn(v, 'color');
+    }
     if (pg.bg) {
-      for (const k of ['color', 'color2', 'from', 'to']) if (eq(pg.bg[k])) fn(pg.bg, k);
+      for (const k of ['color', 'color2', 'from', 'via', 'to']) if (eq(pg.bg[k])) fn(pg.bg, k);
       if (Array.isArray(pg.bg.colors)) pg.bg.colors.forEach((c, i) => { if (eq(c)) fn(pg.bg.colors, i); });
     }
   }
@@ -258,6 +262,24 @@ export default function DesignEditor({ id, onClose }) {
     });
     setSwap(null);
     setShuf({ map, pi: idx, at: Date.now() });
+  };
+  // One click: brand colors on every background, shape, text and QR code, and the brand fonts on all text.
+  const applyBrand = () => {
+    const brand = config.brandColors || []; const f = config.brandFonts || {};
+    if (!brand.length && !f.heading) { toast({ text: 'Add your colors and fonts in Brand library first.', action: { label: 'Brand library', run: () => go({ name: 'assets' }) } }); return; }
+    update((d) => {
+      if (brand.length) {
+        applyBrandAll(d.pages, brand);
+        d.palette = [...brand].slice(0, 5); while (d.palette.length < 5) d.palette.push(brand[d.palette.length % brand.length]);
+      }
+      if (f.heading || f.body) for (const pg2 of d.pages) for (const it of pg2.items) {
+        if (it.type !== 'text') continue;
+        it.font = it.size >= d.size.w * 0.05 ? (f.heading || f.body) : (f.body || f.heading);
+      }
+      return d;
+    });
+    setSwap(null); setShuf(null);
+    toast({ text: 'Your brand colors and fonts are on every page. Undo puts them back.' });
   };
   const shuffleAll = () => {
     const sh = shuf; if (!sh) return;
@@ -528,6 +550,8 @@ export default function DesignEditor({ id, onClose }) {
 
   if (!doc) return <div className="page"><div className="skeleton" style={{ height: '70vh' }} /></div>;
   const colors = cohesive(doc.palette, doc.tint?.color || '#FF9A62', doc.tint?.amount || 0);
+  // Every color picker offers the design's colors and the church's brand colors.
+  const swatches = [...new Set([...colors, ...(config.brandColors || [])].map((c) => String(c).toUpperCase()))];
   const brand = config.brandFonts || { heading: 'Montserrat', body: 'Montserrat' };
   const b = sel ? boxes.current[sel] : null;
   const multi = KINDS[doc.kind]?.multi || doc.pages.length > 1;
@@ -776,7 +800,7 @@ export default function DesignEditor({ id, onClose }) {
                   <FontMenu value={String(item.font || '').replace(/'/g, '')} options={families} onChange={(v) => setItem({ font: v })} align="right" />
                   <div className="row" style={{ gap: 8 }}>
                     <div className="seg sm grow">{[[500, 'Regular'], [700, 'Bold'], [800, 'Heavy']].map(([w, l]) => <button key={w} className={item.weight === w ? 'on' : ''} onClick={() => setItem({ weight: w })}>{l}</button>)}</div>
-                    <ColorField value={item.color} onChange={(c) => setItem({ color: c }, { record: false })} swatches={colors} align="right" />
+                    <ColorField value={item.color} onChange={(c) => setItem({ color: c }, { record: false })} swatches={swatches} align="right" />
                   </div>
                   <div className="token-grid">
                     <label className="field">Size · {item.size}<input type="range" min="12" max={Math.round(doc.size.w * 0.2)} value={item.size} onChange={(e) => setItem({ size: Number(e.target.value) }, { record: false })} /></label>
@@ -791,6 +815,7 @@ export default function DesignEditor({ id, onClose }) {
                     <label className="field">Spacing · {item.letter || 0}<input type="range" min="-4" max="20" value={item.letter || 0} onChange={(e) => setItem({ letter: Number(e.target.value) }, { record: false })} /></label>
                     <label className="field">Line height · {(item.lh || 1.15).toFixed(2)}<input type="range" min="0.8" max="2" step="0.05" value={item.lh || 1.15} onChange={(e) => setItem({ lh: Number(e.target.value) }, { record: false })} /></label>
                   </div>
+                  <TextStyle item={item} colors={swatches} onChange={(fx, opts) => setItem({ fx }, opts)} />
                 </>
               )}
               {item.type === 'shape' && (
@@ -812,11 +837,13 @@ export default function DesignEditor({ id, onClose }) {
                   )}
                   {DEVICE_ASPECT[item.shape] && opacityField}
                   {!DEVICE_ASPECT[item.shape] && (
-                    <div className="row" style={{ gap: 6, alignItems: 'end' }}>
+                    <div className="row wrap" style={{ gap: 6, alignItems: 'end' }}>
                       {!STROKED.has(item.shape) && ((item.shape || 'rect') !== 'rect' || item.erase) && <span className="small" style={{ fontWeight: 600, marginRight: 4, alignSelf: 'center' }}>Flip</span>}
                       <button className={`btn icon sm${item.flipX ? ' primary' : ''}`} aria-pressed={Boolean(item.flipX)} aria-label="Flip across" title="Flip across" onClick={() => setItem({ flipX: !item.flipX })}><FlipHorizontal2 size={15} /></button>
                       <button className={`btn icon sm${item.flipY ? ' primary' : ''}`} aria-pressed={Boolean(item.flipY)} aria-label="Flip up and down" title="Flip up and down" onClick={() => setItem({ flipY: !item.flipY })}><FlipVertical2 size={15} /></button>
-                      {STROKED.has(item.shape) && <label className="field grow">Thickness · {Math.round((item.thick ?? 0.1) * 100)}<input type="range" min="0.02" max="0.4" step="0.01" value={item.thick ?? 0.1} onChange={(e) => setItem({ thick: Number(e.target.value) }, { record: false })} /></label>}
+                      {STROKED.has(item.shape) && (() => { const fine = item.shape === 'gridlines'; const v = item.thick ?? THICK[item.shape] ?? 0.1; return <label className="field grow">Thickness · {Math.round(v * (fine ? 1000 : 100))}<input type="range" min={fine ? 0.001 : 0.01} max={fine ? 0.03 : 0.4} step={fine ? 0.001 : 0.01} value={v} onChange={(e) => setItem({ thick: Number(e.target.value) }, { record: false })} /></label>; })()}
+                      {item.shape === 'gridlines' && <label className="field grow">Columns · {item.cols || 10}<input type="range" min="2" max="40" value={item.cols || 10} onChange={(e) => setItem({ cols: Number(e.target.value) }, { record: false })} /></label>}
+                      {(item.shape === 'rays' || item.shape === 'asterisk') && <label className="field grow">Lines · {item.count || (item.shape === 'rays' ? 14 : 4)}<input type="range" min={item.shape === 'rays' ? 4 : 2} max={item.shape === 'rays' ? 48 : 12} value={item.count || (item.shape === 'rays' ? 14 : 4)} onChange={(e) => setItem({ count: Number(e.target.value) }, { record: false })} /></label>}
                       {(item.shape || 'rect') === 'rect' && !item.erase && <label className="field grow">Corners · {item.radius || 0}<input type="range" min="0" max="200" value={item.radius || 0} onChange={(e) => setItem({ radius: Number(e.target.value) }, { record: false })} /></label>}
                     </div>
                   )}
@@ -837,10 +864,10 @@ export default function DesignEditor({ id, onClose }) {
                       {item.frame && !item.photo && <span className="hint">The pattern only shows while you edit. Exports show the color.</span>}
                     </div>
                   )}
-                  {item.photo && !item.erase && <PhotoEdits value={item.adjust} colors={colors} onChange={(adjust) => setItem({ adjust }, { record: false })} />}
+                  {item.photo && !item.erase && <PhotoEdits value={item.adjust} colors={swatches} onChange={(adjust) => setItem({ adjust }, { record: false })} />}
                   {((!item.photo && !item.erase) || !DEVICE_ASPECT[item.shape]) && (
                     <div className="row between" style={{ gap: 10 }}>
-                      {!item.photo && !item.erase ? <ColorField label={DEVICE_ASPECT[item.shape] ? 'Screen color' : STROKED.has(item.shape) ? 'Color' : 'Fill'} value={item.fill} onChange={(c) => setItem({ fill: c }, { record: false })} swatches={colors} /> : <span />}
+                      {!item.photo && !item.erase ? <ColorField label={DEVICE_ASPECT[item.shape] ? 'Screen color' : STROKED.has(item.shape) ? 'Color' : 'Fill'} value={item.fill} onChange={(c) => setItem({ fill: c }, { record: false })} swatches={swatches} /> : <span />}
                       {!DEVICE_ASPECT[item.shape] && (
                         <Toggle checked={Boolean(item.erase)} onChange={(e) => setItem({ erase: e.target.checked })} icon={Eraser} label="Eraser" small title="Use as an eraser" />
                       )}
@@ -871,15 +898,10 @@ export default function DesignEditor({ id, onClose }) {
               {item.type === 'image' && !/\.svg$/i.test(item.rel) && <button className="btn sm" onClick={() => setErasing(item.rel)}><Eraser size={13} />Erase background</button>}
               {item.type === 'image' && !/\.svg$/i.test(item.rel) && <button className="btn sm" title="Keep just the people or things you pick" onClick={() => setCutting(item.rel)}><Scissors size={13} />Cut out subjects</button>}
               {item.type === 'image' && !/\.svg$/i.test(item.rel) && !item.fx && <button className="btn sm" title="Put a colored shadow or an outline behind a person, right on this photo" onClick={() => setPopping(item)}><Sparkles size={13} />Make a subject pop</button>}
-              {item.type === 'image' && item.fx && <SubjectFx fx={item.fx} colors={colors} onChange={(fx) => setItem({ fx }, { record: false })} />}
-              {item.type === 'image' && !/\.svg$/i.test(item.rel) && <PhotoEdits value={item.adjust} colors={colors} onChange={(adjust) => setItem({ adjust }, { record: false })} />}
-              {item.type === 'image' && /\.svg$/i.test(item.rel) && <SvgColors item={item} cache={cache.current} swatches={colors} onChange={(recolor) => setItem({ recolor }, { record: false })} />}
-              {item.type === 'qr' && (
-                <>
-                  <label className="field">Link<input className="input" value={item.url} onChange={(e) => setItem({ url: e.target.value }, { record: false })} placeholder="https://yourchurch.org/give" /></label>
-                  <div className="row" style={{ gap: 12, alignItems: 'end' }}><ColorField label="Color" value={item.color} onChange={(c) => setItem({ color: c }, { record: false })} swatches={colors} /><div className="grow">{opacityField}</div></div>
-                </>
-              )}
+              {item.type === 'image' && item.fx && <SubjectFx fx={item.fx} colors={swatches} onChange={(fx) => setItem({ fx }, { record: false })} />}
+              {item.type === 'image' && !/\.svg$/i.test(item.rel) && <PhotoEdits value={item.adjust} colors={swatches} onChange={(adjust) => setItem({ adjust }, { record: false })} />}
+              {item.type === 'image' && /\.svg$/i.test(item.rel) && <SvgColors item={item} cache={cache.current} swatches={swatches} onChange={(recolor) => setItem({ recolor }, { record: false })} />}
+              {item.type === 'qr' && <QrFields key={item.id} item={item} colors={swatches} site={config.churchInfo?.website} onChange={setItem} opacityField={opacityField} />}
               <hr className="hairline" />
               <span className="eyebrow">Arrange</span>
               <div className="dz-align">
@@ -913,13 +935,13 @@ export default function DesignEditor({ id, onClose }) {
                 <div className="stack" style={{ gap: 8 }}>
                   <div className="row wrap" style={{ gap: 6 }}>{PATTERNS.map(([k, l]) => <button key={k} className={`pill-choice ${pg.bg.pattern === k ? 'on' : ''}`} onClick={() => setPage({ bg: { ...pg.bg, pattern: k } })}>{l}</button>)}</div>
                   <div className="row wrap" style={{ gap: 12 }}>
-                    <ColorField label="Base" value={pg.bg.color || colors[3]} onChange={(c) => setPage({ bg: { ...pg.bg, color: c } }, { record: false })} swatches={colors} />
-                    <ColorField label="Pattern" value={pg.bg.color2 || colors[0]} onChange={(c) => setPage({ bg: { ...pg.bg, color2: c } }, { record: false })} swatches={colors} align="right" />
+                    <ColorField label="Base" value={pg.bg.color || colors[3]} onChange={(c) => setPage({ bg: { ...pg.bg, color: c } }, { record: false })} swatches={swatches} />
+                    <ColorField label="Pattern" value={pg.bg.color2 || colors[0]} onChange={(c) => setPage({ bg: { ...pg.bg, color2: c } }, { record: false })} swatches={swatches} align="right" />
                   </div>
                   <label className="field">Size · {Math.round((pg.bg.scale || 0.08) * 100)}<input type="range" min="0.02" max="0.25" step="0.01" value={pg.bg.scale || 0.08} onChange={(e) => setPage({ bg: { ...pg.bg, scale: Number(e.target.value) } }, { record: false })} /></label>
                 </div>
               )}
-              {pg.bg?.type === 'image' && <PhotoEdits value={pg.bg.adjust} colors={colors} onChange={(adjust) => setPage({ bg: { ...pg.bg, adjust } }, { record: false })} />}
+              {pg.bg?.type === 'image' && <PhotoEdits value={pg.bg.adjust} colors={swatches} onChange={(adjust) => setPage({ bg: { ...pg.bg, adjust } }, { record: false })} />}
               {['mesh', 'gradient', 'pattern', undefined].includes(pg.bg?.type) && (
                 <div className="token-grid">
                   <label className="field">Grain · {Math.round((pg.bg?.grain || 0) * 100)}%<input type="range" min="0" max="0.5" step="0.02" value={pg.bg?.grain || 0} onChange={(e) => setPage({ bg: { ...pg.bg, grain: Number(e.target.value) } }, { record: false })} /></label>
@@ -928,14 +950,16 @@ export default function DesignEditor({ id, onClose }) {
               )}
               {pg.bg?.type === 'solid' && (
                 <div className="row" style={{ gap: 12, alignItems: 'end' }}>
-                  <ColorField label="Background" value={pg.bg.color || colors[0]} onChange={(c) => setPage({ bg: { ...pg.bg, color: c } }, { record: false })} swatches={colors} />
+                  <ColorField label="Background" value={pg.bg.color || colors[0]} onChange={(c) => setPage({ bg: { ...pg.bg, color: c } }, { record: false })} swatches={swatches} />
                   <div className="grow"><label className="field">Darken · {Math.round((pg.bg?.darken || 0) * 100)}%<input type="range" min="0" max="0.8" step="0.05" value={pg.bg?.darken || 0} onChange={(e) => setPage({ bg: { ...pg.bg, darken: Number(e.target.value) } }, { record: false })} /></label></div>
                 </div>
               )}
               {pg.bg?.type === 'gradient' && (
                 <div className="row wrap" style={{ gap: 12 }}>
-                  <ColorField label="From" value={pg.bg.from || colors[0]} onChange={(c) => setPage({ bg: { ...pg.bg, from: c } }, { record: false })} swatches={colors} />
-                  <ColorField label="To" value={pg.bg.to || colors[2]} onChange={(c) => setPage({ bg: { ...pg.bg, to: c } }, { record: false })} swatches={colors} align="right" />
+                  <ColorField label="From" value={pg.bg.from || colors[0]} onChange={(c) => setPage({ bg: { ...pg.bg, from: c } }, { record: false })} swatches={swatches} />
+                  {pg.bg.via && <ColorField label="Middle" value={pg.bg.via} onChange={(c) => setPage({ bg: { ...pg.bg, via: c } }, { record: false })} swatches={swatches} />}
+                  <ColorField label="To" value={pg.bg.to || colors[2]} onChange={(c) => setPage({ bg: { ...pg.bg, to: c } }, { record: false })} swatches={swatches} align="right" />
+                  <Toggle checked={Boolean(pg.bg.via)} onChange={(e) => setPage({ bg: { ...pg.bg, via: e.target.checked ? colors[1] : null } })} icon={Palette} label="Middle color" small />
                   <label className="field" style={{ width: '100%' }}>Angle · {pg.bg.angle ?? 135}°<input type="range" min="0" max="360" value={pg.bg.angle ?? 135} onChange={(e) => setPage({ bg: { ...pg.bg, angle: Number(e.target.value) } }, { record: false })} /></label>
                 </div>
               )}
@@ -953,7 +977,7 @@ export default function DesignEditor({ id, onClose }) {
                 <span className="eyebrow">Design colors</span>
                 <span className="row" style={{ gap: 2 }}>
                 <button className="btn ghost sm" title="Swap this page's colors for your brand colors. Colors that match stay matched." onClick={shuffleColors}><Shuffle size={13} />Shuffle</button>
-                <button className="btn ghost sm" title="Use my brand colors" onClick={() => update((d) => { d.palette = [...(config.brandColors || d.palette)].slice(0, 5); while (d.palette.length < 5) d.palette.push('#888888'); return d; })}><Palette size={13} />Brand colors</button>
+                <button className="btn ghost sm" title="Put your brand colors and fonts on every page: backgrounds, shapes, text and QR codes" onClick={applyBrand}><Palette size={13} />Apply my brand</button>
                 </span>
               </div>
               <div className="row wrap" style={{ gap: 8 }}>
@@ -978,7 +1002,7 @@ export default function DesignEditor({ id, onClose }) {
         </aside>
       </div>
 
-      {iconsOpen && <IconPicker colors={colors} onClose={() => setIconsOpen(false)} onPick={(r) => {
+      {iconsOpen && <IconPicker colors={swatches} onClose={() => setIconsOpen(false)} onPick={(r) => {
         setIconsOpen(false);
         addItem({ id: uid(), type: 'image', rel: r.rel, x: 0.5, y: 0.5, w: 0.24, opacity: 1 });
         toast({ text: `Added “${r.name}”. Change its colors on the right.` });
@@ -1055,7 +1079,7 @@ function addShapeProps(k, doc, colors, fill) {
     arrow: [0.26, 0.14], arrowLine: [0.34, 0.06], arrowWavy: [0.34, 0.1], arrowDouble: [0.34, 0.06], chevrons: [0.2, 0.09], tri3: [0.18, 0.08], swipe: [0.26, 0.05],
     arrowCurve: [0.2, 0.16], arrowLoop: [0.26, 0.18], arrowBend: [0.2, 0.16],
     arrowUTurn: [0.22, 0.16], arrowCircle: [0.18, 0.18], arrowZigzag: [0.3, 0.1], arrowDashed: [0.34, 0.06], arrowSplit: [0.26, 0.14], arrowTag: [0.26, 0.12],
-    triEq: [0.3, 0.26],
+    triEq: [0.3, 0.26], gridlines: [0.6, 0.3], rays: [0.4, 0.4], asterisk: [0.08, 0.08],
   };
   const [w, h] = SIZE[k] || [0.3, 0.3];
   const tall = SIZE[k] ? h * r : h * r;
@@ -1096,6 +1120,112 @@ function syncLinks(prev, next) {
       Object.assign(other, it, { id: keepId, x: +(keepX + dx).toFixed(4) });
     }
   }
+}
+
+/** A QR code: its link (made into a fresh code with Update), its colors and a check that phones can read it. */
+function QrFields({ item, colors, site, onChange, opacityField }) {
+  const [draft, setDraft] = useState(item.url === 'https://' ? '' : item.url);
+  const clean = (v) => { const t = v.trim(); if (!t) return ''; return /^[a-z][a-z0-9+.-]*:/i.test(t) ? t : `https://${t}`; };
+  const next = clean(draft);
+  const stale = next && next !== item.url;
+  const make = (v = draft) => { const u = clean(v); if (u) { setDraft(u); onChange({ url: u }); } };
+  const base = site ? String(site).replace(/^https?:\/\//, '').replace(/\/$/, '') : '';
+  const fg = norm(item.color) || '#000000'; const bg = norm(item.bg);
+  const weak = bg ? contrast(fg, bg) < 3 : false;
+  return (
+    <div className="stack" style={{ gap: 10 }}>
+      <label className="field">Link
+        <span className="row" style={{ gap: 6 }}>
+          <input className="input grow" value={draft} placeholder="yourchurch.org/give" onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); make(); } e.stopPropagation(); }} />
+          <button className={`btn sm ${stale ? 'primary' : ''}`} disabled={!next} title="Make a new code for this link" onClick={() => make()}><RefreshCw size={13} />{stale ? 'Update code' : 'Remake'}</button>
+        </span>
+      </label>
+      {base && (
+        <div className="row wrap" style={{ gap: 6 }}>
+          {[['Website', base], ['Give', `${base}/give`], ['Connect', `${base}/connect`]].map(([l, u]) => <button key={l} className="pill-choice" onClick={() => make(u)}>{l}</button>)}
+        </div>
+      )}
+      {!next && <span className="hint">Type a link, then press Update code.</span>}
+      <div className="row wrap" style={{ gap: 12, alignItems: 'end' }}>
+        <ColorField label="Code" value={item.color || '#000000'} onChange={(c) => onChange({ color: c }, { record: false })} swatches={colors} />
+        {bg && <ColorField label="Background" value={item.bg} onChange={(c) => onChange({ bg: c }, { record: false })} swatches={colors} />}
+        {bg && <button className="btn icon sm" title="Swap the two colors" aria-label="Swap the two colors" onClick={() => onChange({ color: item.bg, bg: item.color || '#000000' })}><Shuffle size={14} /></button>}
+      </div>
+      <Toggle checked={Boolean(bg)} onChange={(e) => onChange({ bg: e.target.checked ? (luminanceOf(fg) > 0.5 ? '#141414' : '#FFFFFF') : null })} icon={Square} label="Background behind the code" small />
+      {weak && <span className="hint" style={{ color: 'var(--warn)' }}>These colors are close, so some phones may not read the code. Try more contrast.</span>}
+      {opacityField}
+    </div>
+  );
+}
+const luminanceOf = (hex) => { const v = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
+
+/** A text's style: start from a look, then change its shadow, outline, circled letters or the shape behind it. */
+function TextStyle({ item, colors, onChange }) {
+  const fx = item.fx || {};
+  const on = TEXT_STYLES.find(([, , v]) => JSON.stringify(Object.keys(v).sort()) === JSON.stringify(Object.keys(fx).filter((key) => fx[key]).sort()))?.[0];
+  const pick = (v) => onChange(Object.keys(v).length ? structuredClone(v) : null);
+  const set = (key, p) => onChange({ ...fx, [key]: p === null ? null : { ...(fx[key] || {}), ...p } }, { record: false });
+  const sh = fx.shadow; const ol = fx.outline; const ci = fx.circles; const bg = fx.bg;
+  const fieldPct = (label, v, min, max, step, fn) => <label className="field small">{label} · {Math.round(v * 100)}<input type="range" min={min} max={max} step={step} value={v} onChange={(e) => fn(Number(e.target.value))} /></label>;
+  return (
+    <div className="keycard stack" style={{ gap: 10 }}>
+      <strong className="small">Text style</strong>
+      <div className="text-styles" role="group" aria-label="Text style">
+        {TEXT_STYLES.map(([k, l, v]) => (
+          <button key={k} type="button" className={`text-style-chip ${on === k ? 'on' : ''}`} onClick={() => pick(v)} title={l}>
+            <span className={`text-style-sample ts-${k}`} aria-hidden="true">Aa</span><span className="small">{l}</span>
+          </button>
+        ))}
+      </div>
+      <Toggle checked={Boolean(sh)} onChange={(e) => set('shadow', e.target.checked ? { color: '#000000', x: 0.06, y: 0.06, blur: 0, opacity: 0.45 } : null)} icon={Layers2} label="Shadow" small />
+      {sh && (
+        <>
+          <ColorField value={sh.color || '#000000'} swatches={colors} onChange={(c) => set('shadow', { color: c })} />
+          <div className="token-grid">
+            {fieldPct('Across', sh.x ?? 0.06, -0.3, 0.3, 0.01, (x) => set('shadow', { x }))}
+            {fieldPct('Down', sh.y ?? 0.06, -0.3, 0.3, 0.01, (y) => set('shadow', { y }))}
+            {fieldPct('Softness', sh.blur ?? 0, 0, 1, 0.02, (blur) => set('shadow', { blur }))}
+            {fieldPct('Opacity', sh.opacity ?? 0.45, 0.05, 1, 0.05, (opacity) => set('shadow', { opacity }))}
+          </div>
+        </>
+      )}
+      <Toggle checked={Boolean(ol)} onChange={(e) => set('outline', e.target.checked ? { color: '#000000', width: 6 } : null)} icon={PenLine} label="Outline" small />
+      {ol && (
+        <div className="row wrap" style={{ gap: 10, alignItems: 'end' }}>
+          <ColorField value={ol.color || item.color} swatches={colors} onChange={(c) => set('outline', { color: c })} />
+          <label className="field small grow">Thickness · {ol.width ?? 6}px<input type="range" min="1" max="40" value={ol.width ?? 6} onChange={(e) => set('outline', { width: Number(e.target.value) })} /></label>
+          <Toggle checked={Boolean(ol.hollow)} onChange={(e) => set('outline', { hollow: e.target.checked })} icon={Circle} label="Hollow letters" small />
+        </div>
+      )}
+      <Toggle checked={Boolean(ci)} onChange={(e) => set('circles', e.target.checked ? { width: 0.07, gap: 0.08 } : null)} icon={CircleDot} label="Letters in circles" small />
+      {ci && (
+        <>
+          <div className="row wrap" style={{ gap: 10, alignItems: 'center' }}>
+            <div className="seg sm" role="group" aria-label="Circle style">{[[false, 'Rings'], [true, 'Dots']].map(([f, l]) => <button key={l} className={Boolean(ci.fill) === f ? 'on' : ''} onClick={() => set('circles', { fill: f, width: f ? 0 : 0.07 })}>{l}</button>)}</div>
+            <ColorField value={ci.color || item.color} swatches={colors} onChange={(c) => set('circles', { color: c })} />
+          </div>
+          <div className="token-grid">
+            {!ci.fill && fieldPct('Ring', ci.width ?? 0.07, 0.02, 0.2, 0.01, (width) => set('circles', { width }))}
+            {fieldPct('Space', ci.gap ?? 0.08, 0, 0.5, 0.01, (gap) => set('circles', { gap }))}
+          </div>
+        </>
+      )}
+      <Toggle checked={Boolean(bg)} onChange={(e) => set('bg', e.target.checked ? { shape: 'pill', pad: 0.5, each: false } : null)} icon={RectangleHorizontal} label="Shape behind" small />
+      {bg && (
+        <>
+          <div className="row wrap" style={{ gap: 10, alignItems: 'center' }}>
+            <div className="seg sm" role="group" aria-label="Shape">{[['pill', 'Pill'], ['rounded', 'Rounded'], ['box', 'Square']].map(([k, l]) => <button key={k} className={(bg.shape || 'pill') === k ? 'on' : ''} onClick={() => set('bg', { shape: k })}>{l}</button>)}</div>
+            <ColorField value={bg.color || onColor(item.color || '#FFFFFF')} swatches={colors} onChange={(c) => set('bg', { color: c })} />
+          </div>
+          <div className="seg sm" role="group" aria-label="Shape covers">{[[false, 'Whole text'], [true, 'Each line']].map(([v, l]) => <button key={l} className={Boolean(bg.each) === v ? 'on' : ''} onClick={() => set('bg', { each: v })}>{l}</button>)}</div>
+          <div className="token-grid">
+            {fieldPct('Padding', bg.pad ?? 0.4, 0.05, 1.5, 0.05, (pad) => set('bg', { pad }))}
+            {fieldPct('Opacity', bg.opacity ?? 1, 0.1, 1, 0.05, (opacity) => set('bg', { opacity }))}
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 /** A cut-out subject's shadow and outline, to make a person pop from a photo. */

@@ -243,6 +243,126 @@ function wrap(ctx, str, maxW) {
   return out;
 }
 
+// ---------------------------------------------------------------- text styles
+// A text item's style (it.fx), any mix of:
+//   shadow:  { color, x, y, blur, opacity }   x, y and blur are shares of the text size
+//   outline: { color, width, hollow }         width in page pixels; hollow draws only the outline
+//   circles: { color, width, fill, gap }      each letter in its own ring (width: share of the ring); fill: a solid dot behind
+//   bg:      { shape: 'pill'|'rounded'|'box', color, pad, each, opacity }   a shape behind each line (each) or the whole block
+export const TEXT_STYLES = [
+  ['plain', 'Plain', {}],
+  ['shadow', 'Drop shadow', { shadow: { color: '#000000', x: 0.06, y: 0.06, blur: 0, opacity: 0.45 } }],
+  ['soft', 'Soft shadow', { shadow: { color: '#000000', x: 0, y: 0.04, blur: 0.35, opacity: 0.5 } }],
+  ['outline', 'Outline', { outline: { color: '#000000', width: 6 } }],
+  ['hollow', 'Hollow', { outline: { width: 3, hollow: true } }],
+  ['circles', 'Circled letters', { circles: { width: 0.07, gap: 0.08 } }],
+  ['dots', 'Letter dots', { circles: { width: 0, gap: 0.08, fill: true } }],
+  ['pill', 'Pill', { bg: { shape: 'pill', pad: 0.5, each: false } }],
+  ['highlight', 'Line highlight', { bg: { shape: 'box', pad: 0.25, each: true } }],
+  ['label', 'Rounded label', { bg: { shape: 'rounded', pad: 0.45, each: false } }],
+];
+
+const rgba = (hex, a) => { const [r, g, b] = hex2rgb(hex || '#000000'); return `rgba(${r},${g},${b},${a})`; };
+/** Draws one text item with its style. Returns its box as page fractions. */
+function drawText(ctx, it, W, H, k, hidden) {
+  const fx = it.fx || {};
+  const size = it.size * k;
+  ctx.font = `${it.italic ? 'italic ' : ''}${it.weight || 600} ${size}px ${fontCss(it.font)}`;
+  const color = it.color || '#FFFFFF';
+  const boxW = it.w * W; const left = it.x * W - boxW / 2; const align = it.align || 'center';
+  const str = it.upper ? it.text.toUpperCase() : it.text;
+  const lineX = (lw) => (align === 'left' ? left : align === 'right' ? left + boxW - lw : it.x * W - lw / 2);
+  if (fx.circles) return drawCircledText(ctx, it, fx.circles, str, size, color, boxW, left, lineX, W, H, hidden);
+
+  ctx.textBaseline = 'middle';
+  if ('letterSpacing' in ctx) ctx.letterSpacing = `${(it.letter || 0) * k}px`;
+  const lines = wrap(ctx, str, boxW);
+  const lh = size * (it.lh || 1.15);
+  const h = Math.max(lh, lines.length * lh);
+  const top = it.y * H - h / 2;
+  ctx.textAlign = align;
+  const tx = align === 'left' ? left : align === 'right' ? left + boxW : it.x * W;
+  const ys = lines.map((_, i) => top + lh * (i + 0.5));
+  if (!hidden) {
+    if (fx.bg) {
+      // Letter spacing adds a space after the last letter too; leave it out so the shape sits even.
+      const extra = (it.letter || 0) * k;
+      const widths = lines.map((l) => Math.max(0, ctx.measureText(l).width - (l ? extra : 0)));
+      drawTextBg(ctx, fx.bg, widths, ys, lineX, size, color);
+    }
+    const sh = fx.shadow; const ol = fx.outline;
+    const shadowOn = () => { if (!sh) return; ctx.shadowColor = rgba(sh.color, sh.opacity ?? 0.45); ctx.shadowOffsetX = (sh.x ?? 0.06) * size; ctx.shadowOffsetY = (sh.y ?? 0.06) * size; ctx.shadowBlur = (sh.blur ?? 0) * size; };
+    const shadowOff = () => { ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0; };
+    shadowOn();
+    if (ol) {
+      ctx.lineJoin = 'round'; ctx.miterLimit = 2;
+      ctx.strokeStyle = ol.hollow ? (ol.color || color) : (ol.color || '#000000');
+      // A regular outline sits outside the letters, so it is stroked twice as wide and the fill covers the inner half.
+      ctx.lineWidth = Math.max(0.5, (ol.width ?? 6) * k * (ol.hollow ? 1 : 2));
+      lines.forEach((l, i) => ctx.strokeText(l, tx, ys[i]));
+      shadowOff();
+    }
+    if (!ol?.hollow) { ctx.fillStyle = color; lines.forEach((l, i) => ctx.fillText(l, tx, ys[i])); }
+    shadowOff();
+  }
+  return { x0: left / W, x1: (left + boxW) / W, y0: top / H, y1: (top + h) / H };
+}
+
+/** The shape behind a text: one per line, or one around the whole block. */
+function drawTextBg(ctx, bg, widths, ys, lineX, size, color) {
+  const padX = (bg.pad ?? 0.4) * size; const padY = (bg.pad ?? 0.4) * size * 0.55;
+  const rad = (w, h) => (bg.shape === 'pill' ? Math.min(w, h) / 2 : bg.shape === 'rounded' ? Math.min(size * 0.35, h / 2) : 0);
+  ctx.save();
+  ctx.globalAlpha *= bg.opacity ?? 1;
+  ctx.fillStyle = bg.color || (luminance(color) > 0.6 ? '#111111' : '#FFFFFF');
+  const rects = widths.map((w, i) => ({ x: lineX(w) - padX, y: ys[i] - size * 0.5 - padY, w: w + padX * 2, h: size + padY * 2 })).filter((r, i) => widths[i] > 0);
+  const boxes = bg.each ? rects : rects.length ? [rects.reduce((a, r) => ({ x: Math.min(a.x, r.x), y: Math.min(a.y, r.y), x1: Math.max(a.x1, r.x + r.w), y1: Math.max(a.y1, r.y + r.h) }), { x: Infinity, y: Infinity, x1: -Infinity, y1: -Infinity })].map((b) => ({ x: b.x, y: b.y, w: b.x1 - b.x, h: b.y1 - b.y })) : [];
+  for (const r of boxes) { ctx.beginPath(); roundRect(ctx, r.x, r.y, r.w, r.h, rad(r.w, r.h)); ctx.fill(); }
+  ctx.restore();
+}
+
+/** Each letter in its own ring (or on a solid dot), wrapped by words like regular text. */
+function drawCircledText(ctx, it, c, str, size, color, boxW, left, lineX, W, H, hidden) {
+  if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+  const d = size * 1.12; const gap = d * (c.gap ?? 0.08); const space = d * 0.45;
+  const wordW = (w) => [...w].length * d + Math.max(0, [...w].length - 1) * gap;
+  const lines = [];
+  for (const para of String(str).split('\n')) {
+    let line = [];
+    for (const w of para.split(' ').filter(Boolean)) {
+      const next = [...line, w];
+      if (line.length && next.reduce((s, x) => s + wordW(x), 0) + (next.length - 1) * space > boxW) { lines.push(line); line = [w]; } else line = next;
+    }
+    lines.push(line);
+  }
+  const lh = Math.max(d * 1.12, size * (it.lh || 1.15));
+  const h = Math.max(lh, lines.length * lh);
+  const top = it.y * H - h / 2;
+  if (!hidden) {
+    const ring = c.color || color;
+    const rw = Math.max(1, (c.width ?? 0.07) * d);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    lines.forEach((words, li) => {
+      const lw = words.reduce((s, x) => s + wordW(x), 0) + Math.max(0, words.length - 1) * space;
+      let x = lineX(lw); const cy = top + lh * (li + 0.5);
+      words.forEach((w) => {
+        for (const ch of w) {
+          const cx = x + d / 2;
+          ctx.beginPath(); ctx.arc(cx, cy, c.fill ? d / 2 : d / 2 - rw / 2, 0, Math.PI * 2);
+          if (c.fill) { ctx.fillStyle = ring; ctx.fill(); } else if (c.width !== 0) { ctx.strokeStyle = ring; ctx.lineWidth = rw; ctx.stroke(); }
+          const m = ctx.measureText(ch);
+          const sx = Math.min(1, (d * 0.66) / Math.max(1, m.width)); // squeeze wide letters (W, M) to fit
+          ctx.save(); ctx.translate(cx, cy + (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2); ctx.scale(sx, 1);
+          ctx.fillStyle = c.fill ? (c.text || (luminance(ring) > 0.6 ? '#111111' : '#FFFFFF')) : color; ctx.fillText(ch, 0, 0); ctx.restore();
+          x += d + gap;
+        }
+        x += space - gap;
+      });
+    });
+  }
+  return { x0: left / W, x1: (left + boxW) / W, y0: top / H, y1: (top + h) / H };
+}
+
 function drawMesh(ctx, W, H, colors, seed) {
   const rnd = seeded(seed);
   ctx.fillStyle = colors[0];
@@ -271,7 +391,7 @@ const libUrl = (rel) => `/library/${rel.split('/').map(encodeURIComponent).join(
 export function loadImage(src) {
   return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
 }
-const qrKey = (it) => `qr:${it.url}:${it.color}`;
+const qrKey = (it) => `qr:${it.url}:${it.color}:${it.bg || ''}`;
 const svgKey = (it) => `svg:${it.rel}:${JSON.stringify(it.recolor)}`;
 
 // ---------------------------------------------------------------- SVG colors
@@ -318,6 +438,7 @@ export const ACCENTS = [
   ['blob2', 'Soft blob'], ['blob3', 'Long blob'], ['pebble', 'Pebble'], ['drop', 'Drop'], ['ribbon', 'Ribbon wave'], ['hill', 'Wave edge'],
   ['swoosh', 'Swoosh'], ['quarter', 'Quarter circle'], ['ring', 'Ring'], ['leaf', 'Leaf'], ['sparkle', 'Sparkle'], ['dots', 'Dot grid'],
   ['squiggle', 'Squiggle'], ['zigzag', 'Zigzag'], ['wavelines', 'Wave lines'], ['scribble', 'Underline'],
+  ['gridlines', 'Grid lines'], ['rays', 'Sun rays'], ['asterisk', 'Asterisk'],
 ];
 // Arrows and direction marks. Turn and flip them in the shape settings to point any way.
 export const ARROWS = [
@@ -326,8 +447,8 @@ export const ARROWS = [
   ['arrowUTurn', 'U-turn arrow'], ['arrowCircle', 'Circle arrow'], ['arrowZigzag', 'Zigzag arrow'], ['arrowDashed', 'Dashed arrow'], ['arrowSplit', 'Split arrow'], ['arrowTag', 'Tag arrow'],
 ];
 /** Shapes drawn as a line (in the fill color) instead of filled. They can't hold a photo. */
-export const STROKED = new Set(['squiggle', 'zigzag', 'wavelines', 'scribble', 'arrowLine', 'arrowCurve', 'arrowWavy', 'arrowLoop', 'arrowBend', 'arrowDouble', 'swipe', 'arrowUTurn', 'arrowCircle', 'arrowZigzag', 'arrowDashed', 'arrowSplit']);
-const THICK = { squiggle: 0.14, zigzag: 0.12, wavelines: 0.07, scribble: 0.16, swipe: 0.09 };
+export const STROKED = new Set(['gridlines', 'rays', 'asterisk', 'squiggle', 'zigzag', 'wavelines', 'scribble', 'arrowLine', 'arrowCurve', 'arrowWavy', 'arrowLoop', 'arrowBend', 'arrowDouble', 'swipe', 'arrowUTurn', 'arrowCircle', 'arrowZigzag', 'arrowDashed', 'arrowSplit']);
+export const THICK = { gridlines: 0.004, rays: 0.035, asterisk: 0.07, squiggle: 0.14, zigzag: 0.12, wavelines: 0.07, scribble: 0.16, swipe: 0.09 };
 export const shapeLabel = (k) => ([...SHAPES, ...ACCENTS, ...ARROWS].find(([id]) => id === k) || [k, 'Shape'])[1];
 /** A smooth closed outline through points (unit box), like the Blob. */
 function smoothClosed(ctx, pts, P) {
@@ -379,6 +500,21 @@ function extraPath(ctx, kind, x, y, w, h, it) {
     case 'zigzag': { const n = 7; for (let i = 0; i <= n; i++) (i ? l : m)(0.03 + (0.94 * i) / n, i % 2 ? 0.2 : 0.8); return true; }
     case 'wavelines': for (const v of [0.2, 0.5, 0.8]) sinePath(ctx, P, { v, amp: 0.1, cycles: cyc ?? 2, phase: ph, from: 0.02, to: 0.98 }); return true;
     case 'scribble': m(0.03, 0.62); ctx.bezierCurveTo(...P(0.3, 0.3), ...P(0.6, 0.35), ...P(0.97, 0.45)); m(0.1, 0.8); ctx.bezierCurveTo(...P(0.4, 0.6), ...P(0.7, 0.62), ...P(0.9, 0.7)); return true;
+    case 'gridlines': { // square cells: cols across, as many rows as fit
+      const cols = it?.cols || 10; const cell = w / cols; const rows = Math.max(1, Math.round(h / cell));
+      for (let i = 0; i <= cols; i++) { ctx.moveTo(x + i * cell, y); ctx.lineTo(x + i * cell, y + rows * cell); }
+      for (let j = 0; j <= rows; j++) { ctx.moveTo(x, y + j * cell); ctx.lineTo(x + w, y + j * cell); }
+      return true;
+    }
+    case 'rays': { // lines from a hidden center out to the edge, like a rising sun
+      const n = it?.count || 14; const inner = it?.inner ?? 0.55; const cx = x + w / 2; const cy = y + h / 2;
+      for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2 + (it?.phase || 0); ctx.moveTo(cx + Math.cos(a) * w * 0.5 * inner, cy + Math.sin(a) * h * 0.5 * inner); ctx.lineTo(cx + Math.cos(a) * w * 0.5, cy + Math.sin(a) * h * 0.5); }
+      return true;
+    }
+    case 'asterisk': { const n = it?.count || 4; const cx = x + w / 2; const cy = y + h / 2;
+      for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI + Math.PI / 2; ctx.moveTo(cx + Math.cos(a) * w * 0.46, cy + Math.sin(a) * h * 0.46); ctx.lineTo(cx - Math.cos(a) * w * 0.46, cy - Math.sin(a) * h * 0.46); }
+      return true;
+    }
     case 'arrow': m(0, 0.33); l(0.6, 0.33); l(0.6, 0.05); l(1, 0.5); l(0.6, 0.95); l(0.6, 0.67); l(0, 0.67); ctx.closePath(); return true;
     case 'arrowLine': { const [ex, ey] = P(0.97, 0.5); m(0.03, 0.5); ctx.lineTo(ex, ey); arrowHead(ctx, ex, ey, 0, Math.min(h * 0.42, w * 0.3)); return true; }
     case 'arrowCurve': { const [ex, ey] = P(0.95, 0.2); m(0.05, 0.9); ctx.bezierCurveTo(...P(0.2, 0.25), ...P(0.6, 0.12), ex, ey); const [cx2, cy2] = P(0.6, 0.12); arrowHead(ctx, ex, ey, Math.atan2(ey - cy2, ex - cx2), s * 0.34); return true; }
@@ -621,7 +757,7 @@ function fillShape(ctx, it, kind, x, y, w, h, r, cache, placeholders) {
     shapePath(ctx, kind, x, y, w, h, r, it);
     ctx.strokeStyle = it.fill && it.fill !== 'none' ? it.fill : '#FFFFFF';
     ctx.lineWidth = Math.max(1, (it.thick ?? THICK[kind] ?? 0.1) * Math.min(w, h));
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.lineCap = kind === 'gridlines' || kind === 'rays' ? 'butt' : 'round'; ctx.lineJoin = 'round';
     if (kind === 'arrowDashed') {
       const lw = ctx.lineWidth; ctx.setLineDash([lw * 1.6, lw * 1.9]); ctx.stroke(); ctx.setLineDash([]);
       const ex = x + w * 0.97; const ey = y + h * 0.5; ctx.beginPath(); arrowHead(ctx, ex, ey, 0, Math.min(h * 0.42, w * 0.3)); ctx.stroke();
@@ -677,7 +813,8 @@ export async function loadAssets(pg, cache) {
   }
   for (const it of pg.items.filter((i) => i.type === 'qr' && i.url)) {
     const key = qrKey(it);
-    if (!(key in cache)) cache[key] = await loadImage(await QRCode.toDataURL(it.url, { margin: 1, width: 600, color: { dark: it.color || '#000000', light: '#00000000' } })).catch(() => null);
+    if (!(key in cache)) // With a background color the code gets a wider quiet edge, which helps phones read it.
+    cache[key] = await loadImage(await QRCode.toDataURL(it.url, { margin: it.bg ? 2 : 1, width: 600, errorCorrectionLevel: 'M', color: { dark: it.color || '#000000', light: it.bg || '#00000000' } })).catch(() => null);
   }
 }
 
@@ -704,7 +841,7 @@ export function renderPage(canvas, doc, pg, scale, cache, { skip, placeholders =
   else if (bg.type === 'gradient') {
     const a = ((bg.angle ?? 135) * Math.PI) / 180; const r = Math.hypot(W, H) / 2;
     const g = ctx.createLinearGradient(W / 2 - Math.cos(a) * r, H / 2 - Math.sin(a) * r, W / 2 + Math.cos(a) * r, H / 2 + Math.sin(a) * r);
-    g.addColorStop(0, bg.from || colors[0]); g.addColorStop(1, bg.to || colors[2]);
+    g.addColorStop(0, bg.from || colors[0]); if (bg.via) g.addColorStop(bg.viaAt ?? 0.5, bg.via); g.addColorStop(1, bg.to || colors[2]);
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   } else if (bg.type === 'pattern') {
     drawPattern(ctx, W, H, bg, colors);
@@ -753,20 +890,7 @@ export function renderPage(canvas, doc, pg, scale, cache, { skip, placeholders =
       }
       boxes[it.id] = { x0: x / W, x1: (x + w) / W, y0: y / H, y1: (y + h) / H };
     } else if (it.type === 'text') {
-      ctx.font = `${it.italic ? 'italic ' : ''}${it.weight || 600} ${it.size * k}px ${fontCss(it.font)}`;
-      ctx.fillStyle = it.color || '#FFFFFF';
-      ctx.textBaseline = 'middle';
-      if ('letterSpacing' in ctx) ctx.letterSpacing = `${(it.letter || 0) * k}px`;
-      const boxW = it.w * W;
-      const lines = wrap(ctx, it.upper ? it.text.toUpperCase() : it.text, boxW);
-      const lh = it.size * k * (it.lh || 1.15);
-      const h = Math.max(lh, lines.length * lh);
-      const top = it.y * H - h / 2;
-      const left = it.x * W - boxW / 2;
-      ctx.textAlign = it.align || 'center';
-      const tx = it.align === 'left' ? left : it.align === 'right' ? left + boxW : it.x * W;
-      if (it.id !== skip) lines.forEach((l, i) => ctx.fillText(l, tx, top + lh * (i + 0.5)));
-      boxes[it.id] = { x0: left / W, x1: (left + boxW) / W, y0: top / H, y1: (top + h) / H };
+      boxes[it.id] = drawText(ctx, it, W, H, k, it.id === skip);
     }
     ctx.restore();
     if (sheet && it.erase && it.depth > 0) { main.drawImage(sheet, 0, 0); sheet = null; ctx = main; }
@@ -917,7 +1041,7 @@ export function shapeIcon(kind) {
   const box = wide ? [6, 26, 84, 44] : [12, 12, 72, 72];
   if (['arrowLine', 'arrowDouble', 'swipe', 'arrowDashed'].includes(kind)) { box[0] = 6; box[2] = 84; box[1] = 32; box[3] = 32; }
   if (kind === 'triEq') { box[1] = 17; box[3] = 62; }
-  const it = { fill: '#000', thick: STROKED.has(kind) ? Math.min(0.5, 7 / Math.min(box[2], box[3])) : undefined, cycles: kind === 'ribbon' ? 1 : undefined };
+  const it = { fill: '#000', thick: kind === 'gridlines' ? 0.04 : STROKED.has(kind) ? Math.min(0.5, 7 / Math.min(box[2], box[3])) : undefined, cycles: kind === 'ribbon' ? 1 : undefined, cols: 4, count: kind === 'rays' ? 12 : undefined };
   fillShape(g, it, kind, box[0], box[1], box[2], box[3], 0, {}, false);
   return (iconCache[kind] = c.toDataURL());
 }

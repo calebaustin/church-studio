@@ -20,9 +20,10 @@ import { CAROUSEL_TEMPLATES } from '../design/carousels.js';
 import { CAROUSEL_TEMPLATES2 } from '../design/carousels2.js';
 import { TEXT_TEMPLATES } from '../design/textposts.js';
 import { MORE_TEMPLATES } from '../design/packs4.js';
+import { PACKS5, PACK5_TEMPLATES, inSignatureColors } from '../design/packs5.js';
 
 // Every template pack: the newer plug-and-play packs first.
-export const PACKS = { ...PACKS3, ...PACKS2, ...PACKS1 };
+export const PACKS = { ...PACKS5, ...PACKS3, ...PACKS2, ...PACKS1 };
 import { buildDeck, parseNotes } from '../design/deckBuilder.js';
 
 // Event-ready templates fill in an event's details by themselves.
@@ -38,7 +39,7 @@ export function photoCount(t) {
   return photoCounts.get(t.id);
 }
 const EVENT_READY = new Set(['post-event', 'flyer-event', ...Object.keys(PACKS1).map((k) => `${k}-event`)]);
-export const TEMPLATES = [...PACK3_TEMPLATES, ...PACK2_TEMPLATES, ...BASE_TEMPLATES.map((t) => (EVENT_READY.has(t.id) ? { ...t, event: true } : t)), ...PACK_TEMPLATES.map((t) => (EVENT_READY.has(t.id) ? { ...t, event: true, photos: 1 } : t)), ...CAROUSEL_TEMPLATES2, ...CAROUSEL_TEMPLATES, ...TEXT_TEMPLATES, ...MORE_TEMPLATES];
+export const TEMPLATES = [...PACK5_TEMPLATES, ...PACK3_TEMPLATES, ...PACK2_TEMPLATES, ...BASE_TEMPLATES.map((t) => (EVENT_READY.has(t.id) ? { ...t, event: true } : t)), ...PACK_TEMPLATES.map((t) => (EVENT_READY.has(t.id) ? { ...t, event: true, photos: 1 } : t)), ...CAROUSEL_TEMPLATES2, ...CAROUSEL_TEMPLATES, ...TEXT_TEMPLATES, ...MORE_TEMPLATES];
 
 export { cohesive } from '../design/model.js';
 
@@ -79,7 +80,8 @@ export function newDoc(kind, tpl, ctx, size, { brand = false } = {}) {
   // A template's own colors (its pack's, or its own list), which the brand switch swaps for the church's.
   const packColors = tpl?.colors || (tpl?.pack ? PACKS[tpl.pack].c : null);
   let pages = tpl ? fillChurch(tpl.build(ctx), ctx.church) : [blankPage(kind, ctx)];
-  if (brand && packColors) pages = inBrandColors(pages, packColors, ctx.c);
+  if (brand && tpl?.brandSwap) pages = inSignatureColors(pages, tpl.brandSwap, ctx.c);
+  else if (brand && packColors) pages = inBrandColors(pages, packColors, ctx.c);
   return {
     id: uid(), name: tpl ? (ctx.ev?.title ? `${ctx.ev.title} · ${tpl.name}` : tpl.name) : `Untitled ${k.label.toLowerCase()}`, kind,
     size: size || { w: k.w, h: k.h }, palette: packColors && !brand ? [...packColors] : ctx.c, tint: { color: '#FF9A62', amount: 0 },
